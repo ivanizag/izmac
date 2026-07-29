@@ -2,11 +2,9 @@ module github.com/ivanizag/izmac
 
 go 1.26.0
 
-replace github.com/ivanizag/iz68000 => ../iz68000
-
 require (
 	github.com/hajimehoshi/ebiten/v2 v2.9.9
-	github.com/ivanizag/iz68000 v0.0.0
+	github.com/ivanizag/iz68000 v1.0.0
 	github.com/pkg/profile v1.7.0
 )
 
