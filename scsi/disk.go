@@ -1,4 +1,4 @@
-package izmac
+package scsi
 
 import (
 	"fmt"
@@ -7,7 +7,7 @@ import (
 )
 
 /*
-A direct access device on the SCSI bus, the hard disk the Macintosh boots
+Disk is a direct access device on the bus, the hard disk the Macintosh boots
 from. It answers the commands the ROM and the disk driver use and nothing
 else, which is a short list: everything the boot needs is an inquiry, a
 capacity, and reads.
@@ -18,10 +18,10 @@ or the other, then the status and a message, then the bus is free again.
 */
 
 // The SCSI phases, as the target moves through them
-type scsiPhase int
+type phase int
 
 const (
-	phaseBusFree scsiPhase = iota
+	phaseBusFree phase = iota
 	phaseSelection
 	phaseCommand
 	phaseDataIn
@@ -30,7 +30,7 @@ const (
 	phaseMessageIn
 )
 
-func (p scsiPhase) String() string {
+func (p phase) String() string {
 	switch p {
 	case phaseBusFree:
 		return "bus free"
@@ -53,25 +53,25 @@ func (p scsiPhase) String() string {
 // The commands answered. The rest are rejected with a sense of invalid
 // command, which is what a real device does and what the driver expects.
 const (
-	scsiCmdTestUnitReady  = 0x00
-	scsiCmdRequestSense   = 0x03
-	scsiCmdFormatUnit     = 0x04
-	scsiCmdRead6          = 0x08
-	scsiCmdWrite6         = 0x0a
-	scsiCmdInquiry        = 0x12
-	scsiCmdModeSelect6    = 0x15
-	scsiCmdModeSense6     = 0x1a
-	scsiCmdStartStopUnit  = 0x1b
-	scsiCmdPreventRemoval = 0x1e
-	scsiCmdReadCapacity   = 0x25
-	scsiCmdRead10         = 0x28
-	scsiCmdWrite10        = 0x2a
+	cmdTestUnitReady  = 0x00
+	cmdRequestSense   = 0x03
+	cmdFormatUnit     = 0x04
+	cmdRead6          = 0x08
+	cmdWrite6         = 0x0a
+	cmdInquiry        = 0x12
+	cmdModeSelect6    = 0x15
+	cmdModeSense6     = 0x1a
+	cmdStartStopUnit  = 0x1b
+	cmdPreventRemoval = 0x1e
+	cmdReadCapacity   = 0x25
+	cmdRead10         = 0x28
+	cmdWrite10        = 0x2a
 )
 
 // The status bytes
 const (
-	scsiStatusGood           uint8 = 0x00
-	scsiStatusCheckCondition uint8 = 0x02
+	statusGood           uint8 = 0x00
+	statusCheckCondition uint8 = 0x02
 )
 
 // The sense keys
@@ -84,12 +84,12 @@ const (
 	senseDataProtect    uint8 = 0x07
 )
 
-// scsiTarget is one device on the bus
-type scsiTarget struct {
+// Disk is one device on the bus
+type Disk struct {
 	id   uint8
 	disk storage.BlockDisk
 
-	phase scsiPhase
+	phase phase
 
 	// command is the descriptor block being gathered
 	command []uint8
@@ -109,8 +109,8 @@ type scsiTarget struct {
 	trace bool
 }
 
-func newScsiTarget(id uint8, disk storage.BlockDisk, trace bool) *scsiTarget {
-	return &scsiTarget{
+func NewDisk(id uint8, disk storage.BlockDisk, trace bool) *Disk {
+	return &Disk{
 		id:    id,
 		disk:  disk,
 		phase: phaseBusFree,
@@ -125,7 +125,7 @@ func newScsiTarget(id uint8, disk storage.BlockDisk, trace bool) *scsiTarget {
 
 // busReset takes a device back to where it was at power on, which is what a
 // reset of the bus does to it
-func (t *scsiTarget) busReset() {
+func (t *Disk) busReset() {
 	t.phase = phaseBusFree
 	t.command = t.command[:0]
 	t.commandLength = 0
@@ -135,13 +135,13 @@ func (t *scsiTarget) busReset() {
 }
 
 // select starts a command. The initiator has put the target id on the bus.
-func (t *scsiTarget) startSelection() {
+func (t *Disk) startSelection() {
 	t.phase = phaseCommand
 	t.command = t.command[:0]
 	t.commandLength = 0
 	t.data = nil
 	t.index = 0
-	t.status = scsiStatusGood
+	t.status = statusGood
 	t.message = 0
 }
 
@@ -160,7 +160,7 @@ func commandLengthOf(opcode uint8) int {
 }
 
 // putByte takes a byte from the initiator, in the command or data out phases
-func (t *scsiTarget) putByte(value uint8) {
+func (t *Disk) putByte(value uint8) {
 	switch t.phase {
 	case phaseCommand:
 		t.command = append(t.command, value)
@@ -184,7 +184,7 @@ func (t *scsiTarget) putByte(value uint8) {
 
 // getByte hands a byte to the initiator and advances the phase when the
 // buffer runs out
-func (t *scsiTarget) getByte() uint8 {
+func (t *Disk) getByte() uint8 {
 	switch t.phase {
 	case phaseDataIn:
 		var value uint8
@@ -210,7 +210,7 @@ func (t *scsiTarget) getByte() uint8 {
 }
 
 // execute runs the command once the whole descriptor block has arrived
-func (t *scsiTarget) execute() {
+func (t *Disk) execute() {
 	opcode := t.command[0]
 
 	if t.trace {
@@ -218,28 +218,28 @@ func (t *scsiTarget) execute() {
 	}
 
 	switch opcode {
-	case scsiCmdTestUnitReady:
+	case cmdTestUnitReady:
 		t.finishGood()
 
-	case scsiCmdRequestSense:
+	case cmdRequestSense:
 		t.sendData(t.senseData())
 
-	case scsiCmdInquiry:
+	case cmdInquiry:
 		t.sendData(t.inquiryData(int(t.command[4])))
 
-	case scsiCmdReadCapacity:
+	case cmdReadCapacity:
 		t.sendData(t.capacityData())
 
-	case scsiCmdModeSense6:
+	case cmdModeSense6:
 		t.sendData(t.modeSenseData())
 
-	case scsiCmdRead6, scsiCmdRead10:
+	case cmdRead6, cmdRead10:
 		t.read()
 
-	case scsiCmdWrite6, scsiCmdWrite10:
+	case cmdWrite6, cmdWrite10:
 		t.write()
 
-	case scsiCmdFormatUnit, scsiCmdModeSelect6, scsiCmdStartStopUnit, scsiCmdPreventRemoval:
+	case cmdFormatUnit, cmdModeSelect6, cmdStartStopUnit, cmdPreventRemoval:
 		// Accepted and ignored, there is nothing to do to a file
 		t.finishGood()
 
@@ -250,7 +250,7 @@ func (t *scsiTarget) execute() {
 
 // blockAndCount pulls the address and the length out of a six or ten byte
 // descriptor block
-func (t *scsiTarget) blockAndCount() (uint32, uint32) {
+func (t *Disk) blockAndCount() (uint32, uint32) {
 	if t.command[0]>>5 == 0 {
 		// The six byte form has a 21 bit address and a byte count, with
 		// zero meaning 256 blocks
@@ -269,7 +269,7 @@ func (t *scsiTarget) blockAndCount() (uint32, uint32) {
 	return block, count
 }
 
-func (t *scsiTarget) read() {
+func (t *Disk) read() {
 	block, count := t.blockAndCount()
 
 	data := make([]uint8, 0, count*storage.BlockSize)
@@ -287,7 +287,7 @@ func (t *scsiTarget) read() {
 	t.sendData(data)
 }
 
-func (t *scsiTarget) write() {
+func (t *Disk) write() {
 	if t.disk.IsReadOnly() {
 		t.fail(senseDataProtect)
 		return
@@ -299,7 +299,7 @@ func (t *scsiTarget) write() {
 	t.phase = phaseDataOut
 }
 
-func (t *scsiTarget) completeWrite() {
+func (t *Disk) completeWrite() {
 	block, count := t.blockAndCount()
 
 	for i := uint32(0); i < count; i++ {
@@ -317,10 +317,10 @@ func (t *scsiTarget) completeWrite() {
 }
 
 // sendData moves to the data in phase with the buffer to hand over
-func (t *scsiTarget) sendData(data []uint8) {
+func (t *Disk) sendData(data []uint8) {
 	t.data = data
 	t.index = 0
-	t.status = scsiStatusGood
+	t.status = statusGood
 
 	if len(data) == 0 {
 		t.phase = phaseStatus
@@ -329,21 +329,21 @@ func (t *scsiTarget) sendData(data []uint8) {
 	t.phase = phaseDataIn
 }
 
-func (t *scsiTarget) finishGood() {
-	t.status = scsiStatusGood
+func (t *Disk) finishGood() {
+	t.status = statusGood
 	t.data = nil
 	t.phase = phaseStatus
 }
 
-func (t *scsiTarget) fail(key uint8) {
+func (t *Disk) fail(key uint8) {
 	t.senseKey = key
-	t.status = scsiStatusCheckCondition
+	t.status = statusCheckCondition
 	t.data = nil
 	t.phase = phaseStatus
 }
 
 // senseData is the fixed format sense the driver asks for after a failure
-func (t *scsiTarget) senseData() []uint8 {
+func (t *Disk) senseData() []uint8 {
 	data := make([]uint8, 18)
 	data[0] = 0x70 // Current error, fixed format
 	data[2] = t.senseKey
@@ -362,7 +362,7 @@ func (t *scsiTarget) senseData() []uint8 {
 
 // inquiryData describes the device. The driver reads the type from the first
 // byte and refuses anything that is not a direct access device.
-func (t *scsiTarget) inquiryData(allocation int) []uint8 {
+func (t *Disk) inquiryData(allocation int) []uint8 {
 	data := make([]uint8, 36)
 	data[0] = 0x00 // Direct access device
 	data[1] = 0x00 // Not removable
@@ -381,7 +381,7 @@ func (t *scsiTarget) inquiryData(allocation int) []uint8 {
 }
 
 // capacityData is the address of the last block and the block size
-func (t *scsiTarget) capacityData() []uint8 {
+func (t *Disk) capacityData() []uint8 {
 	last := t.disk.Blocks() - 1
 
 	return []uint8{
@@ -392,7 +392,7 @@ func (t *scsiTarget) capacityData() []uint8 {
 
 // modeSenseData is the shortest answer that says the device is not write
 // protected and has no block descriptors worth reading
-func (t *scsiTarget) modeSenseData() []uint8 {
+func (t *Disk) modeSenseData() []uint8 {
 	deviceSpecific := uint8(0)
 	if t.disk.IsReadOnly() {
 		deviceSpecific = 0x80 // Write protected
@@ -404,19 +404,19 @@ func (t *scsiTarget) modeSenseData() []uint8 {
 // describeCommand names a descriptor block for the trace
 func describeCommand(command []uint8) string {
 	names := map[uint8]string{
-		scsiCmdTestUnitReady:  "TEST UNIT READY",
-		scsiCmdRequestSense:   "REQUEST SENSE",
-		scsiCmdFormatUnit:     "FORMAT UNIT",
-		scsiCmdRead6:          "READ(6)",
-		scsiCmdWrite6:         "WRITE(6)",
-		scsiCmdInquiry:        "INQUIRY",
-		scsiCmdModeSelect6:    "MODE SELECT(6)",
-		scsiCmdModeSense6:     "MODE SENSE(6)",
-		scsiCmdStartStopUnit:  "START STOP UNIT",
-		scsiCmdPreventRemoval: "PREVENT ALLOW REMOVAL",
-		scsiCmdReadCapacity:   "READ CAPACITY",
-		scsiCmdRead10:         "READ(10)",
-		scsiCmdWrite10:        "WRITE(10)",
+		cmdTestUnitReady:  "TEST UNIT READY",
+		cmdRequestSense:   "REQUEST SENSE",
+		cmdFormatUnit:     "FORMAT UNIT",
+		cmdRead6:          "READ(6)",
+		cmdWrite6:         "WRITE(6)",
+		cmdInquiry:        "INQUIRY",
+		cmdModeSelect6:    "MODE SELECT(6)",
+		cmdModeSense6:     "MODE SENSE(6)",
+		cmdStartStopUnit:  "START STOP UNIT",
+		cmdPreventRemoval: "PREVENT ALLOW REMOVAL",
+		cmdReadCapacity:   "READ CAPACITY",
+		cmdRead10:         "READ(10)",
+		cmdWrite10:        "WRITE(10)",
 	}
 
 	name, known := names[command[0]]

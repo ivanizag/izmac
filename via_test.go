@@ -9,7 +9,7 @@ import (
 // viaAddress returns the address of a VIA register, the way the ROM reaches
 // it: the base $efe1fe with the registers 512 bytes apart
 func viaAddress(reg uint32) uint32 {
-	return 0xefe1fe + reg*0x200
+	return 0xef_e1fe + reg*0x200
 }
 
 const (
@@ -41,7 +41,7 @@ func TestTheViaRegistersAreEvery512Bytes(t *testing.T) {
 func TestTheViaIsMirroredOverItsRegion(t *testing.T) {
 	// Only the address lines 9 to 12 are decoded, so the block repeats
 	base := viaAddress(viaRegDdrA)
-	for _, address := range []uint32{base, base + 0x2000, base + 0x100000} {
+	for _, address := range []uint32{base, base + 0x2000, base + 0x10_0000} {
 		if viaRegister(address) != viaRegDdrA {
 			t.Errorf("$%06x does not reach the register %v", address, viaRegDdrA)
 		}

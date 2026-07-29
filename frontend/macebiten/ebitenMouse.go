@@ -4,6 +4,7 @@ import (
 	"github.com/ivanizag/izmac"
 
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/inpututil"
 )
 
 /*
@@ -14,7 +15,8 @@ where the pointer ought to be, only how far it has travelled.
 
 The pointer is captured so that the host's own one does not run off the
 window and so that the movement keeps coming when it reaches the edge of the
-screen. Escape gives it back.
+screen. The secondary button gives it back, and so does escape: the Macintosh
+has one button and no escape key, so neither is anything the machine wants.
 */
 type ebitenMouse struct {
 	m *izmac.Mac
@@ -37,7 +39,8 @@ func (mo *ebitenMouse) update() {
 		return
 	}
 
-	if ebiten.IsKeyPressed(ebiten.KeyEscape) {
+	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonRight) ||
+		ebiten.IsKeyPressed(ebiten.KeyEscape) {
 		mo.release()
 		return
 	}
@@ -69,7 +72,7 @@ func (mo *ebitenMouse) release() {
 // or how to give it over
 func (mo *ebitenMouse) hint() string {
 	if mo.captured {
-		return "esc releases the mouse"
+		return "right click releases the mouse"
 	}
 	return "click to use the mouse"
 }

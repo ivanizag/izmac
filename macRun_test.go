@@ -3,6 +3,8 @@ package izmac
 import (
 	"testing"
 	"time"
+
+	"github.com/ivanizag/izmac/storage"
 )
 
 // newTestMac builds a machine running a ROM that does nothing but branch to
@@ -10,7 +12,7 @@ import (
 func newTestMac(t *testing.T) *Mac {
 	t.Helper()
 
-	data := make([]uint8, romSize)
+	data := make([]uint8, storage.RomSize)
 
 	// The reset stack pointer, on the RAM as the overlay maps it
 	data[0], data[1], data[2], data[3] = 0x00, 0x60, 0x04, 0x00
@@ -22,7 +24,7 @@ func newTestMac(t *testing.T) *Mac {
 	config := NewConfiguration()
 	config.RomFile = "<test>"
 
-	return newMac(config, &rom{data: data}, nil)
+	return newMac(config, storage.RomFromData(data), nil)
 }
 
 func TestTheMachineRunsAtTheRightRate(t *testing.T) {

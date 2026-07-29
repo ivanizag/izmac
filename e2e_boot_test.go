@@ -3,6 +3,8 @@ package izmac
 import (
 	"strings"
 	"testing"
+
+	"github.com/ivanizag/izmac/storage"
 )
 
 /*
@@ -16,7 +18,7 @@ This builds a small ROM that follows the same steps and ends on the loop the
 ROM settles into after a failure, with a code on D7 and D6.
 */
 func buildOverlayTestRom() []uint8 {
-	data := make([]uint8, romSize)
+	data := make([]uint8, storage.RomSize)
 
 	code := []uint8{
 		// $000008, still on the overlay map
@@ -48,7 +50,7 @@ func newOverlayTestMac(t *testing.T) *Mac {
 	config.RomFile = "<test>"
 	config.Trace = "sadmac"
 
-	return newMac(config, &rom{data: buildOverlayTestRom()}, nil)
+	return newMac(config, storage.RomFromData(buildOverlayTestRom()), nil)
 }
 
 func TestTheRomLeavesTheOverlayMap(t *testing.T) {
@@ -59,7 +61,7 @@ func TestTheRomLeavesTheOverlayMap(t *testing.T) {
 		t.Fatal("the overlay was not cleared through the VIA")
 	}
 
-	if m.GetPC() != 0x400028 {
+	if m.GetPC() != 0x40_0028 {
 		t.Errorf("the run ended at $%06x, wanted $400028", m.GetPC())
 	}
 }

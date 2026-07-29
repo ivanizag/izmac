@@ -1,11 +1,15 @@
 package izmac
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/ivanizag/izmac/storage"
+)
 
 // newTestMemoryManager returns a memory manager with a ROM whose bytes are
 // recognizable: the byte at the ROM offset i is i, wrapped
 func newTestMemoryManager(ramSizeKb int) *memoryManager {
-	rom := make([]uint8, romSize)
+	rom := make([]uint8, storage.RomSize)
 	for i := range rom {
 		rom[i] = uint8(i)
 	}
@@ -65,7 +69,7 @@ func TestDevicesAreMirroredOverTheirRegion(t *testing.T) {
 	// The 128Kb of ROM repeat inside the 256Kb the sockets can hold, and
 	// no further
 	value := m.Peek(romBase + 0x40)
-	if m.Peek(romBase+romSize+0x40) != value {
+	if m.Peek(romBase+storage.RomSize+0x40) != value {
 		t.Error("the ROM does not repeat inside its window")
 	}
 	if m.Peek(romWindowEnd+0x40) == value {
@@ -74,7 +78,7 @@ func TestDevicesAreMirroredOverTheirRegion(t *testing.T) {
 
 	// And the 1Mb of RAM repeats over the RAM region
 	m.Poke(0x1000, 0x55)
-	if m.Peek(0x101000) != 0x55 {
+	if m.Peek(0x10_1000) != 0x55 {
 		t.Error("the RAM does not mirror over its region")
 	}
 }
@@ -94,10 +98,10 @@ func TestQuartersAreDecoded(t *testing.T) {
 		address uint32
 	}{
 		{"SCSI", scsiBase},
-		{"SCC read", 0x800000},
-		{"SCC write", 0xa00000},
+		{"SCC read", 0x80_0000},
+		{"SCC write", 0xa0_0000},
 		{"IWM", iwmBase},
-		{"VIA", 0xefe1fe},
+		{"VIA", 0xef_e1fe},
 	} {
 		probe.reads = 0
 		m.Peek(c.address)
@@ -121,8 +125,8 @@ func TestAddressesAreMaskedTo24Bits(t *testing.T) {
 
 	// The Memory Manager keeps flags on the high byte of the master
 	// pointers, so the high byte has to be dropped
-	m.Poke(0x001234, 0x77)
-	if m.Peek(0xff001234) != 0x77 {
+	m.Poke(0x00_1234, 0x77)
+	if m.Peek(0xff00_1234) != 0x77 {
 		t.Error("the high byte of the address was not ignored")
 	}
 }
@@ -132,8 +136,8 @@ func TestRamTop(t *testing.T) {
 		ramSizeKb int
 		videoMain uint32
 	}{
-		{1024, 0x0fa700},
-		{4096, 0x3fa700},
+		{1024, 0x0f_a700},
+		{4096, 0x3f_a700},
 	} {
 		m := newTestMemoryManager(c.ramSizeKb)
 		got := m.ramTop() - videoMainOffset
@@ -175,8 +179,8 @@ func TestTheRomCanTellThatTheMachineHasScsi(t *testing.T) {
 			uint32(m.Peek(address+2))<<8 | uint32(m.Peek(address+3))
 	}
 
-	inside := longAt(0x420000)
-	outside := longAt(0x440000)
+	inside := longAt(0x42_0000)
+	outside := longAt(0x44_0000)
 
 	if inside == outside {
 		t.Errorf("$420000 and $440000 both read $%08x, so the ROM sees no SCSI", inside)

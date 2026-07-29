@@ -1,5 +1,7 @@
 package izmac
 
+import "github.com/ivanizag/izmac/scsi"
+
 /*
 The address decoding of the Macintosh Plus. The 16Mb the processor can reach
 is split in four quarters: RAM, ROM and SCSI, the SCC, and the IWM and the
@@ -15,7 +17,7 @@ jumps to the ROM on its normal position and clears the bit.
 
 const (
 	// addressMask is applied to every access, the 68000 has 24 address lines
-	addressMask uint32 = 0x00ffffff
+	addressMask uint32 = 0x00ff_ffff
 
 	quarterRAM  = 0 // $000000-$3fffff
 	quarterROM  = 1 // $400000-$7fffff, with the SCSI
@@ -31,18 +33,18 @@ const (
 	// with one at $440000, which is outside the window. Mirroring the ROM
 	// over the whole quarter makes those equal and the ROM decides there is
 	// no SCSI, skips the bus scan at $407d40 and never looks for a disk.
-	romWindowEnd = 0x440000
+	romWindowEnd = 0x44_0000
 
-	scsiBase = 0x580000
-	scsiEnd  = 0x600000
+	scsiBase = 0x58_0000
+	scsiEnd  = 0x60_0000
 
 	// unmappedValue is what an address nothing answers at reads as
 	unmappedValue = 0xff
 
-	overlayRAMBase = 0x600000
+	overlayRAMBase = 0x60_0000
 
-	iwmBase = 0xc00000
-	viaBase = 0xe00000
+	iwmBase = 0xc0_0000
+	viaBase = 0xe0_0000
 )
 
 // device is anything mapped on the address space other than RAM and ROM
@@ -155,27 +157,16 @@ func (m *memoryManager) Peek(address uint32) uint8 {
 	}
 }
 
-// PeekCode returns the byte at the given address. Instructions are only
-// fetched from RAM and ROM, so the devices are not reached from here.
+/*
+PeekCode returns the byte at the given address. iz68000 offers it as a place
+to take advantage of instructions being fetched from a narrower part of the
+map than data is, but there is nothing here to take: the decoding is a switch
+on two bits and the same branches either way, and a specialised copy of the
+RAM and ROM cases measured no faster over a boot than this does. What it did
+do was make the map exist in two places, which is how the window the ROM
+answers over came to be fixed in one of them and not the other.
+*/
 func (m *memoryManager) PeekCode(address uint32) uint8 {
-	address &= addressMask
-
-	switch address >> 22 {
-	case quarterRAM:
-		if m.overlay {
-			return m.rom[address&m.romMask]
-		}
-		return m.ram[address&m.ramMask]
-
-	case quarterROM:
-		if m.overlay && address >= overlayRAMBase {
-			return m.ram[address&m.ramMask]
-		}
-		if address < romWindowEnd {
-			return m.rom[address&m.romMask]
-		}
-	}
-
 	return m.Peek(address)
 }
 
@@ -210,6 +201,18 @@ func (m *memoryManager) Poke(address uint32, value uint8) {
 		}
 	}
 }
+
+/*
+scsiBus puts the bus on the address space. The device interface is unexported
+so that the map of the machine stays private, and the bus is its own package,
+so the two are joined here rather than by exporting one to suit the other.
+*/
+type scsiBus struct {
+	bus *scsi.Bus
+}
+
+func (d *scsiBus) peek(address uint32) uint8        { return d.bus.Peek(address) }
+func (d *scsiBus) poke(address uint32, value uint8) { d.bus.Poke(address, value) }
 
 // nullDevice stands for the devices not implemented yet. Reads return $ff as
 // an undriven bus does.

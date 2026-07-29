@@ -1,7 +1,8 @@
-package izmac
+// Package scsi is the bus of the Macintosh and the disks on it.
+package scsi
 
 /*
-The NCR 5380 of the Macintosh Plus, the initiator side.
+Bus is the NCR 5380 of the Macintosh Plus, the initiator side.
 
 The chip is at $580000 and the addresses have the shape $580drn: r is the
 register, n is 0 to read and 1 to write, and d is the DACK line used by the
@@ -22,13 +23,13 @@ The 5380 does not run the bus by itself, the driver walks it through every
 phase. What is emulated here is the register file and the handshake, with the
 target holding the phase.
 */
-type scsi5380 struct {
+type Bus struct {
 	// targets holds the devices by their id. The initiator keeps the id 7
 	// for itself, so a bus takes seven of them.
-	targets [scsiTargetCount]*scsiTarget
+	targets [TargetCount]*Disk
 
 	// selected is the target holding the bus, nil while it is free
-	selected *scsiTarget
+	selected *Disk
 
 	outputData uint8
 	inputData  uint8
@@ -40,14 +41,14 @@ type scsi5380 struct {
 }
 
 const (
-	scsiRegCurrentData  = 0
-	scsiRegInitiatorCmd = 1
-	scsiRegMode         = 2
-	scsiRegTargetCmd    = 3
-	scsiRegBusStatus    = 4
-	scsiRegBusAndStatus = 5
-	scsiRegInputData    = 6
-	scsiRegResetParity  = 7
+	regCurrentData  = 0
+	regInitiatorCmd = 1
+	regMode         = 2
+	regTargetCmd    = 3
+	regBusStatus    = 4
+	regBusAndStatus = 5
+	regInputData    = 6
+	regResetParity  = 7
 
 	// The mode register
 	modeArbitrate uint8 = 1 << 0
@@ -86,84 +87,111 @@ const (
 	basEndOfDma    uint8 = 1 << 7
 )
 
-// scsiTargetCount is how many devices a bus can hold, the eight ids less the
+// TargetCount is how many devices a bus can hold, the eight ids less the
 // one the initiator answers to
-const scsiTargetCount = 7
+const TargetCount = 7
 
-// scsiInitiatorId is the id the Macintosh gives itself
-const scsiInitiatorId = 7
+// initiatorId is the id the Macintosh gives itself
+const initiatorId = 7
 
-func newScsi5380() *scsi5380 {
-	return &scsi5380{}
+func NewBus() *Bus {
+	return &Bus{}
 }
 
-// attach puts a device on the bus at its own id
-func (s *scsi5380) attach(t *scsiTarget) {
-	if int(t.id) < len(s.targets) {
-		s.targets[t.id] = t
+// Attach puts a disk on the bus at its own id
+func (s *Bus) Attach(d *Disk) {
+	if int(d.id) < len(s.targets) {
+		s.targets[d.id] = d
 	}
+}
+
+/*
+Attachment describes a disk on the bus, for a caller that wants to say what
+is there without being handed the disk itself.
+*/
+type Attachment struct {
+	Id     int
+	Name   string
+	Blocks uint32
+}
+
+// Attached describes the disks on the bus, in the order of their ids
+func (s *Bus) Attached() []Attachment {
+	attached := make([]Attachment, 0, len(s.targets))
+
+	for id, d := range s.targets {
+		if d == nil {
+			continue
+		}
+		attached = append(attached, Attachment{
+			Id:     id,
+			Name:   d.disk.Name(),
+			Blocks: d.disk.Blocks(),
+		})
+	}
+	return attached
 }
 
 // phase is the phase of whichever target holds the bus, or bus free when
 // none does
-func (s *scsi5380) phase() scsiPhase {
+func (s *Bus) currentPhase() phase {
 	if s.selected == nil {
 		return phaseBusFree
 	}
 	return s.selected.phase
 }
 
-// scsiRegister returns the register an address reaches
-func scsiRegister(address uint32) uint8 {
+// registerOf returns the register an address reaches
+func registerOf(address uint32) uint8 {
 	return uint8((address >> 4) & 0x07)
 }
 
-// scsiIsDack tells if the address is one of the pseudo DMA ones, which
+// isDack tells if the address is one of the pseudo DMA ones, which
 // handshake by themselves
-func scsiIsDack(address uint32) bool {
+func isDack(address uint32) bool {
 	return address&0x200 != 0
 }
 
-func (s *scsi5380) peek(address uint32) uint8 {
-	switch scsiRegister(address) {
-	case scsiRegCurrentData:
-		return s.readData(scsiIsDack(address))
-	case scsiRegInitiatorCmd:
+func (s *Bus) Peek(address uint32) uint8 {
+	switch registerOf(address) {
+	case regCurrentData:
+		return s.readData(isDack(address))
+	case regInitiatorCmd:
 		return s.readInitiatorCommand()
-	case scsiRegMode:
+	case regMode:
 		return s.mode
-	case scsiRegTargetCmd:
+	case regTargetCmd:
 		return s.targetCommand
-	case scsiRegBusStatus:
+	case regBusStatus:
 		return s.busStatus()
-	case scsiRegBusAndStatus:
+	case regBusAndStatus:
 		return s.busAndStatus()
-	case scsiRegInputData:
-		return s.readData(scsiIsDack(address))
-	case scsiRegResetParity:
+	case regInputData:
+		return s.readData(isDack(address))
+	case regResetParity:
 		return 0
 	}
 	return 0
 }
 
-func (s *scsi5380) poke(address uint32, value uint8) {
-	switch scsiRegister(address) {
-	case scsiRegCurrentData:
+func (s *Bus) Poke(address uint32, value uint8) {
+	switch registerOf(address) {
+	case regCurrentData:
 		s.outputData = value
-		if scsiIsDack(address) && s.selected != nil {
+		if isDack(address) && s.selected != nil {
 			s.selected.putByte(value)
 		}
 		s.trySelect()
-	case scsiRegInitiatorCmd:
+	case regInitiatorCmd:
 		s.writeInitiatorCommand(value)
-	case scsiRegMode:
+	case regMode:
 		s.mode = value
 		s.trySelect()
-	case scsiRegTargetCmd:
+	case regTargetCmd:
 		s.targetCommand = value
-	case scsiRegBusStatus:
+	case regBusStatus:
 		s.selectEnable = value
-	case scsiRegBusAndStatus, scsiRegInputData, scsiRegResetParity:
+	case regBusAndStatus, regInputData, regResetParity:
 		// Starting a DMA transfer. There is nothing to set up, the
 		// handshake happens on the DACK addresses.
 	}
@@ -178,7 +206,7 @@ be in progress and for the lost arbitration bit to stay clear.
 Nothing else ever wants the bus, so the arbitration is won as soon as it is
 asked for and it is never lost.
 */
-func (s *scsi5380) readInitiatorCommand() uint8 {
+func (s *Bus) readInitiatorCommand() uint8 {
 	value := s.initiatorCommand &^ (icrArbitrationInProgress | icrLostArbitration)
 
 	if s.arbitrating() {
@@ -190,7 +218,7 @@ func (s *scsi5380) readInitiatorCommand() uint8 {
 
 // arbitrating tells if the driver has asked for the bus and not yet finished
 // selecting a target with it
-func (s *scsi5380) arbitrating() bool {
+func (s *Bus) arbitrating() bool {
 	return s.mode&modeArbitrate != 0
 }
 
@@ -199,7 +227,7 @@ writeInitiatorCommand is where the bus is driven. Two transitions matter: the
 select line going up with the target id on the data bus starts a command, and
 the acknowledge going up moves one byte.
 */
-func (s *scsi5380) writeInitiatorCommand(value uint8) {
+func (s *Bus) writeInitiatorCommand(value uint8) {
 	previous := s.initiatorCommand
 	s.initiatorCommand = value
 
@@ -240,7 +268,7 @@ func (s *scsi5380) writeInitiatorCommand(value uint8) {
 }
 
 // releaseIfFree lets go of a target that has finished with the bus
-func (s *scsi5380) releaseIfFree() {
+func (s *Bus) releaseIfFree() {
 	if s.selected != nil && s.selected.phase == phaseBusFree {
 		s.selected = nil
 	}
@@ -254,7 +282,7 @@ arbitrate for the bus, win it, assert select, write the initiator and the
 target as a bit each, and assert the data bus. Looking at the data when
 select goes up sees only the initiator's own id and never selects anything.
 */
-func (s *scsi5380) trySelect() {
+func (s *Bus) trySelect() {
 	if s.selected != nil {
 		return
 	}
@@ -267,7 +295,7 @@ func (s *scsi5380) trySelect() {
 
 	// The data bus carries the initiator and the target as a bit each, so
 	// what is left after taking the initiator out names the device wanted
-	wanted := s.outputData &^ (1 << scsiInitiatorId)
+	wanted := s.outputData &^ (1 << initiatorId)
 	for _, t := range s.targets {
 		if t != nil && wanted&(1<<t.id) != 0 {
 			s.selected = t
@@ -279,7 +307,7 @@ func (s *scsi5380) trySelect() {
 
 // readData hands over a byte, acknowledging it when the address used is one
 // of the pseudo DMA ones
-func (s *scsi5380) readData(dack bool) uint8 {
+func (s *Bus) readData(dack bool) uint8 {
 	if s.selected == nil {
 		return 0
 	}
@@ -292,7 +320,7 @@ func (s *scsi5380) readData(dack bool) uint8 {
 }
 
 // peekByte looks at the byte the target has ready without taking it
-func (s *scsi5380) peekByte() uint8 {
+func (s *Bus) peekByte() uint8 {
 	t := s.selected
 
 	switch t.phase {
@@ -313,7 +341,7 @@ busStatus reports the lines the target is driving. The phase is carried by
 the message, command/data and input/output lines, which is what the driver
 reads to know what to do next.
 */
-func (s *scsi5380) busStatus() uint8 {
+func (s *Bus) busStatus() uint8 {
 	var status uint8
 
 	if s.initiatorCommand&icrAssertSel != 0 {
@@ -323,7 +351,7 @@ func (s *scsi5380) busStatus() uint8 {
 		status |= busStatusRst
 	}
 
-	if s.phase() == phaseBusFree {
+	if s.currentPhase() == phaseBusFree {
 		if s.arbitrating() {
 			// The chip drives the bus busy while it holds it
 			status |= busStatusBsy
@@ -347,7 +375,7 @@ func (s *scsi5380) busStatus() uint8 {
 		status |= busStatusReq
 	}
 
-	msg, cd, io := phaseLines(s.phase())
+	msg, cd, io := phaseLines(s.currentPhase())
 	if msg {
 		status |= busStatusMsg
 	}
@@ -363,7 +391,7 @@ func (s *scsi5380) busStatus() uint8 {
 
 // phaseLines returns the message, command/data and input/output lines of a
 // phase, which is how a phase is named on the bus
-func phaseLines(phase scsiPhase) (msg bool, cd bool, io bool) {
+func phaseLines(phase phase) (msg bool, cd bool, io bool) {
 	switch phase {
 	case phaseCommand:
 		return false, true, false
@@ -382,7 +410,7 @@ func phaseLines(phase scsiPhase) (msg bool, cd bool, io bool) {
 // busAndStatus reports the handshake state. The phase match bit says that
 // the target agrees with the phase the driver set on the target command
 // register, and the driver waits on it before every transfer.
-func (s *scsi5380) busAndStatus() uint8 {
+func (s *Bus) busAndStatus() uint8 {
 	var status uint8
 
 	if s.initiatorCommand&icrAssertAck != 0 {
@@ -395,7 +423,7 @@ func (s *scsi5380) busAndStatus() uint8 {
 	if s.phaseMatches() {
 		status |= basPhaseMatch
 	}
-	if s.phase() != phaseBusFree {
+	if s.currentPhase() != phaseBusFree {
 		status |= basDmaRequest
 	}
 
@@ -404,12 +432,12 @@ func (s *scsi5380) busAndStatus() uint8 {
 
 // phaseMatches compares the phase the driver expects, on the low three bits
 // of the target command register, with the one the target is in
-func (s *scsi5380) phaseMatches() bool {
-	if s.phase() == phaseBusFree {
+func (s *Bus) phaseMatches() bool {
+	if s.currentPhase() == phaseBusFree {
 		return false
 	}
 
-	msg, cd, io := phaseLines(s.phase())
+	msg, cd, io := phaseLines(s.currentPhase())
 
 	var wanted uint8
 	if io {
@@ -425,7 +453,7 @@ func (s *scsi5380) phaseMatches() bool {
 	return s.targetCommand&0x07 == wanted
 }
 
-func (s *scsi5380) reset() {
+func (s *Bus) reset() {
 	s.outputData = 0
 	s.inputData = 0
 	s.mode = 0

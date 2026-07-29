@@ -1,83 +1,28 @@
 package izmac
 
+import "github.com/ivanizag/izmac/component"
+
 /*
-The Zilog 8530 serial controller. Only as much of it as the mouse needs is
-here: the two data carrier detect inputs, which is where the mouse interrupt
-signals X1 and Y1 arrive, and the registers the ROM reads to find out which
-of them moved.
+The serial controller as the Macintosh wires it. The chip is its own thing in
+component; what belongs here is where it sits on the address space and what
+is plugged into it.
 
-	sccRBase $9ffff8   read      bCtl +0   aCtl +2   bData +4   aData +6
-	sccWBase $bffff9   write
+	sccRBase $9f_fff8   read      bCtl +0   aCtl +2   bData +4   aData +6
+	sccWBase $bf_fff9   write
 
-A channel is reached by writing a register number to its control address and
-then reading or writing that address again; the pointer falls back to zero
-afterwards, so a bare read of the control address returns RR0. RR0 carries
-the data carrier detect on bit 3. RR2 of channel B carries the vector the
-level 2 handler dispatches on, with the source on its bits 3 to 1: $2 for the
-external status of channel B, which is the Y axis, and $a for channel A,
-which is the X axis.
+The two data carrier detect inputs are the mouse: the interrupt signal of the
+x axis on the channel A and of the y axis on the channel B.
 */
 type scc struct {
-	channels [2]sccChannel
-}
-
-// sccChannel is one of the two serial channels
-type sccChannel struct {
-	// pointer is the register the next access reaches
-	pointer uint8
-
-	// write holds the write registers, of which only the interrupt enables
-	// matter here
-	write [16]uint8
-
-	// dcd is the data carrier detect input, driven by the mouse
-	dcd bool
-
-	// dcdLatched is what RR0 reports, which the handler compares against
-	// what it saw last time to find the line that moved
-	dcdLatched bool
-
-	// interrupt is set by a transition and cleared when the handler resets
-	// the external status latches
-	interrupt bool
+	chip component.SCC8530
 }
 
 const (
-	sccChannelB = 0
-	sccChannelA = 1
-
 	// The offsets from the base of each of the two ports
 	sccOffsetBControl = 0
 	sccOffsetAControl = 2
 	sccOffsetBData    = 4
 	sccOffsetAData    = 6
-
-	// sccRR0Dcd is the data carrier detect bit of the status register
-	sccRR0Dcd uint8 = 1 << 3
-
-	// sccWR1ExternalInterrupt enables the external status interrupt
-	sccWR1ExternalInterrupt uint8 = 1 << 0
-
-	/*
-		The commands on the bits 3 to 5 of a write to register 0. Point
-		High is the one that matters here: the pointer is only three bits
-		wide, so the registers 8 to 15 are reached by asking for the one
-		eight lower and setting this command in the same byte. A write of
-		$0f selects the register 15 and not the register 7, and reading
-		the register 15 back is how the interrupt handler finds out that
-		the carrier detect was what moved.
-	*/
-	sccWR0PointHigh           uint8 = 1 << 3
-	sccWR0ResetExternalStatus uint8 = 2 << 3
-	sccWR0CommandMask         uint8 = 7 << 3
-
-	// sccWR15DcdInterrupt enables the interrupt on a carrier detect
-	// transition, and is what the handler reads back to identify it
-	sccWR15DcdInterrupt uint8 = 1 << 3
-
-	// The vectors of RR2 on channel B, with the source on the bits 3 to 1
-	sccVectorBExternalStatus uint8 = 0x2
-	sccVectorAExternalStatus uint8 = 0xa
 )
 
 func newScc() *scc {
@@ -89,138 +34,27 @@ func newScc() *scc {
 func sccPort(address uint32) (channel int, control bool) {
 	switch address & 0x06 {
 	case sccOffsetBControl:
-		return sccChannelB, true
+		return component.ChannelB, true
 	case sccOffsetAControl:
-		return sccChannelA, true
+		return component.ChannelA, true
 	case sccOffsetBData:
-		return sccChannelB, false
+		return component.ChannelB, false
 	default:
-		return sccChannelA, false
+		return component.ChannelA, false
 	}
 }
 
 func (s *scc) peek(address uint32) uint8 {
 	channel, control := sccPort(address)
-	c := &s.channels[channel]
-
-	if !control {
-		return 0
-	}
-
-	register := c.pointer
-	c.pointer = 0
-
-	switch register {
-	case 0:
-		return c.readStatus()
-	case 2:
-		// Only channel B carries the vector the dispatch uses
-		if channel == sccChannelB {
-			return s.vector()
-		}
-		return 0
-	}
-
-	// The rest read back what was written, which is all the handler wants
-	// of them: it reads the register 15 to tell a carrier detect change
-	// from the other things that share the interrupt
-	return c.write[register&0x0f]
+	return s.chip.Read(channel, control)
 }
 
 func (s *scc) poke(address uint32, value uint8) {
 	channel, control := sccPort(address)
-	c := &s.channels[channel]
-
-	if !control {
-		return
-	}
-
-	register := c.pointer
-	c.pointer = 0
-
-	if register == 0 {
-		// A write to register 0 carries a command on its high bits and
-		// the next register on its low ones
-		command := value & sccWR0CommandMask
-		if command == sccWR0ResetExternalStatus {
-			c.resetExternalStatus()
-		}
-
-		c.pointer = value & 0x07
-		if command == sccWR0PointHigh {
-			c.pointer |= 8
-		}
-		return
-	}
-
-	c.write[register&0x0f] = value
+	s.chip.Write(channel, control, value)
 }
 
-// readStatus is RR0, which reports the pins as they were last latched
-func (c *sccChannel) readStatus() uint8 {
-	var status uint8
-	if c.dcdLatched {
-		status |= sccRR0Dcd
-	}
-	return status
-}
-
-/*
-vector is RR2 of channel B, the modified vector the level 2 handler reads to
-find out what happened. Channel A is the higher priority of the two.
-*/
-func (s *scc) vector() uint8 {
-	if s.channels[sccChannelA].interrupt {
-		return sccVectorAExternalStatus
-	}
-	if s.channels[sccChannelB].interrupt {
-		return sccVectorBExternalStatus
-	}
-	return sccVectorBExternalStatus
-}
-
-/*
-setDcd drives one of the data carrier detect pins. A transition either way
-raises the interrupt, and the handler compares the latched state with what it
-saw before to work out which way the mouse moved.
-*/
-func (s *scc) setDcd(channel int, level bool) {
-	c := &s.channels[channel]
-	if c.dcd == level {
-		return
-	}
-	c.dcd = level
-
-	if c.write[1]&sccWR1ExternalInterrupt != 0 && c.write[15]&sccWR15DcdInterrupt != 0 {
-		c.interrupt = true
-	}
-	c.dcdLatched = level
-}
-
-/*
-resetExternalStatus clears the latch and the interrupt of one channel, which
-is what the handler does once it has read the status. It is per channel and
-not for the whole chip: the two axes of the mouse are one channel each and
-move at the same time, so clearing both here loses every transition of the
-axis whose turn it was not.
-*/
-func (c *sccChannel) resetExternalStatus() {
-	c.interrupt = false
-	c.dcdLatched = c.dcd
-}
-
-// pending tells if a channel still has an interrupt the processor has not
-// answered, which is what keeps the mouse from moving out from under it
-func (s *scc) pending(channel int) bool {
-	return s.channels[channel].interrupt
-}
-
-// interruptAsserted returns the state of the interrupt line, the level 2 of
-// the processor
-func (s *scc) interruptAsserted() bool {
-	return s.channels[sccChannelA].interrupt || s.channels[sccChannelB].interrupt
-}
-
-func (s *scc) reset() {
-	*s = scc{}
-}
+func (s *scc) setDcd(channel int, level bool) { s.chip.SetDcd(channel, level) }
+func (s *scc) pending(channel int) bool       { return s.chip.Pending(channel) }
+func (s *scc) interruptAsserted() bool        { return s.chip.InterruptAsserted() }
+func (s *scc) reset()                         { s.chip.Reset() }

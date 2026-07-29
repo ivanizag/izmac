@@ -6,6 +6,9 @@ import (
 	"io"
 	"strconv"
 	"strings"
+
+	"github.com/ivanizag/izmac/scsi"
+	"github.com/ivanizag/izmac/storage"
 )
 
 // Configuration holds the settings of an emulated machine. It is passed to
@@ -102,13 +105,19 @@ func (c *Configuration) AddFiles(filenames []string) error {
 		return nil
 	}
 
-	hardDisks, diskettes, err := sortMedia(filenames)
-	if err != nil {
-		return err
+	for _, filename := range filenames {
+		kind, err := storage.Classify(filename)
+		if err != nil {
+			return err
+		}
+
+		if kind == storage.KindFloppy {
+			c.Diskettes = append(c.Diskettes, filename)
+		} else {
+			c.DiskFiles = append(c.DiskFiles, filename)
+		}
 	}
 
-	c.DiskFiles = append(c.DiskFiles, hardDisks...)
-	c.Diskettes = append(c.Diskettes, diskettes...)
 	return nil
 }
 
@@ -159,9 +168,9 @@ func (c *Configuration) Validate() error {
 		return fmt.Errorf("unsupported RAM size %vKb, use 1024 or 4096", c.RamSizeKb)
 	}
 
-	if len(c.DiskFiles) > scsiTargetCount {
+	if len(c.DiskFiles) > scsi.TargetCount {
 		return fmt.Errorf("the bus takes %v disks, %v were given",
-			scsiTargetCount, len(c.DiskFiles))
+			scsi.TargetCount, len(c.DiskFiles))
 	}
 
 	return c.parseSpeed()

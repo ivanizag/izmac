@@ -4,7 +4,7 @@ import "testing"
 
 // The soft switches, as offsets from the IWM base
 const (
-	iwmBaseAddress = 0xdfe1ff
+	iwmBaseAddress = 0xdf_e1ff
 
 	iwmSwCa0L  = 0
 	iwmSwEnblL = 8
@@ -40,7 +40,7 @@ func TestTheIwmIsMirroredOverItsRegion(t *testing.T) {
 	}
 
 	// Only the address lines 9 to 12 are decoded, so the block repeats
-	if iwmRegister(0xdff1ff) != iwmRegister(0xdfd1ff) {
+	if iwmRegister(0xdf_f1ff) != iwmRegister(0xdf_d1ff) {
 		t.Error("the IWM does not mirror over its region")
 	}
 }

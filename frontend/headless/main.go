@@ -7,7 +7,6 @@ import (
 	"os"
 
 	"github.com/ivanizag/izmac"
-	"github.com/ivanizag/izmac/screen"
 )
 
 func main() {
@@ -28,8 +27,6 @@ func run(name string, args []string) error {
 		"frames to run before reporting")
 	pngFile := fs.String("png", "",
 		"file to write the screen to as a PNG image")
-	textScale := fs.Int("textscale", 6,
-		"scale down factor of the screen dump on the terminal, 0 to skip it")
 	disasmFrom := fs.Uint64("disasm", 0,
 		"address to disassemble before running, in hex")
 	disasmCount := fs.Int("disasmcount", 16,
@@ -95,13 +92,8 @@ func run(name string, args []string) error {
 
 	fmt.Printf("\n%v\n%v\n", m.DumpRegisters(), m.Disasm(m.GetPC(), 6))
 
-	vs := m.GetVideoSource()
-	if *textScale > 0 {
-		fmt.Print(screen.SnapshotText(vs, *textScale))
-	}
-
 	if *pngFile != "" {
-		err = writePng(*pngFile, vs)
+		err = writePng(*pngFile, m)
 		if err != nil {
 			return err
 		}
@@ -121,12 +113,12 @@ func reportMedia(m *izmac.Mac) {
 	}
 }
 
-func writePng(filename string, vs screen.VideoSource) error {
+func writePng(filename string, m *izmac.Mac) error {
 	f, err := os.Create(filename)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
 
-	return png.Encode(f, screen.Snapshot(vs))
+	return png.Encode(f, m.GetImage())
 }

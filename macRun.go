@@ -3,6 +3,8 @@ package izmac
 import (
 	"math"
 	"time"
+
+	"github.com/ivanizag/izmac/component"
 )
 
 /*
@@ -205,13 +207,13 @@ func (m *Mac) lineTick() {
 		then changes the level under the edge it is reading.
 	*/
 	x1, x2, y1, y2 := m.mouse.tick(
-		!m.scc.pending(sccChannelA), !m.scc.pending(sccChannelB))
+		!m.scc.pending(component.ChannelA), !m.scc.pending(component.ChannelB))
 
 	// The interrupt lines arrive on the carrier detect inputs, which are
 	// active low, so the edge the ROM reads as positive is the falling one
 	// of the signal the mouse sends
-	m.scc.setDcd(sccChannelA, !x1)
-	m.scc.setDcd(sccChannelB, !y1)
+	m.scc.setDcd(component.ChannelA, !x1)
+	m.scc.setDcd(component.ChannelB, !y1)
 	m.via.setMouseQuadrature(x2, y2)
 }
 

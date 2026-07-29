@@ -1,4 +1,4 @@
-package izmac
+package scsi
 
 import (
 	"testing"
@@ -6,7 +6,12 @@ import (
 	"github.com/ivanizag/izmac/storage"
 )
 
-const scsiBaseAddress = 0x580000
+const (
+	scsiBaseAddress = 0x58_0000
+
+	// testDiskId is where the tests put their only disk
+	testDiskId = 0
+)
 
 func scsiAddress(reg uint32, write bool, dack bool) uint32 {
 	address := uint32(scsiBaseAddress) + reg*0x10
@@ -19,18 +24,18 @@ func scsiAddress(reg uint32, write bool, dack bool) uint32 {
 	return address
 }
 
-func newTestScsi(t *testing.T, blocks uint32) (*scsi5380, storage.BlockDisk) {
+func newTestScsi(t *testing.T, blocks uint32) (*Bus, storage.BlockDisk) {
 	t.Helper()
 
 	disk := storage.NewBlockDiskMemory(blocks)
-	s := newScsi5380()
-	s.attach(newScsiTarget(scsiFirstDiskId, disk, false))
+	s := NewBus()
+	s.Attach(NewDisk(testDiskId, disk, false))
 	return s, disk
 }
 
 // theTarget is the only device the tests put on the bus
-func (s *scsi5380) theTarget() *scsiTarget {
-	return s.targets[scsiFirstDiskId]
+func (s *Bus) theTarget() *Disk {
+	return s.targets[testDiskId]
 }
 
 /*
@@ -39,39 +44,39 @@ getting it wrong is what kept the ROM from ever selecting anything: arbitrate
 for the bus with the initiator's own id, assert select, and only then put the
 target on the data bus and assert it.
 */
-func selectTarget(s *scsi5380, id uint8) {
-	s.poke(scsiAddress(scsiRegCurrentData, true, false), 1<<7)
-	s.poke(scsiAddress(scsiRegMode, true, false), modeArbitrate)
-	s.poke(scsiAddress(scsiRegInitiatorCmd, true, false), icrAssertSel)
-	s.poke(scsiAddress(scsiRegCurrentData, true, false), 1<<7|1<<id)
-	s.poke(scsiAddress(scsiRegInitiatorCmd, true, false), icrAssertSel|icrAssertData)
-	s.poke(scsiAddress(scsiRegMode, true, false), 0)
-	s.poke(scsiAddress(scsiRegInitiatorCmd, true, false), icrAssertData)
+func selectTarget(s *Bus, id uint8) {
+	s.Poke(scsiAddress(regCurrentData, true, false), 1<<7)
+	s.Poke(scsiAddress(regMode, true, false), modeArbitrate)
+	s.Poke(scsiAddress(regInitiatorCmd, true, false), icrAssertSel)
+	s.Poke(scsiAddress(regCurrentData, true, false), 1<<7|1<<id)
+	s.Poke(scsiAddress(regInitiatorCmd, true, false), icrAssertSel|icrAssertData)
+	s.Poke(scsiAddress(regMode, true, false), 0)
+	s.Poke(scsiAddress(regInitiatorCmd, true, false), icrAssertData)
 }
 
 // runCommand selects the target, hands over the descriptor block a byte at a
 // time, then takes whatever comes back until the bus is free again. It
 // returns the data and the status.
-func runCommand(s *scsi5380, command []uint8) ([]uint8, uint8) {
+func runCommand(s *Bus, command []uint8) ([]uint8, uint8) {
 	selectTarget(s, s.theTarget().id)
 
 	for _, b := range command {
-		s.poke(scsiAddress(scsiRegCurrentData, true, false), b)
-		s.poke(scsiAddress(scsiRegInitiatorCmd, true, false), icrAssertAck)
-		s.poke(scsiAddress(scsiRegInitiatorCmd, true, false), 0)
+		s.Poke(scsiAddress(regCurrentData, true, false), b)
+		s.Poke(scsiAddress(regInitiatorCmd, true, false), icrAssertAck)
+		s.Poke(scsiAddress(regInitiatorCmd, true, false), 0)
 	}
 
 	data := make([]uint8, 0)
 	status := uint8(0)
 
 	for i := 0; i < 1<<20; i++ {
-		switch s.phase() {
+		switch s.currentPhase() {
 		case phaseDataIn:
-			data = append(data, s.peek(scsiAddress(scsiRegInputData, false, true)))
+			data = append(data, s.Peek(scsiAddress(regInputData, false, true)))
 		case phaseStatus:
-			status = s.peek(scsiAddress(scsiRegInputData, false, true))
+			status = s.Peek(scsiAddress(regInputData, false, true))
 		case phaseMessageIn:
-			s.peek(scsiAddress(scsiRegInputData, false, true))
+			s.Peek(scsiAddress(regInputData, false, true))
 		default:
 			return data, status
 		}
@@ -85,11 +90,11 @@ func TestTheScsiRegistersAre16BytesApart(t *testing.T) {
 		for _, write := range []bool{false, true} {
 			for _, dack := range []bool{false, true} {
 				address := scsiAddress(reg, write, dack)
-				if got := scsiRegister(address); uint32(got) != reg {
+				if got := registerOf(address); uint32(got) != reg {
 					t.Errorf("$%06x reached the register %v, wanted %v",
 						address, got, reg)
 				}
-				if scsiIsDack(address) != dack {
+				if isDack(address) != dack {
 					t.Errorf("$%06x got the DACK line wrong", address)
 				}
 			}
@@ -110,19 +115,19 @@ func TestSelectingAnAbsentTargetLeavesTheBusFree(t *testing.T) {
 
 	// An id that is not the one of the disk
 	selectTarget(s, 4)
-	s.poke(scsiAddress(scsiRegInitiatorCmd, true, false), 0)
+	s.Poke(scsiAddress(regInitiatorCmd, true, false), 0)
 
-	if s.phase() != phaseBusFree {
-		t.Errorf("selecting an absent target left the bus on %v", s.phase())
+	if s.currentPhase() != phaseBusFree {
+		t.Errorf("selecting an absent target left the bus on %v", s.currentPhase())
 	}
 }
 
 func TestInquiryDescribesADirectAccessDevice(t *testing.T) {
 	s, _ := newTestScsi(t, 16)
 
-	data, status := runCommand(s, []uint8{scsiCmdInquiry, 0, 0, 0, 36, 0})
+	data, status := runCommand(s, []uint8{cmdInquiry, 0, 0, 0, 36, 0})
 
-	if status != scsiStatusGood {
+	if status != statusGood {
 		t.Fatalf("the inquiry answered the status $%02x", status)
 	}
 	if len(data) != 36 {
@@ -139,9 +144,9 @@ func TestInquiryDescribesADirectAccessDevice(t *testing.T) {
 func TestTheCapacityIsTheLastBlockAndTheBlockSize(t *testing.T) {
 	s, _ := newTestScsi(t, 100)
 
-	data, status := runCommand(s, []uint8{scsiCmdReadCapacity, 0, 0, 0, 0, 0, 0, 0, 0, 0})
+	data, status := runCommand(s, []uint8{cmdReadCapacity, 0, 0, 0, 0, 0, 0, 0, 0, 0})
 
-	if status != scsiStatusGood {
+	if status != statusGood {
 		t.Fatalf("the capacity answered the status $%02x", status)
 	}
 	if len(data) != 8 {
@@ -170,9 +175,9 @@ func TestReadingABlock(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	data, status := runCommand(s, []uint8{scsiCmdRead6, 0, 0, 3, 1, 0})
+	data, status := runCommand(s, []uint8{cmdRead6, 0, 0, 3, 1, 0})
 
-	if status != scsiStatusGood {
+	if status != statusGood {
 		t.Fatalf("the read answered the status $%02x", status)
 	}
 	if len(data) != storage.BlockSize {
@@ -196,7 +201,7 @@ func TestReadingSeveralBlocksAtOnce(t *testing.T) {
 		}
 	}
 
-	data, _ := runCommand(s, []uint8{scsiCmdRead6, 0, 0, 0, 3, 0})
+	data, _ := runCommand(s, []uint8{cmdRead6, 0, 0, 0, 3, 0})
 
 	if len(data) != 3*storage.BlockSize {
 		t.Fatalf("the read returned %v bytes, wanted three blocks", len(data))
@@ -211,9 +216,9 @@ func TestReadingSeveralBlocksAtOnce(t *testing.T) {
 func TestReadingPastTheEndFails(t *testing.T) {
 	s, _ := newTestScsi(t, 16)
 
-	_, status := runCommand(s, []uint8{scsiCmdRead6, 0, 0, 200, 1, 0})
+	_, status := runCommand(s, []uint8{cmdRead6, 0, 0, 200, 1, 0})
 
-	if status != scsiStatusCheckCondition {
+	if status != statusCheckCondition {
 		t.Errorf("a read past the end answered the status $%02x", status)
 	}
 }
@@ -227,9 +232,9 @@ func TestTheTenByteReadIsDecodedToo(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	data, status := runCommand(s, []uint8{scsiCmdRead10, 0, 0, 0, 0, 5, 0, 0, 1, 0})
+	data, status := runCommand(s, []uint8{cmdRead10, 0, 0, 0, 0, 5, 0, 0, 1, 0})
 
-	if status != scsiStatusGood {
+	if status != statusGood {
 		t.Fatalf("the ten byte read answered the status $%02x", status)
 	}
 	if len(data) != storage.BlockSize || data[0] != 0x5a {
@@ -243,8 +248,8 @@ func TestTheTenByteReadIsDecodedToo(t *testing.T) {
 func TestTheUnitAttentionIsReportedOnce(t *testing.T) {
 	s, _ := newTestScsi(t, 16)
 
-	data, status := runCommand(s, []uint8{scsiCmdRequestSense, 0, 0, 0, 18, 0})
-	if status != scsiStatusGood {
+	data, status := runCommand(s, []uint8{cmdRequestSense, 0, 0, 0, 18, 0})
+	if status != statusGood {
 		t.Fatalf("the request sense answered the status $%02x", status)
 	}
 	if data[2] != senseUnitAttention {
@@ -252,7 +257,7 @@ func TestTheUnitAttentionIsReportedOnce(t *testing.T) {
 			data[2], senseUnitAttention)
 	}
 
-	data, _ = runCommand(s, []uint8{scsiCmdRequestSense, 0, 0, 0, 18, 0})
+	data, _ = runCommand(s, []uint8{cmdRequestSense, 0, 0, 0, 18, 0})
 	if data[2] != senseNoSense {
 		t.Errorf("the sense was not cleared after being read, it reads $%02x", data[2])
 	}
@@ -262,11 +267,11 @@ func TestAnUnknownCommandIsRejected(t *testing.T) {
 	s, _ := newTestScsi(t, 16)
 
 	_, status := runCommand(s, []uint8{0xdd, 0, 0, 0, 0, 0})
-	if status != scsiStatusCheckCondition {
+	if status != statusCheckCondition {
 		t.Fatalf("an unknown command answered the status $%02x", status)
 	}
 
-	data, _ := runCommand(s, []uint8{scsiCmdRequestSense, 0, 0, 0, 18, 0})
+	data, _ := runCommand(s, []uint8{cmdRequestSense, 0, 0, 0, 18, 0})
 	if data[2] != senseIllegalRequest {
 		t.Errorf("the sense key after an unknown command is $%02x, wanted $%02x",
 			data[2], senseIllegalRequest)
@@ -279,18 +284,18 @@ func TestWritingABlock(t *testing.T) {
 	// The command, then the data out phase a byte at a time
 	selectTarget(s, s.theTarget().id)
 
-	for _, b := range []uint8{scsiCmdWrite6, 0, 0, 7, 1, 0} {
-		s.poke(scsiAddress(scsiRegCurrentData, true, false), b)
-		s.poke(scsiAddress(scsiRegInitiatorCmd, true, false), icrAssertAck)
-		s.poke(scsiAddress(scsiRegInitiatorCmd, true, false), 0)
+	for _, b := range []uint8{cmdWrite6, 0, 0, 7, 1, 0} {
+		s.Poke(scsiAddress(regCurrentData, true, false), b)
+		s.Poke(scsiAddress(regInitiatorCmd, true, false), icrAssertAck)
+		s.Poke(scsiAddress(regInitiatorCmd, true, false), 0)
 	}
 
-	if s.phase() != phaseDataOut {
-		t.Fatalf("the write did not ask for data, it is on %v", s.phase())
+	if s.currentPhase() != phaseDataOut {
+		t.Fatalf("the write did not ask for data, it is on %v", s.currentPhase())
 	}
 
 	for i := 0; i < storage.BlockSize; i++ {
-		s.poke(scsiAddress(scsiRegCurrentData, true, true), uint8(i))
+		s.Poke(scsiAddress(regCurrentData, true, true), uint8(i))
 	}
 
 	block, err := disk.Read(7)
@@ -311,12 +316,12 @@ func TestThePhaseMatchFollowsTheTargetCommandRegister(t *testing.T) {
 
 	// The target asks for a command, which is command/data asserted and
 	// input/output clear, so the driver puts a 2 on the target command
-	s.poke(scsiAddress(scsiRegTargetCmd, true, false), 0x02)
+	s.Poke(scsiAddress(regTargetCmd, true, false), 0x02)
 	if s.busAndStatus()&basPhaseMatch == 0 {
 		t.Error("the phase does not match with the command phase selected")
 	}
 
-	s.poke(scsiAddress(scsiRegTargetCmd, true, false), 0x01)
+	s.Poke(scsiAddress(regTargetCmd, true, false), 0x01)
 	if s.busAndStatus()&basPhaseMatch != 0 {
 		t.Error("the phase matches a phase the target is not in")
 	}
@@ -347,10 +352,10 @@ func TestAResetLeavesTheBusFree(t *testing.T) {
 
 	selectTarget(s, s.theTarget().id)
 
-	s.poke(scsiAddress(scsiRegInitiatorCmd, true, false), icrAssertRst)
+	s.Poke(scsiAddress(regInitiatorCmd, true, false), icrAssertRst)
 
-	if s.phase() != phaseBusFree {
-		t.Errorf("the bus is on %v after a reset", s.phase())
+	if s.currentPhase() != phaseBusFree {
+		t.Errorf("the bus is on %v after a reset", s.currentPhase())
 	}
 }
 
@@ -359,14 +364,14 @@ func TestAResetLeavesTheBusFree(t *testing.T) {
 func TestTheArbitrationIsWonAsSoonAsItIsAsked(t *testing.T) {
 	s, _ := newTestScsi(t, 16)
 
-	if s.peek(scsiAddress(scsiRegInitiatorCmd, false, false))&icrArbitrationInProgress != 0 {
+	if s.Peek(scsiAddress(regInitiatorCmd, false, false))&icrArbitrationInProgress != 0 {
 		t.Error("the arbitration is in progress before it was asked for")
 	}
 
-	s.poke(scsiAddress(scsiRegCurrentData, true, false), 1<<7)
-	s.poke(scsiAddress(scsiRegMode, true, false), modeArbitrate)
+	s.Poke(scsiAddress(regCurrentData, true, false), 1<<7)
+	s.Poke(scsiAddress(regMode, true, false), modeArbitrate)
 
-	icr := s.peek(scsiAddress(scsiRegInitiatorCmd, false, false))
+	icr := s.Peek(scsiAddress(regInitiatorCmd, false, false))
 	if icr&icrArbitrationInProgress == 0 {
 		t.Error("the arbitration was asked for and is not in progress")
 	}
@@ -383,21 +388,21 @@ func TestTheArbitrationIsWonAsSoonAsItIsAsked(t *testing.T) {
 func TestSelectNeedsTheTargetOnTheDataBus(t *testing.T) {
 	s, _ := newTestScsi(t, 16)
 
-	s.poke(scsiAddress(scsiRegCurrentData, true, false), 1<<7)
-	s.poke(scsiAddress(scsiRegMode, true, false), modeArbitrate)
-	s.poke(scsiAddress(scsiRegInitiatorCmd, true, false), icrAssertSel)
+	s.Poke(scsiAddress(regCurrentData, true, false), 1<<7)
+	s.Poke(scsiAddress(regMode, true, false), modeArbitrate)
+	s.Poke(scsiAddress(regInitiatorCmd, true, false), icrAssertSel)
 
-	if s.phase() != phaseBusFree {
+	if s.currentPhase() != phaseBusFree {
 		t.Fatalf("the target answered a selection that named nobody, it is on %v",
-			s.phase())
+			s.currentPhase())
 	}
 
 	// Now the driver puts the target on the bus and asserts it
-	s.poke(scsiAddress(scsiRegCurrentData, true, false), 1<<7|1<<s.theTarget().id)
-	s.poke(scsiAddress(scsiRegInitiatorCmd, true, false), icrAssertSel|icrAssertData)
+	s.Poke(scsiAddress(regCurrentData, true, false), 1<<7|1<<s.theTarget().id)
+	s.Poke(scsiAddress(regInitiatorCmd, true, false), icrAssertSel|icrAssertData)
 
-	if s.phase() != phaseCommand {
-		t.Errorf("the target did not answer the selection, it is on %v", s.phase())
+	if s.currentPhase() != phaseCommand {
+		t.Errorf("the target did not answer the selection, it is on %v", s.currentPhase())
 	}
 }
 
@@ -415,14 +420,14 @@ func TestRequestFallsWhileAcknowledgeIsUp(t *testing.T) {
 		t.Fatal("the target is not asking for the first byte")
 	}
 
-	s.poke(scsiAddress(scsiRegCurrentData, true, false), scsiCmdTestUnitReady)
-	s.poke(scsiAddress(scsiRegInitiatorCmd, true, false), icrAssertData|icrAssertAck)
+	s.Poke(scsiAddress(regCurrentData, true, false), cmdTestUnitReady)
+	s.Poke(scsiAddress(regInitiatorCmd, true, false), icrAssertData|icrAssertAck)
 
 	if s.busStatus()&busStatusReq != 0 {
 		t.Error("the request stayed up while the acknowledge was up")
 	}
 
-	s.poke(scsiAddress(scsiRegInitiatorCmd, true, false), icrAssertData)
+	s.Poke(scsiAddress(regInitiatorCmd, true, false), icrAssertData)
 	if s.busStatus()&busStatusReq == 0 {
 		t.Error("the request did not come back for the next byte")
 	}
@@ -435,18 +440,18 @@ func TestTheDescriptorBlockArrivesIntact(t *testing.T) {
 	s, _ := newTestScsi(t, 16)
 	selectTarget(s, s.theTarget().id)
 
-	command := []uint8{scsiCmdRead6, 0x00, 0x00, 0x05, 0x01, 0x00}
+	command := []uint8{cmdRead6, 0x00, 0x00, 0x05, 0x01, 0x00}
 	for _, b := range command {
 		if s.busStatus()&busStatusReq == 0 {
 			t.Fatal("the target is not asking for a byte")
 		}
-		s.poke(scsiAddress(scsiRegCurrentData, true, false), b)
-		s.poke(scsiAddress(scsiRegInitiatorCmd, true, false), icrAssertData|icrAssertAck)
-		s.poke(scsiAddress(scsiRegInitiatorCmd, true, false), icrAssertData)
+		s.Poke(scsiAddress(regCurrentData, true, false), b)
+		s.Poke(scsiAddress(regInitiatorCmd, true, false), icrAssertData|icrAssertAck)
+		s.Poke(scsiAddress(regInitiatorCmd, true, false), icrAssertData)
 	}
 
-	if s.phase() != phaseDataIn {
-		t.Fatalf("the read did not reach the data phase, it is on %v", s.phase())
+	if s.currentPhase() != phaseDataIn {
+		t.Fatalf("the read did not reach the data phase, it is on %v", s.currentPhase())
 	}
 	block, count := s.theTarget().blockAndCount()
 	if block != 5 || count != 1 {
@@ -465,39 +470,39 @@ func TestTheStatusAndMessageAreTakenByTheAcknowledge(t *testing.T) {
 	s, _ := newTestScsi(t, 16)
 	selectTarget(s, s.theTarget().id)
 
-	for _, b := range []uint8{scsiCmdTestUnitReady, 0, 0, 0, 0, 0} {
-		s.poke(scsiAddress(scsiRegCurrentData, true, false), b)
-		s.poke(scsiAddress(scsiRegInitiatorCmd, true, false), icrAssertData|icrAssertAck)
-		s.poke(scsiAddress(scsiRegInitiatorCmd, true, false), icrAssertData)
+	for _, b := range []uint8{cmdTestUnitReady, 0, 0, 0, 0, 0} {
+		s.Poke(scsiAddress(regCurrentData, true, false), b)
+		s.Poke(scsiAddress(regInitiatorCmd, true, false), icrAssertData|icrAssertAck)
+		s.Poke(scsiAddress(regInitiatorCmd, true, false), icrAssertData)
 	}
 
-	if s.phase() != phaseStatus {
-		t.Fatalf("the command did not reach the status phase, it is on %v", s.phase())
+	if s.currentPhase() != phaseStatus {
+		t.Fatalf("the command did not reach the status phase, it is on %v", s.currentPhase())
 	}
 
 	// Read the status without the pseudo DMA port, then acknowledge it
-	if got := s.peek(scsiAddress(scsiRegCurrentData, false, false)); got != scsiStatusGood {
-		t.Errorf("the status reads $%02x, wanted $%02x", got, scsiStatusGood)
+	if got := s.Peek(scsiAddress(regCurrentData, false, false)); got != statusGood {
+		t.Errorf("the status reads $%02x, wanted $%02x", got, statusGood)
 	}
-	s.poke(scsiAddress(scsiRegInitiatorCmd, true, false), icrAssertAck)
-	s.poke(scsiAddress(scsiRegInitiatorCmd, true, false), 0)
+	s.Poke(scsiAddress(regInitiatorCmd, true, false), icrAssertAck)
+	s.Poke(scsiAddress(regInitiatorCmd, true, false), 0)
 
-	if s.phase() != phaseMessageIn {
+	if s.currentPhase() != phaseMessageIn {
 		t.Fatalf("the acknowledge did not move the target to the message, it is on %v",
-			s.phase())
+			s.currentPhase())
 	}
 
 	// The phase the driver will ask for has to match
-	s.poke(scsiAddress(scsiRegTargetCmd, true, false), 0x07)
+	s.Poke(scsiAddress(regTargetCmd, true, false), 0x07)
 	if s.busAndStatus()&basPhaseMatch == 0 {
 		t.Error("the message in phase does not match the target command register")
 	}
 
-	s.peek(scsiAddress(scsiRegCurrentData, false, false))
-	s.poke(scsiAddress(scsiRegInitiatorCmd, true, false), icrAssertAck)
-	s.poke(scsiAddress(scsiRegInitiatorCmd, true, false), 0)
+	s.Peek(scsiAddress(regCurrentData, false, false))
+	s.Poke(scsiAddress(regInitiatorCmd, true, false), icrAssertAck)
+	s.Poke(scsiAddress(regInitiatorCmd, true, false), 0)
 
-	if s.phase() != phaseBusFree {
-		t.Errorf("the bus was not freed after the message, it is on %v", s.phase())
+	if s.currentPhase() != phaseBusFree {
+		t.Errorf("the bus was not freed after the message, it is on %v", s.currentPhase())
 	}
 }

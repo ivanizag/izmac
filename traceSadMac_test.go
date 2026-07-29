@@ -74,7 +74,7 @@ func TestTheHaltDetectorSpotsATightLoop(t *testing.T) {
 	// A loop of three instructions with the registers standing still
 	halted := false
 	for i := 0; i < 500; i++ {
-		halted = h.inspect(0x400000+uint32(i%3)*2, 0x1234, uint64(i)*10)
+		halted = h.inspect(0x40_0000+uint32(i%3)*2, 0x1234, uint64(i)*10)
 	}
 
 	if !halted {
@@ -87,7 +87,7 @@ func TestTheHaltDetectorIgnoresRunningCode(t *testing.T) {
 
 	// Code walking forward leaves the window every few instructions
 	for i := 0; i < 500; i++ {
-		if h.inspect(0x400000+uint32(i)*2, 0x1234, uint64(i)*10) {
+		if h.inspect(0x40_0000+uint32(i)*2, 0x1234, uint64(i)*10) {
 			t.Fatal("running code was reported as halted")
 		}
 	}
@@ -100,7 +100,7 @@ func TestTheHaltDetectorIgnoresALoopMakingProgress(t *testing.T) {
 
 	for i := 0; i < 100000; i++ {
 		// The same handful of addresses, but a pointer advancing
-		if h.inspect(0x400000+uint32(i%4)*2, uint32(i), uint64(i)*10) {
+		if h.inspect(0x40_0000+uint32(i%4)*2, uint32(i), uint64(i)*10) {
 			t.Fatal("a loop advancing a register was reported as halted")
 		}
 	}
@@ -110,14 +110,14 @@ func TestTheHaltDetectorRecovers(t *testing.T) {
 	h := newHaltDetector(0x40, 1000)
 
 	for i := 0; i < 500; i++ {
-		h.inspect(0x400000, 0x1234, uint64(i)*10)
+		h.inspect(0x40_0000, 0x1234, uint64(i)*10)
 	}
 	if !h.halted {
 		t.Fatal("a loop on a single address was not detected")
 	}
 
 	// An interrupt taking the processor elsewhere clears it
-	h.inspect(0x401000, 0x1234, 999999)
+	h.inspect(0x40_1000, 0x1234, 999999)
 	if h.halted {
 		t.Error("the detector stayed halted after the processor moved on")
 	}
@@ -133,14 +133,14 @@ func TestTheHaltDetectorWaitsOutAWaitForTheTick(t *testing.T) {
 	// A whole frame of CMP and BEQ on two addresses, nothing changing
 	cycles := uint64(0)
 	for cycles < cyclesPerFrame {
-		if h.inspect(0x4007d4+uint32(cycles%2)*4, 0x1234, cycles) {
+		if h.inspect(0x40_07d4+uint32(cycles%2)*4, 0x1234, cycles) {
 			t.Fatalf("a wait for the tick was called a halt after %v cycles", cycles)
 		}
 		cycles += 13
 	}
 
 	// The tick arrives, the loop exits and the registers move on
-	if h.inspect(0x4007da, 0x9999, cycles) {
+	if h.inspect(0x40_07da, 0x9999, cycles) {
 		t.Error("the detector stayed halted once the wait ended")
 	}
 }
@@ -150,7 +150,7 @@ func TestALoopThatNeverEndsIsStillAHalt(t *testing.T) {
 
 	halted := false
 	for cycles := uint64(0); cycles < 20*cyclesPerLine*linesPerFrame; cycles += 10 {
-		halted = h.inspect(0x400000, 0x1234, cycles)
+		halted = h.inspect(0x40_0000, 0x1234, cycles)
 	}
 
 	if !halted {

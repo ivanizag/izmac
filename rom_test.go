@@ -3,98 +3,81 @@ package izmac
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/ivanizag/izmac/storage"
 )
 
-// buildTestRom returns a ROM image of the right size whose stored checksum
-// matches its contents. The words after the checksum are filled until they
-// add up to the value wanted, which lets the tests build an image that
-// identifies as any of the known revisions without shipping a copyrighted
-// ROM.
-func buildTestRom(checksum uint32) []uint8 {
-	data := make([]uint8, romSize)
-
-	data[0] = uint8(checksum >> 24)
-	data[1] = uint8(checksum >> 16)
-	data[2] = uint8(checksum >> 8)
-	data[3] = uint8(checksum)
-
-	remaining := checksum
-	for i := 4; i+1 < len(data) && remaining != 0; i += 2 {
-		word := remaining
-		if word > 0xffff {
-			word = 0xffff
-		}
-		data[i] = uint8(word >> 8)
-		data[i+1] = uint8(word)
-		remaining -= word
-	}
-
-	return data
-}
-
-func writeTestRom(t *testing.T, data []uint8) string {
-	t.Helper()
-
-	filename := filepath.Join(t.TempDir(), "rom.bin")
-	err := os.WriteFile(filename, data, 0o600)
-	if err != nil {
+/*
+Whether to fetch a ROM at all is the machine's decision and not the image's,
+so it is tested here. A ROM named on the command line is never downloaded: the
+user said where it is, and quietly fetching a different one over the top of a
+missing file is not what they asked for.
+*/
+func TestAnExistingRomIsNotDownloaded(t *testing.T) {
+	filename := filepath.Join(t.TempDir(), defaultRomFile)
+	if err := os.WriteFile(filename, make([]uint8, storage.RomSize), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	return filename
-}
 
-func TestBuildTestRomChecksums(t *testing.T) {
-	for _, v := range plusRomVersions() {
-		data := buildTestRom(v.checksum)
-		computed := romChecksum(data)
-		if computed != v.checksum {
-			t.Errorf("%v: built a ROM with the checksum 0x%08x, wanted 0x%08x",
-				v.nickname, computed, v.checksum)
-		}
+	config := NewConfiguration()
+	config.RomFile = filename
+	config.romIsDefault = true
+
+	out := &strings.Builder{}
+	if err := ensureRom(config, out); err != nil {
+		t.Fatal(err)
+	}
+	if out.String() != "" {
+		t.Errorf("a ROM already there was reported as missing: %q", out.String())
 	}
 }
 
-func TestLoadRomIdentifiesTheRevisions(t *testing.T) {
-	for _, v := range plusRomVersions() {
-		filename := writeTestRom(t, buildTestRom(v.checksum))
+func TestARomNamedOnTheCommandLineIsNotDownloaded(t *testing.T) {
+	config := NewConfiguration()
+	config.RomFile = filepath.Join(t.TempDir(), "missing.rom")
+	config.romIsDefault = false
 
-		r, err := loadRom(filename)
-		if err != nil {
-			t.Fatalf("%v: %v", v.nickname, err)
-		}
-		if r.version.nickname != v.nickname {
-			t.Errorf("identified 0x%08x as '%v', wanted '%v'",
-				v.checksum, r.version.nickname, v.nickname)
-		}
-		if r.isPreferred() != (v.checksum == preferredRomChecksum) {
-			t.Errorf("%v: unexpected preferred revision report", v.nickname)
-		}
+	out := &strings.Builder{}
+	err := ensureRom(config, out)
+
+	// Nothing is fetched and nothing is said. The caller reports the
+	// missing file when it tries to read it.
+	if err != nil {
+		t.Errorf("a missing named ROM was treated as an error too early: %v", err)
+	}
+	if out.String() != "" {
+		t.Errorf("a named ROM triggered a download: %q", out.String())
 	}
 }
 
-func TestLoadRomRejectsAnUnknownChecksum(t *testing.T) {
-	filename := writeTestRom(t, buildTestRom(0x01020304))
+// The revision izmac targets is the one that copes with a target answering a
+// unit attention after a reset, which is what an emulated disk does
+func TestTheTargetedRevisionIsTheOneThatCopesWithUnitAttention(t *testing.T) {
+	versions := storage.PlusRomVersions()
 
-	_, err := loadRom(filename)
-	if err == nil {
-		t.Error("an unknown ROM revision was accepted")
+	var preferred storage.RomVersion
+	for _, v := range versions {
+		if v.Checksum == preferredRomChecksum {
+			preferred = v
+		}
 	}
-}
 
-func TestLoadRomRejectsACorruptImage(t *testing.T) {
-	data := buildTestRom(preferredRomChecksum)
-	data[100] ^= 0xff
-
-	_, err := loadRom(writeTestRom(t, data))
-	if err == nil {
-		t.Error("a ROM not matching its own checksum was accepted")
+	if preferred.Nickname != "Loud Harmonicas" {
+		t.Errorf("izmac targets %q, wanted Loud Harmonicas", preferred.Nickname)
 	}
-}
+	if preferred.Notes != "" {
+		t.Errorf("the revision targeted carries the caveat %q", preferred.Notes)
+	}
 
-func TestLoadRomRejectsTheWrongSize(t *testing.T) {
-	_, err := loadRom(writeTestRom(t, make([]uint8, 64*1024)))
-	if err == nil {
-		t.Error("a ROM of the wrong size was accepted")
+	// And the others are recognised but not preferred
+	for _, v := range versions {
+		if v.Checksum == preferredRomChecksum {
+			continue
+		}
+		if v.Notes == "" {
+			t.Errorf("%v is not targeted and says nothing about why", v.Nickname)
+		}
 	}
 }

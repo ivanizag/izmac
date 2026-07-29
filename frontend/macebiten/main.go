@@ -5,7 +5,6 @@ import (
 	"os"
 
 	"github.com/ivanizag/izmac"
-	"github.com/ivanizag/izmac/screen"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/pkg/profile"
@@ -22,6 +21,12 @@ type game struct {
 	mouse    *ebitenMouse
 	menu     *menu
 	title    string
+
+	// The size of the screen of the machine, taken from the image it hands
+	// over rather than asked for separately. Layout is called on every
+	// frame, so it is kept rather than looked up again.
+	width  int
+	height int
 
 	updates uint64
 	paused  bool
@@ -41,7 +46,7 @@ func (g *game) Update() error {
 	}
 
 	if !g.m.IsPaused() {
-		img := screen.Snapshot(g.m.GetVideoSource())
+		img := g.m.GetImage()
 		g.image.WritePixels(img.Pix)
 	}
 
@@ -59,7 +64,7 @@ func (g *game) Draw(dst *ebiten.Image) {
 }
 
 func (g *game) Layout(outsideWidth int, outsideHeight int) (int, int) {
-	return screen.Width, screen.Height
+	return g.width, g.height
 }
 
 func (g *game) windowTitle() string {
@@ -119,7 +124,7 @@ const keyHelp = `
  Ctrl-F2: Reset
    Pause: Stop the machine and let it go again
 
-Click on the window to use the mouse, escape to get the pointer back.
+Click on the window to use the mouse, right click to get the pointer back.
 The option key is the Macintosh command key, and control is option.
 `
 
@@ -136,16 +141,20 @@ func ebitenRun(m *izmac.Mac) error {
 		return err
 	}
 
+	size := m.GetImage().Bounds().Size()
+
 	g := &game{
 		m:        m,
-		image:    ebiten.NewImage(screen.Width, screen.Height),
+		image:    ebiten.NewImage(size.X, size.Y),
 		keyboard: keyboard,
 		mouse:    mouse,
 		menu:     menu,
 		title:    "iz" + m.Name,
+		width:    size.X,
+		height:   size.Y,
 	}
 
-	ebiten.SetWindowSize(screen.Width*windowScale, screen.Height*windowScale)
+	ebiten.SetWindowSize(size.X*windowScale, size.Y*windowScale)
 	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeEnabled)
 	ebiten.SetWindowTitle(g.title)
 

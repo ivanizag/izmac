@@ -6,8 +6,6 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
-
-	"github.com/ivanizag/izmac/screen"
 )
 
 /*
@@ -65,12 +63,12 @@ func TestBootsToTheFinder(t *testing.T) {
 
 // blackRatio returns the share of black pixels on a band of scan lines
 func blackRatio(m *Mac, from int, to int) float64 {
-	buffer := m.GetVideoSource().GetFrameBuffer()
+	buffer := m.video.frameBuffer()
 
 	set := 0
 	for y := from; y < to; y++ {
-		for x := 0; x < screen.BytesPerLine; x++ {
-			bits := buffer[y*screen.BytesPerLine+x]
+		for x := 0; x < bytesPerLine; x++ {
+			bits := buffer[y*bytesPerLine+x]
 			for bit := 0; bit < 8; bit++ {
 				if bits&(0x80>>bit) != 0 {
 					set++
@@ -79,7 +77,7 @@ func blackRatio(m *Mac, from int, to int) float64 {
 		}
 	}
 
-	return float64(set) / float64((to-from)*screen.Width)
+	return float64(set) / float64((to-from)*width)
 }
 
 /*

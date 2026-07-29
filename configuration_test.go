@@ -1,8 +1,13 @@
 package izmac
 
 import (
+	"github.com/ivanizag/izmac/storage"
 	"io"
+	"os"
+	"path/filepath"
 	"testing"
+
+	"github.com/ivanizag/izmac/scsi"
 )
 
 func TestTheDefaultRomIsUsedWhenNoneIsNamed(t *testing.T) {
@@ -150,7 +155,7 @@ func TestFullSpeedReachesTheMachine(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	m := newMac(config, &rom{data: make([]uint8, romSize)}, nil)
+	m := newMac(config, storage.RomFromData(make([]uint8, storage.RomSize)), nil)
 	if !m.IsFullSpeed() {
 		t.Error("the machine is throttled with the full speed option")
 	}
@@ -170,7 +175,7 @@ func TestTheSpeedCanBeToggled(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	m := newMac(config, &rom{data: make([]uint8, romSize)}, nil)
+	m := newMac(config, storage.RomFromData(make([]uint8, storage.RomSize)), nil)
 	if m.IsFullSpeed() {
 		t.Fatal("the machine starts unthrottled by default")
 	}
@@ -199,7 +204,7 @@ func TestTogglingFromFullSpeedGivesTheRealOne(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	m := newMac(config, &rom{data: make([]uint8, romSize)}, nil)
+	m := newMac(config, storage.RomFromData(make([]uint8, storage.RomSize)), nil)
 	m.toggleSpeed()
 
 	if m.IsFullSpeed() {
@@ -207,5 +212,67 @@ func TestTogglingFromFullSpeedGivesTheRealOne(t *testing.T) {
 	}
 	if m.GetClockMhz() != CPUClockMhz {
 		t.Errorf("the toggle gave %v Mhz, wanted the real %v", m.GetClockMhz(), CPUClockMhz)
+	}
+}
+
+// writeImage makes a file of the given size, optionally starting with the
+// driver descriptor map a partitioned Macintosh disk carries
+func writeImage(t *testing.T, name string, size int, partitioned bool) string {
+	t.Helper()
+
+	data := make([]uint8, size)
+	if partitioned {
+		data[0], data[1] = 0x45, 0x52 // 'ER'
+		data[2], data[3] = 0x02, 0x00 // 512 byte blocks
+	}
+
+	filename := filepath.Join(t.TempDir(), name)
+	if err := os.WriteFile(filename, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return filename
+}
+
+func TestTheFilesOnTheCommandLineAreSorted(t *testing.T) {
+	hard := writeImage(t, "hard.img", 4*1024*1024, true)
+	floppy := writeImage(t, "floppy.img", 800*1024, false)
+
+	c := NewConfiguration()
+	err := c.ParseFlags("izmac", []string{"-rom", "rom.bin", hard, floppy}, io.Discard)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(c.DiskFiles) != 1 || c.DiskFiles[0] != hard {
+		t.Errorf("the hard disk did not reach the bus, the disks are %v", c.DiskFiles)
+	}
+	if len(c.Diskettes) != 1 || c.Diskettes[0] != floppy {
+		t.Errorf("the diskette was not set aside, the diskettes are %v", c.Diskettes)
+	}
+}
+
+func TestTheDiskFlagCanBeRepeated(t *testing.T) {
+	c := NewConfiguration()
+	err := c.ParseFlags("izmac",
+		[]string{"-rom", "rom.bin", "-disk", "one.img", "-disk", "two.img"}, io.Discard)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(c.DiskFiles) != 2 || c.DiskFiles[0] != "one.img" || c.DiskFiles[1] != "two.img" {
+		t.Errorf("the disks are %v, wanted both in the order given", c.DiskFiles)
+	}
+}
+
+func TestMoreDisksThanTheBusTakesIsRefused(t *testing.T) {
+	args := []string{"-rom", "rom.bin"}
+	for i := 0; i <= scsi.TargetCount; i++ {
+		args = append(args, "-disk", "disk.img")
+	}
+
+	c := NewConfiguration()
+	if err := c.ParseFlags("izmac", args, io.Discard); err == nil {
+		t.Errorf("%v disks were accepted on a bus that takes %v",
+			scsi.TargetCount+1, scsi.TargetCount)
 	}
 }

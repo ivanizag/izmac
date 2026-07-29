@@ -9,7 +9,7 @@ import (
 
 	"github.com/ivanizag/iz68000"
 	"github.com/ivanizag/izmac/component"
-	"github.com/ivanizag/izmac/screen"
+	"github.com/ivanizag/izmac/scsi"
 	"github.com/ivanizag/izmac/storage"
 )
 
@@ -20,7 +20,7 @@ type Mac struct {
 	config   *Configuration
 	cpu      *iz68000.State
 	mm       *memoryManager
-	rom      *rom
+	rom      *storage.Rom
 	video    *video
 	via      *via
 	rtc      *component.AppleRTC
@@ -28,6 +28,7 @@ type Mac struct {
 	mouse    *mouse
 	scc      *scc
 	sound    *sound
+	scsi     *scsi.Bus
 
 	commandChannel chan command
 
@@ -88,7 +89,7 @@ func NewMac(config *Configuration) (*Mac, error) {
 		return nil, err
 	}
 
-	r, err := loadRom(config.RomFile)
+	r, err := storage.LoadRom(config.RomFile)
 	if err != nil {
 		return nil, err
 	}
@@ -107,8 +108,8 @@ func NewMac(config *Configuration) (*Mac, error) {
 
 // newMac assembles the machine around an already loaded ROM. The tests use
 // it to run code that no real ROM would contain.
-func newMac(config *Configuration, r *rom, disks []storage.BlockDisk) *Mac {
-	mm := newMemoryManager(config.RamSizeKb, r.data)
+func newMac(config *Configuration, r *storage.Rom, disks []storage.BlockDisk) *Mac {
+	mm := newMemoryManager(config.RamSizeKb, r.Data())
 
 	v := newVideo(mm)
 	d := newIwm()
@@ -120,11 +121,11 @@ func newMac(config *Configuration, r *rom, disks []storage.BlockDisk) *Mac {
 	sc := newScc()
 	mm.scc = sc
 
-	bus := newScsi5380()
+	bus := scsi.NewBus()
 	for i, d := range disks {
-		bus.attach(newScsiTarget(uint8(scsiFirstDiskId+i), d, config.hasTracer("scsi")))
+		bus.Attach(scsi.NewDisk(uint8(scsiFirstDiskId+i), d, config.hasTracer("scsi")))
 	}
-	mm.scsi = bus
+	mm.scsi = &scsiBus{bus: bus}
 
 	m := &Mac{
 		Name:           "Macintosh Plus",
@@ -136,6 +137,7 @@ func newMac(config *Configuration, r *rom, disks []storage.BlockDisk) *Mac {
 		keyboard:       k,
 		mouse:          mo,
 		sound:          so,
+		scsi:           bus,
 		scc:            sc,
 		via:            newVia(mm, v, d, c, k, mo, so),
 		commandChannel: make(chan command, commandChannelSize),
@@ -152,6 +154,28 @@ func newMac(config *Configuration, r *rom, disks []storage.BlockDisk) *Mac {
 	m.cpu.SetTrace(m.cpuTrace)
 
 	return m
+}
+
+// DiskDescription names an attached disk for a frontend to report
+type DiskDescription struct {
+	Id     int
+	Name   string
+	Blocks uint32
+}
+
+// GetDisks describes the disks on the bus
+func (m *Mac) GetDisks() []DiskDescription {
+	attached := m.scsi.Attached()
+
+	described := make([]DiskDescription, 0, len(attached))
+	for _, a := range attached {
+		described = append(described, DiskDescription{
+			Id:     a.Id,
+			Name:   a.Name,
+			Blocks: a.Blocks,
+		})
+	}
+	return described
 }
 
 // PutKey queues a key transition for the keyboard. The code is the raw one
@@ -175,11 +199,6 @@ func (m *Mac) MoveMouse(dx int, dy int) {
 // SetMouseButton reports the state of the only button the machine has
 func (m *Mac) SetMouseButton(pressed bool) {
 	m.mouse.setButton(pressed)
-}
-
-// GetVideoSource returns the frame buffer of the machine
-func (m *Mac) GetVideoSource() screen.VideoSource {
-	return m.video
 }
 
 // GetCycles returns the cycles run since the reset
@@ -299,9 +318,11 @@ func (m *Mac) MediaWarnings() []string {
 // RomWarning returns a message when the ROM loaded is not the revision izmac
 // targets, or an empty string
 func (m *Mac) RomWarning() string {
-	if m.rom.isPreferred() {
+	if isPreferredRom(m.rom) {
 		return ""
 	}
+
+	version := m.rom.Version()
 	return fmt.Sprintf("%v is not the revision izmac targets, %v",
-		m.rom.version.nickname, m.rom.version.notes)
+		version.Nickname, version.Notes)
 }

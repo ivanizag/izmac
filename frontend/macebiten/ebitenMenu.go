@@ -14,7 +14,6 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
 
 	"github.com/ivanizag/izmac"
-	"github.com/ivanizag/izmac/screen"
 )
 
 /*
@@ -210,7 +209,7 @@ func (mn *menu) saveScreenshot() string {
 	}
 	defer file.Close()
 
-	err = png.Encode(file, screen.Snapshot(mn.m.GetVideoSource()))
+	err = png.Encode(file, mn.m.GetImage())
 	if err != nil {
 		return fmt.Sprintf("Could not save: %v", err)
 	}
