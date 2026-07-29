@@ -108,9 +108,8 @@ func (s *Stream) dropOldest() {
 	s.count--
 }
 
-// Waiting returns how many samples are queued, for a frontend that wants to
-// know whether the emulation is keeping up
-func (s *Stream) Waiting() int {
+// waiting returns how many samples are queued
+func (s *Stream) waiting() int {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 

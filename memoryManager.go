@@ -1,6 +1,9 @@
 package izmac
 
-import "github.com/ivanizag/izmac/scsi"
+import (
+	"github.com/ivanizag/izmac/component"
+	"github.com/ivanizag/izmac/scsi"
+)
 
 /*
 The address decoding of the Macintosh Plus. The 16Mb the processor can reach
@@ -47,12 +50,6 @@ const (
 	viaBase = 0xe0_0000
 )
 
-// device is anything mapped on the address space other than RAM and ROM
-type device interface {
-	peek(address uint32) uint8
-	poke(address uint32, value uint8)
-}
-
 // memoryManager decodes the address space. It implements iz68000.Memory.
 type memoryManager struct {
 	ram []uint8
@@ -64,10 +61,23 @@ type memoryManager struct {
 	// overlay is the reset time address map, the ROM over the address zero
 	overlay bool
 
-	scsi device
-	scc  device
-	iwm  device
-	via  device
+	/*
+		The chips on the map. Each is at one place and there is never a
+		second one of its kind, so they are held as what they are.
+
+			scsi     $580000
+			scc      $9ffff8   read    bCtl +0  aCtl +2  bData +4  aData +6
+			         $bffff9   write
+			iwm      $c00000
+			via      $e00000
+
+		The via is the one the machine has to fill in later: it is built
+		around this manager, so it can not exist before it does.
+	*/
+	scsi *scsi.Bus
+	scc  *component.SCC8530
+	iwm  *iwm
+	via  *via
 
 	// A watch on a range of the RAM, to find what writes a low memory
 	// global. Nil unless a frontend asked for it.
@@ -103,11 +113,9 @@ func newMemoryManager(ramSizeKb int, romData []uint8) *memoryManager {
 		overlay: true,
 	}
 
-	null := &nullDevice{}
-	m.scsi = null
-	m.scc = null
-	m.iwm = null
-	m.via = null
+	m.scsi = scsi.NewBus()
+	m.scc = component.NewSCC8530()
+	m.iwm = newIwm()
 
 	return m
 }
@@ -142,12 +150,12 @@ func (m *memoryManager) Peek(address uint32) uint8 {
 			return m.rom[address&m.romMask]
 		}
 		if address >= scsiBase && address < scsiEnd {
-			return m.scsi.peek(address)
+			return m.scsi.Peek(address)
 		}
 		return unmappedValue
 
 	case quarterSCC:
-		return m.scc.peek(address)
+		return m.scc.Read(sccPort(address))
 
 	default: // quarterMisc
 		if address < viaBase {
@@ -187,11 +195,12 @@ func (m *memoryManager) Poke(address uint32, value uint8) {
 			m.ram[address&m.ramMask] = value
 			m.notifyWatch(address&m.ramMask, value)
 		} else if address >= scsiBase && address < scsiEnd {
-			m.scsi.poke(address, value)
+			m.scsi.Poke(address, value)
 		}
 
 	case quarterSCC:
-		m.scc.poke(address, value)
+		channel, control := sccPort(address)
+		m.scc.Write(channel, control, value)
 
 	default: // quarterMisc
 		if address < viaBase {
@@ -202,21 +211,25 @@ func (m *memoryManager) Poke(address uint32, value uint8) {
 	}
 }
 
-/*
-scsiBus puts the bus on the address space. The device interface is unexported
-so that the map of the machine stays private, and the bus is its own package,
-so the two are joined here rather than by exporting one to suit the other.
-*/
-type scsiBus struct {
-	bus *scsi.Bus
+const (
+	// The offsets from the base of each of the two serial ports
+	sccOffsetBControl = 0
+	sccOffsetAControl = 2
+	sccOffsetBData    = 4
+	sccOffsetAData    = 6
+)
+
+// sccPort works out which channel of the serial controller an address reaches
+// and whether it is the control or the data side of it
+func sccPort(address uint32) (channel int, control bool) {
+	switch address & 0x06 {
+	case sccOffsetBControl:
+		return component.ChannelB, true
+	case sccOffsetAControl:
+		return component.ChannelA, true
+	case sccOffsetBData:
+		return component.ChannelB, false
+	default:
+		return component.ChannelA, false
+	}
 }
-
-func (d *scsiBus) peek(address uint32) uint8        { return d.bus.Peek(address) }
-func (d *scsiBus) poke(address uint32, value uint8) { d.bus.Poke(address, value) }
-
-// nullDevice stands for the devices not implemented yet. Reads return $ff as
-// an undriven bus does.
-type nullDevice struct{}
-
-func (d *nullDevice) peek(address uint32) uint8        { return 0xff }
-func (d *nullDevice) poke(address uint32, value uint8) {}

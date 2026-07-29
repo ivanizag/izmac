@@ -29,6 +29,11 @@ type Configuration struct {
 	// PramFile is where the parameter RAM is persisted between runs
 	PramFile string
 
+	// WallClock makes the real time clock answer with the time of the host
+	// on every read, instead of starting from it and counting the emulated
+	// seconds of its own
+	WallClock bool
+
 	// RamSizeKb is the size of the RAM, 1024 or 4096
 	RamSizeKb int
 
@@ -145,6 +150,10 @@ func (c *Configuration) AddFlags(fs *flag.FlagSet) {
 		"disk image to attach to the SCSI bus, repeat for more than one")
 	fs.StringVar(&c.PramFile, "pram", c.PramFile,
 		"path to the file where the parameter RAM is persisted")
+	fs.BoolVar(&c.WallClock, "wallclock", c.WallClock,
+		"read the clock from the host every time instead of counting "+
+			"emulated seconds from it. Never drifts, but the date can "+
+			"no longer be set from the machine")
 	fs.IntVar(&c.RamSizeKb, "ram", c.RamSizeKb,
 		"RAM size in Kb, 1024 or 4096")
 	fs.StringVar(&c.Speed, "speed", c.Speed,
@@ -207,29 +216,10 @@ func cycleDurationOf(mhz float64) float64 {
 
 // hasTracer returns true when the given tracer is listed in the trace option
 func (c *Configuration) hasTracer(name string) bool {
-	for _, v := range splitComma(c.Trace) {
-		if v == name {
+	for _, v := range strings.Split(c.Trace, ",") {
+		if strings.TrimSpace(v) == name {
 			return true
 		}
 	}
 	return false
-}
-
-func splitComma(s string) []string {
-	result := make([]string, 0)
-	current := ""
-	for _, r := range s {
-		if r == ',' {
-			if current != "" {
-				result = append(result, current)
-			}
-			current = ""
-		} else if r != ' ' {
-			current += string(r)
-		}
-	}
-	if current != "" {
-		result = append(result, current)
-	}
-	return result
 }

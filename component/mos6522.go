@@ -253,13 +253,8 @@ func (v *MOS6522) GetPortB() uint8 {
 	return (v.orb & v.ddrb) | (v.irb &^ v.ddrb)
 }
 
-// GetDirectionA returns the data direction register of the port A, a 1 bit
+// GetDirectionB returns the data direction register of the port B, a 1 bit
 // for each pin driven by the chip
-func (v *MOS6522) GetDirectionA() uint8 {
-	return v.ddra
-}
-
-// GetDirectionB returns the data direction register of the port B
 func (v *MOS6522) GetDirectionB() uint8 {
 	return v.ddrb
 }

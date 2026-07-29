@@ -26,7 +26,7 @@ type Mac struct {
 	rtc      *component.AppleRTC
 	keyboard *keyboard
 	mouse    *mouse
-	scc      *scc
+	scc      *component.SCC8530
 	sound    *sound
 	scsi     *scsi.Bus
 
@@ -112,20 +112,14 @@ func newMac(config *Configuration, r *storage.Rom, disks []storage.BlockDisk) *M
 	mm := newMemoryManager(config.RamSizeKb, r.Data())
 
 	v := newVideo(mm)
-	d := newIwm()
-	mm.iwm = d
-	c := component.NewAppleRTC(config.PramFile)
+	c := component.NewAppleRTC(config.PramFile, config.WallClock)
 	k := newKeyboard()
 	mo := newMouse()
 	so := newSound(mm)
-	sc := newScc()
-	mm.scc = sc
 
-	bus := scsi.NewBus()
 	for i, d := range disks {
-		bus.Attach(scsi.NewDisk(uint8(scsiFirstDiskId+i), d, config.hasTracer("scsi")))
+		mm.scsi.Attach(scsi.NewDisk(uint8(scsiFirstDiskId+i), d, config.hasTracer("scsi")))
 	}
-	mm.scsi = &scsiBus{bus: bus}
 
 	m := &Mac{
 		Name:           "Macintosh Plus",
@@ -137,9 +131,9 @@ func newMac(config *Configuration, r *storage.Rom, disks []storage.BlockDisk) *M
 		keyboard:       k,
 		mouse:          mo,
 		sound:          so,
-		scsi:           bus,
-		scc:            sc,
-		via:            newVia(mm, v, d, c, k, mo, so),
+		scsi:           mm.scsi,
+		scc:            mm.scc,
+		via:            newVia(mm, v, mm.iwm, c, k, mo, so),
 		commandChannel: make(chan command, commandChannelSize),
 		cpuTrace:       config.hasTracer("cpu"),
 		toolboxTrace:   config.hasTracer("toolbox"),
@@ -270,9 +264,9 @@ func (m *Mac) cycleDuration() float64 {
 	return math.Float64frombits(m.cycleDurationNs.Load())
 }
 
-// GetClockMhz returns the clock the emulation is throttled to, or the one of
+// clockMhz returns the clock the emulation is throttled to, or the one of
 // the real machine when it is running free
-func (m *Mac) GetClockMhz() float64 {
+func (m *Mac) clockMhz() float64 {
 	ns := m.cycleDuration()
 	if ns == 0 {
 		return CPUClockMhz
@@ -295,34 +289,34 @@ func (m *Mac) IsProfiling() bool {
 	return m.config.Profile
 }
 
-// RomDescription returns the revision of the ROM in use
-func (m *Mac) RomDescription() string {
-	return m.rom.String()
-}
-
 /*
-MediaWarnings returns what could not be used, one message per line. The
-diskette drives are not emulated yet, so an image that turns out to be one is
-reported rather than quietly ignored.
+Summary describes the machine as it was configured, one line at a time: the
+ROM it came up on, what reached the SCSI bus and what could not be used. The
+frontends differ in where they put it and not in what it says, so the lines
+are made here and printed there.
 */
-func (m *Mac) MediaWarnings() []string {
-	warnings := make([]string, 0, len(m.config.Diskettes))
+func (m *Mac) Summary() []string {
+	lines := []string{m.rom.String()}
+
+	if !isPreferredRom(m.rom) {
+		version := m.rom.Version()
+		lines = append(lines, fmt.Sprintf(
+			"Warning: %v is not the revision izmac targets, %v",
+			version.Nickname, version.Notes))
+	}
+
+	for _, disk := range m.GetDisks() {
+		lines = append(lines, fmt.Sprintf("SCSI %v: %v, %v blocks",
+			disk.Id, disk.Name, disk.Blocks))
+	}
+
+	// The diskette drives are not emulated yet, so an image that turns out
+	// to be one is reported rather than quietly ignored
 	for _, filename := range m.config.Diskettes {
-		warnings = append(warnings,
-			fmt.Sprintf("%v is a diskette and the drives are not emulated yet, it was not attached",
-				filename))
-	}
-	return warnings
-}
-
-// RomWarning returns a message when the ROM loaded is not the revision izmac
-// targets, or an empty string
-func (m *Mac) RomWarning() string {
-	if isPreferredRom(m.rom) {
-		return ""
+		lines = append(lines, fmt.Sprintf(
+			"Warning: %v is a diskette and the drives are not emulated yet, it was not attached",
+			filename))
 	}
 
-	version := m.rom.Version()
-	return fmt.Sprintf("%v is not the revision izmac targets, %v",
-		version.Nickname, version.Notes)
+	return lines
 }

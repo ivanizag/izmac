@@ -162,9 +162,9 @@ func TestFullSpeedReachesTheMachine(t *testing.T) {
 
 	// And the reported clock falls back to the real one, there is no
 	// meaningful number to give until it has run
-	if m.GetClockMhz() != CPUClockMhz {
+	if m.clockMhz() != CPUClockMhz {
 		t.Errorf("the clock reads %v at full speed, wanted the real %v",
-			m.GetClockMhz(), CPUClockMhz)
+			m.clockMhz(), CPUClockMhz)
 	}
 }
 
@@ -189,8 +189,8 @@ func TestTheSpeedCanBeToggled(t *testing.T) {
 	if m.IsFullSpeed() {
 		t.Error("the toggle did not come back to the speed configured")
 	}
-	if m.GetClockMhz() != CPUClockMhz {
-		t.Errorf("the speed came back as %v, wanted %v", m.GetClockMhz(), CPUClockMhz)
+	if m.clockMhz() != CPUClockMhz {
+		t.Errorf("the speed came back as %v, wanted %v", m.clockMhz(), CPUClockMhz)
 	}
 }
 
@@ -210,8 +210,8 @@ func TestTogglingFromFullSpeedGivesTheRealOne(t *testing.T) {
 	if m.IsFullSpeed() {
 		t.Fatal("the toggle left the machine at full speed")
 	}
-	if m.GetClockMhz() != CPUClockMhz {
-		t.Errorf("the toggle gave %v Mhz, wanted the real %v", m.GetClockMhz(), CPUClockMhz)
+	if m.clockMhz() != CPUClockMhz {
+		t.Errorf("the toggle gave %v Mhz, wanted the real %v", m.clockMhz(), CPUClockMhz)
 	}
 }
 

@@ -34,6 +34,17 @@ type AppleRTC struct {
 	pram    [pramSize]uint8
 	seconds uint32
 
+	/*
+		wallClock takes the counter from the host on every read instead of
+		from the seconds register, so a machine that has been running for a
+		while, or accelerated, or paused, still reads the right time.
+
+		It costs what the register bought: the counter can no longer be
+		set, so the date in the Control Panel does not take. The parameter
+		RAM is untouched by this and still saves.
+	*/
+	wallClock bool
+
 	// writeProtected blocks every write, including the parameter RAM
 	writeProtected bool
 
@@ -134,10 +145,16 @@ func withDirection(command uint8, read bool) uint8 {
 	return command
 }
 
-func NewAppleRTC(pramFile string) *AppleRTC {
+/*
+NewAppleRTC returns a clock started at the time of the host. With wallClock it
+goes back to the host on every read instead of keeping its own count, which
+never drifts but can not be set.
+*/
+func NewAppleRTC(pramFile string, wallClock bool) *AppleRTC {
 	r := &AppleRTC{
-		pramFile: pramFile,
-		seconds:  macSeconds(time.Now()),
+		pramFile:  pramFile,
+		wallClock: wallClock,
+		seconds:   macSeconds(time.Now()),
 	}
 	r.loadPram()
 	return r
@@ -152,9 +169,29 @@ func macSeconds(t time.Time) uint32 {
 	return uint32(t.Sub(epoch) / time.Second)
 }
 
-// TickSecond advances the counter, called once a second of emulated time
+// TickSecond advances the counter, called once a second of emulated time. A
+// clock that reads the host has nothing to advance.
 func (r *AppleRTC) TickSecond() {
+	if r.wallClock {
+		return
+	}
 	r.seconds++
+}
+
+/*
+counter is the four byte seconds register the chip answers reads with.
+
+Taking it from the host on every read is what a real chip does too: its
+counter ticks on its own while the processor is reading it, and the ROM knows
+it. The ROM reads the four bytes twice, through the two groups the counter
+answers to, and compares the halves to catch a tick landing in the middle of
+the read; when they differ it reads again.
+*/
+func (r *AppleRTC) counter() uint32 {
+	if r.wallClock {
+		return macSeconds(time.Now())
+	}
+	return r.seconds
 }
 
 /*
@@ -328,7 +365,7 @@ func (r *AppleRTC) readRegister() uint8 {
 	switch target {
 	case rtcTargetSeconds:
 		// The low order byte is the register 0
-		return uint8(r.seconds >> (8 * index))
+		return uint8(r.counter() >> (8 * index))
 	case rtcTargetPram:
 		if index < len(r.pram) {
 			return r.pram[index]
@@ -354,6 +391,10 @@ func (r *AppleRTC) writeRegister(value uint8) {
 
 	switch target {
 	case rtcTargetSeconds:
+		if r.wallClock {
+			// The host owns the time, there is nothing to set
+			return
+		}
 		shift := 8 * index
 		r.seconds = r.seconds&^(0xff<<shift) | uint32(value)<<shift
 	case rtcTargetPram:

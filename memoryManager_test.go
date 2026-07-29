@@ -3,6 +3,7 @@ package izmac
 import (
 	"testing"
 
+	"github.com/ivanizag/izmac/component"
 	"github.com/ivanizag/izmac/storage"
 )
 
@@ -83,39 +84,59 @@ func TestDevicesAreMirroredOverTheirRegion(t *testing.T) {
 	}
 }
 
+/*
+Every chip is reached on the quarter it belongs to. Each is checked against
+state only that chip keeps: the SCSI mode register and the VIA data direction
+register read back what was written to them, and the IWM latches its enable
+line from the address of the access alone.
+*/
 func TestQuartersAreDecoded(t *testing.T) {
+	v, m, _ := newTestVia(t)
+	m.via = v
+	m.setOverlay(false)
+
+	// The NCR 5380 on the ROM quarter, its registers 16 bytes apart. The
+	// second of them is the mode register.
+	const scsiModeRegister = scsiBase + 2*0x10
+	m.Poke(scsiModeRegister, 0x55)
+	if got := m.Peek(scsiModeRegister); got != 0x55 {
+		t.Errorf("the SCSI mode register at $%06x reads $%02x, wanted $55",
+			scsiModeRegister, got)
+	}
+
+	// The IWM on the low half of the last quarter
+	m.Peek(iwmAddress(iwmSwEnblH))
+	if !m.iwm.enable {
+		t.Errorf("the IWM at $%06x was not reached", iwmAddress(iwmSwEnblH))
+	}
+
+	// And the VIA on the high half of it
+	m.Poke(viaAddress(viaRegDdrA), 0x55)
+	if got := m.Peek(viaAddress(viaRegDdrA)); got != 0x55 {
+		t.Errorf("the VIA data direction register at $%06x reads $%02x, wanted $55",
+			viaAddress(viaRegDdrA), got)
+	}
+}
+
+/*
+The serial controller is reached on its own quarter, on the read side and on
+the write side, and it is not behind the device interface so it is checked by
+writing a register and reading it back.
+*/
+func TestTheSerialQuarterIsDecoded(t *testing.T) {
 	m := newTestMemoryManager(1024)
 	m.setOverlay(false)
 
-	probe := &probeDevice{}
-	m.scsi = probe
-	m.scc = probe
-	m.iwm = probe
-	m.via = probe
+	for _, base := range []uint32{0x80_0000, 0xa0_0000} {
+		// Point at the register 1 and write it
+		m.Poke(base, 1)
+		m.Poke(base, 0x5a)
 
-	for _, c := range []struct {
-		name    string
-		address uint32
-	}{
-		{"SCSI", scsiBase},
-		{"SCC read", 0x80_0000},
-		{"SCC write", 0xa0_0000},
-		{"IWM", iwmBase},
-		{"VIA", 0xef_e1fe},
-	} {
-		probe.reads = 0
-		m.Peek(c.address)
-		if probe.reads != 1 {
-			t.Errorf("%v at $%06x was not reached", c.name, c.address)
+		m.Poke(base, 1)
+		if got := m.Peek(base); got != 0x5a {
+			t.Errorf("$%06x did not reach the serial controller, it read $%02x",
+				base, got)
 		}
-	}
-
-	// The RAM and the ROM must not reach any device
-	probe.reads = 0
-	m.Peek(0x1000)
-	m.Peek(romBase)
-	if probe.reads != 0 {
-		t.Error("an access to the RAM or the ROM reached a device")
 	}
 }
 
@@ -148,21 +169,6 @@ func TestRamTop(t *testing.T) {
 	}
 }
 
-// probeDevice counts the accesses that reach it
-type probeDevice struct {
-	reads  int
-	writes int
-}
-
-func (d *probeDevice) peek(address uint32) uint8 {
-	d.reads++
-	return 0
-}
-
-func (d *probeDevice) poke(address uint32, value uint8) {
-	d.writes++
-}
-
 /*
 The ROM works out whether the machine has SCSI by comparing a long at $420000
 with one at $440000. The first is the second copy of the ROM inside the 256Kb
@@ -187,5 +193,34 @@ func TestTheRomCanTellThatTheMachineHasScsi(t *testing.T) {
 	}
 	if inside != longAt(romBase) {
 		t.Error("$420000 is not the second copy of the ROM")
+	}
+}
+
+const sccReadBase = 0x9f_fff8
+
+func sccAddress(offset uint32) uint32 {
+	return sccReadBase + offset
+}
+
+/*
+The four ports of the serial controller land on the right channel and side.
+The chip has no idea where it sits, so this is the map's business.
+*/
+func TestTheFourPortsAreDecoded(t *testing.T) {
+	for _, c := range []struct {
+		offset  uint32
+		channel int
+		control bool
+	}{
+		{sccOffsetBControl, component.ChannelB, true},
+		{sccOffsetAControl, component.ChannelA, true},
+		{sccOffsetBData, component.ChannelB, false},
+		{sccOffsetAData, component.ChannelA, false},
+	} {
+		channel, control := sccPort(sccAddress(c.offset))
+		if channel != c.channel || control != c.control {
+			t.Errorf("the offset %v reached the channel %v control %v, wanted %v and %v",
+				c.offset, channel, control, c.channel, c.control)
+		}
 	}
 }

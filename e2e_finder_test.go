@@ -22,36 +22,12 @@ the Finder draws its menu bar. That tells the two apart without depending on
 any particular System version or set of icons.
 */
 func TestBootsToTheFinder(t *testing.T) {
-	const (
-		diskFile = "frontend/macebiten/HD20SC.vhd"
-		romFile  = defaultRomFile
-		frames   = 2400
-	)
-
-	for _, name := range []string{diskFile, romFile} {
-		if _, err := os.Stat(name); err != nil {
-			t.Skipf("%v is not here, the boot test needs it", name)
-		}
-	}
-
-	config := NewConfiguration()
-	config.RomFile = romFile
-	config.DiskFiles = []string{diskFile}
-	if err := config.Validate(); err != nil {
-		t.Fatal(err)
-	}
-
-	m, err := NewMac(config)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	m.RunFrames(frames)
+	m := bootedMac(t)
 
 	if black := blackRatio(m, 2, 16); black > 0.2 {
 		t.Errorf("the top of the screen is %.0f%% black after %v frames, "+
 			"so there is no menu bar and the Finder did not start",
-			black*100, frames)
+			black*100, bootFrames)
 	}
 
 	// And the desktop below it is still the stipple, which rules out a
@@ -140,9 +116,12 @@ func TestTheMouseMovesThePointer(t *testing.T) {
 	}
 }
 
-// bootedMac runs a machine up to the Finder, or skips when the ROM or the
-// disk image is not here
-func bootedMac(t *testing.T) *Mac {
+/*
+realConfig points a configuration at the real ROM and disk image, which are
+not part of the repository, and skips when either is missing. A test that
+wants to change a setting starts here and builds the machine itself.
+*/
+func realConfig(t *testing.T) *Configuration {
 	t.Helper()
 
 	const (
@@ -162,13 +141,31 @@ func bootedMac(t *testing.T) *Mac {
 	if err := config.Validate(); err != nil {
 		t.Fatal(err)
 	}
+	return config
+}
 
-	m, err := NewMac(config)
+// realMac is that machine at its reset, not yet run, for a test that wants to
+// watch it come up
+func realMac(t *testing.T) *Mac {
+	t.Helper()
+
+	m, err := NewMac(realConfig(t))
 	if err != nil {
 		t.Fatal(err)
 	}
+	return m
+}
 
-	m.RunFrames(2400)
+// bootFrames is how long the machine takes to reach the Finder, about forty
+// emulated seconds and about a second of real time
+const bootFrames = 2400
+
+// bootedMac runs a machine up to the Finder
+func bootedMac(t *testing.T) *Mac {
+	t.Helper()
+
+	m := realMac(t)
+	m.RunFrames(bootFrames)
 	return m
 }
 
@@ -344,7 +341,7 @@ func TestTwoDisksBothMount(t *testing.T) {
 		t.Fatalf("%v disks reached the bus, wanted 2", len(m.GetDisks()))
 	}
 
-	m.RunFrames(2400)
+	m.RunFrames(bootFrames)
 
 	// Walk the drive queue. One entry is the floppy the IWM reports, the
 	// other two are the disks.
@@ -396,7 +393,7 @@ the right bits of the VIA. Any one of them wrong gives silence, which is what
 no sound at all sounds like.
 */
 func TestTheMachineMakesASoundAsItStarts(t *testing.T) {
-	m := bootedMacQuiet(t)
+	m := realMac(t)
 
 	sink := &countingSink{}
 	m.SetAudioSink(sink)
@@ -435,36 +432,6 @@ func (c *countingSink) PushSample(sample float32) {
 	}
 }
 
-// bootedMacQuiet is bootedMac without running it, for a test that wants to
-// watch the machine from its reset
-func bootedMacQuiet(t *testing.T) *Mac {
-	t.Helper()
-
-	const (
-		diskFile = "frontend/macebiten/HD20SC.vhd"
-		romFile  = defaultRomFile
-	)
-
-	for _, name := range []string{diskFile, romFile} {
-		if _, err := os.Stat(name); err != nil {
-			t.Skipf("%v is not here, this test needs it", name)
-		}
-	}
-
-	config := NewConfiguration()
-	config.RomFile = romFile
-	config.DiskFiles = []string{diskFile}
-	if err := config.Validate(); err != nil {
-		t.Fatal(err)
-	}
-
-	m, err := NewMac(config)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return m
-}
-
 /*
 The clock read by the machine rather than by a test of the chip. The ROM
 copies the counter into the Time global as it comes up, so a booted machine
@@ -489,6 +456,42 @@ func TestTheMachineKnowsTheTime(t *testing.T) {
 	now := time.Now()
 
 	if machine.Before(now.Add(-time.Minute)) || machine.After(now.Add(10*time.Minute)) {
+		t.Errorf("the machine says it is %v, the host says %v", machine, now)
+	}
+}
+
+/*
+The same, on a clock that answers with the time of the host on every read.
+This is the one worth running end to end rather than against the chip alone:
+the ROM reads the counter twice and compares the halves to catch a tick
+landing in the middle of the read, and a clock that ticks on its own while it
+is being read is exactly what that guards against. Failing it twice leaves the
+machine at the epoch, so a machine that knows the year proves the read went
+through.
+
+The window is tight in both directions here, which is the point of the
+option: forty emulated seconds of booting move this clock not at all.
+*/
+func TestTheWallClockReachesTheMachine(t *testing.T) {
+	const timeGlobal = 0x020c
+
+	config := realConfig(t)
+	config.WallClock = true
+
+	m, err := NewMac(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.RunFrames(bootFrames)
+
+	stored := uint32(m.mm.Peek(timeGlobal))<<24 | uint32(m.mm.Peek(timeGlobal+1))<<16 |
+		uint32(m.mm.Peek(timeGlobal+2))<<8 | uint32(m.mm.Peek(timeGlobal+3))
+
+	epoch := time.Date(1904, 1, 1, 0, 0, 0, 0, time.Local)
+	machine := epoch.Add(time.Duration(stored) * time.Second)
+	now := time.Now()
+
+	if machine.Before(now.Add(-time.Minute)) || machine.After(now.Add(time.Minute)) {
 		t.Errorf("the machine says it is %v, the host says %v", machine, now)
 	}
 }

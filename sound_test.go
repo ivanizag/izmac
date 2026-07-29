@@ -163,7 +163,7 @@ func TestOneSamplePerScanLine(t *testing.T) {
 			frames, len(sink.samples), frames*soundSamplesPerFrame)
 	}
 
-	if rate := soundSampleRateHz; rate < 22250 || rate > 22260 {
+	if rate := SoundSampleRateHz; rate < 22250 || rate > 22260 {
 		t.Errorf("the rate works out at %v, wanted about 22254", rate)
 	}
 }

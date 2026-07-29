@@ -45,7 +45,7 @@ const (
 func newEbitenAudio(m *izmac.Mac) (*ebitenAudio, error) {
 	s := &ebitenAudio{
 		stream: izaudio.NewStream(
-			izmac.SoundSampleRateHz(), audioSampleRate, audioQueueSamples),
+			izmac.SoundSampleRateHz, audioSampleRate, audioQueueSamples),
 	}
 
 	context := audio.NewContext(audioSampleRate)

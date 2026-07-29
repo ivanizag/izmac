@@ -50,18 +50,12 @@ const (
 
 // Run starts the emulation
 func (m *Mac) Run() {
-	m.Start(false)
-}
-
-// Start the emulation, can start paused
-func (m *Mac) Start(paused bool) {
 	m.reset()
+	m.paused.Store(false)
 
 	referenceTime := time.Now()
 	speedReferenceTime := referenceTime
 	speedReferenceCycles := uint64(0)
-
-	m.paused.Store(paused)
 
 	for {
 		if !m.paused.Load() {
@@ -176,7 +170,7 @@ func (m *Mac) updateInterrupts() {
 	if m.via.interruptAsserted() {
 		level = 1
 	}
-	if m.scc.interruptAsserted() {
+	if m.scc.InterruptAsserted() {
 		level = 2
 	}
 	m.cpu.SetIRQ(level)
@@ -207,13 +201,13 @@ func (m *Mac) lineTick() {
 		then changes the level under the edge it is reading.
 	*/
 	x1, x2, y1, y2 := m.mouse.tick(
-		!m.scc.pending(component.ChannelA), !m.scc.pending(component.ChannelB))
+		!m.scc.Pending(component.ChannelA), !m.scc.Pending(component.ChannelB))
 
 	// The interrupt lines arrive on the carrier detect inputs, which are
 	// active low, so the edge the ROM reads as positive is the falling one
 	// of the signal the mouse sends
-	m.scc.setDcd(component.ChannelA, !x1)
-	m.scc.setDcd(component.ChannelB, !y1)
+	m.scc.SetDcd(component.ChannelA, !x1)
+	m.scc.SetDcd(component.ChannelB, !y1)
 	m.via.setMouseQuadrature(x2, y2)
 }
 
@@ -236,7 +230,7 @@ func (m *Mac) Reset() {
 func (m *Mac) reset() {
 	m.started = true
 	m.via.reset()
-	m.scc.reset()
+	m.scc.Reset()
 	m.mouse.reset()
 	m.keyboard.reset()
 	m.mm.setOverlay(true)

@@ -59,11 +59,9 @@ func run(name string, args []string) error {
 		return err
 	}
 
-	fmt.Println(m.RomDescription())
-	if warning := m.RomWarning(); warning != "" {
-		fmt.Printf("Warning: %v\n", warning)
+	for _, line := range m.Summary() {
+		fmt.Println(line)
 	}
-	reportMedia(m)
 
 	if *disasmFrom != 0 {
 		fmt.Print(m.Disasm(uint32(*disasmFrom), *disasmCount))
@@ -101,16 +99,6 @@ func run(name string, args []string) error {
 	}
 
 	return nil
-}
-
-// reportMedia says what went on the bus and what could not be used
-func reportMedia(m *izmac.Mac) {
-	for _, disk := range m.GetDisks() {
-		fmt.Printf("SCSI %v: %v, %v blocks\n", disk.Id, disk.Name, disk.Blocks)
-	}
-	for _, warning := range m.MediaWarnings() {
-		fmt.Printf("Warning: %v\n", warning)
-	}
 }
 
 func writePng(filename string, m *izmac.Mac) error {

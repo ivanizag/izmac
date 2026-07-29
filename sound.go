@@ -42,9 +42,9 @@ const (
 	// or not
 	soundSamplesPerFrame = linesPerFrame
 
-	// soundSampleRateHz is what that works out at, and what a frontend has
-	// to resample from
-	soundSampleRateHz = CPUClockMhz * 1_000_000 / cyclesPerLine
+	// SoundSampleRateHz is what that works out at, 22254 a second, and what
+	// a frontend has to resample from
+	SoundSampleRateHz = CPUClockMhz * 1_000_000 / cyclesPerLine
 
 	// soundMidpoint is the value of silence, the samples being unsigned
 	soundMidpoint = 128
@@ -69,11 +69,6 @@ func newSound(mm *memoryManager) *sound {
 // SetAudioSink attaches a frontend to the sound of the machine
 func (m *Mac) SetAudioSink(sink AudioSink) {
 	m.sound.sink = sink
-}
-
-// SoundSampleRateHz is the rate the machine produces samples at
-func SoundSampleRateHz() float64 {
-	return soundSampleRateHz
 }
 
 // setVolume takes the three bits of the VIA port A

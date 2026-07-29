@@ -44,7 +44,7 @@ func TestTheRatesAreReconciled(t *testing.T) {
 		out := make([]float32, 20)
 		s.Read(out)
 
-		if left := s.Waiting(); left < c.wantedLeft-2 || left > c.wantedLeft+2 {
+		if left := s.waiting(); left < c.wantedLeft-2 || left > c.wantedLeft+2 {
 			t.Errorf("%v: %v samples left of %v, wanted about %v",
 				c.name, left, c.pushed, c.wantedLeft)
 		}
@@ -98,7 +98,7 @@ func TestRunningOverDropsTheOldest(t *testing.T) {
 		s.Push(float32(i))
 	}
 
-	if waiting := s.Waiting(); waiting != capacity {
+	if waiting := s.waiting(); waiting != capacity {
 		t.Errorf("%v samples are queued, wanted the capacity of %v", waiting, capacity)
 	}
 

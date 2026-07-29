@@ -1,9 +1,6 @@
 package izmac
 
-import (
-	"image"
-	"image/color"
-)
+import "image"
 
 /*
 The video of the Macintosh Plus, which is as simple as video gets. There is no
@@ -73,22 +70,29 @@ func (m *Mac) GetImage() *image.RGBA {
 	return m.video.render()
 }
 
+/*
+render draws the frame buffer into the image. The buffer and the pixels of the
+image are both contiguous, in the same order and of the same shape, so this is
+one sweep over the pair of them rather than a walk in x and y: there is no
+row to work out and no bounds to check for each of the 175104 pixels.
+*/
 func (v *video) render() *image.RGBA {
-	white := color.RGBA{0xff, 0xff, 0xff, 0xff}
-	black := color.RGBA{0x00, 0x00, 0x00, 0xff}
+	pix := v.image.Pix
 
-	buffer := v.frameBuffer()
-
-	for y := 0; y < height; y++ {
-		for xByte := 0; xByte < bytesPerLine; xByte++ {
-			bits := buffer[y*bytesPerLine+xByte]
-			for bit := 0; bit < 8; bit++ {
-				c := white
-				if bits&(0x80>>bit) != 0 {
-					c = black
-				}
-				v.image.SetRGBA(xByte*8+bit, y, c)
+	p := 0
+	for _, bits := range v.frameBuffer() {
+		for mask := uint8(0x80); mask != 0; mask >>= 1 {
+			// A set bit is black
+			shade := uint8(0xff)
+			if bits&mask != 0 {
+				shade = 0x00
 			}
+
+			pix[p] = shade
+			pix[p+1] = shade
+			pix[p+2] = shade
+			pix[p+3] = 0xff
+			p += 4
 		}
 	}
 

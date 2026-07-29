@@ -1,6 +1,7 @@
 package izmac
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/ivanizag/izmac/storage"
@@ -20,9 +21,14 @@ func TestADisketteIsReported(t *testing.T) {
 
 	m := newMac(config, storage.RomFromData(make([]uint8, storage.RomSize)), nil)
 
-	warnings := m.MediaWarnings()
-	if len(warnings) != 1 {
-		t.Fatalf("the diskette gave %v warnings, wanted one", len(warnings))
+	warnings := 0
+	for _, line := range m.Summary() {
+		if strings.Contains(line, floppy) {
+			warnings++
+		}
+	}
+	if warnings != 1 {
+		t.Fatalf("the diskette was named on %v lines of the summary, wanted one", warnings)
 	}
 	if len(m.GetDisks()) != 0 {
 		t.Error("the diskette was put on the SCSI bus")

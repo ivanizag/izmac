@@ -140,17 +140,6 @@ func TestThereIsNoDiskToRead(t *testing.T) {
 	}
 }
 
-func TestTheIwmIsReachableThroughTheMemoryManager(t *testing.T) {
-	mm := newTestMemoryManager(1024)
-	mm.iwm = newIwm()
-	mm.setOverlay(false)
-
-	mm.Peek(iwmAddress(iwmSwEnblH))
-	if !mm.iwm.(*iwm).enable {
-		t.Error("the IWM is not reachable through the memory manager")
-	}
-}
-
 // The drive presence line is what gets a drive into the drive queue, without
 // which the ROM hangs at $4006e8. Everything else stays negated, which says
 // there is a drive with no disk in it.

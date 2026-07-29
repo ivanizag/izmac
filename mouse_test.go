@@ -1,6 +1,10 @@
 package izmac
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/ivanizag/izmac/component"
+)
 
 /*
 The direction the ROM reads out of the two lines, from the table on page
@@ -234,5 +238,48 @@ func TestMovementIsPostponedAndNotLostWhileHeld(t *testing.T) {
 	}
 	if m.pendingX != 0 {
 		t.Errorf("%v steps were still waiting after they were let out", m.pendingX)
+	}
+}
+
+/*
+The x axis of the mouse interrupts on the channel A and the y on the channel
+B. Crossing them over is not something a test of the chip can catch, because
+the chip has no idea which is which.
+*/
+func TestTheMouseReachesTheRightChannels(t *testing.T) {
+	m := newMouse()
+	s := component.NewSCC8530()
+
+	/*
+		The lines settle before the interrupts are enabled, which is the
+		order the machine comes up in: the ROM programs the chip well
+		after the first scan line has driven the pins, so the level it
+		finds is already the idle one.
+	*/
+	x1, _, y1, _ := m.tick(true, true)
+	s.SetDcd(component.ChannelA, !x1)
+	s.SetDcd(component.ChannelB, !y1)
+
+	// Both channels set up to interrupt on a carrier detect change
+	for _, ch := range []int{component.ChannelA, component.ChannelB} {
+		s.Write(ch, true, 1)
+		s.Write(ch, true, 1)
+		s.Write(ch, true, 0x08|7) // Point high, register 15
+		s.Write(ch, true, 0x08)   // The carrier detect interrupt
+	}
+
+	m.move(4, 0)
+	for i := 0; i < 8; i++ {
+		m.quadratureRead()
+		x1, _, y1, _ = m.tick(true, true)
+		s.SetDcd(component.ChannelA, !x1)
+		s.SetDcd(component.ChannelB, !y1)
+	}
+
+	if !s.Pending(component.ChannelA) {
+		t.Error("moving along x did not interrupt on the channel A")
+	}
+	if s.Pending(component.ChannelB) {
+		t.Error("moving along x interrupted on the channel B")
 	}
 }

@@ -282,18 +282,17 @@ izmac/
   macRun.go           run loop, scanline tick, speed control
   command.go          command channel, mirrors izapple2/command.go
   configuration.go    command line flags
-  memoryManager.go    address decode, overlay, iz68000.Memory impl
+  memoryManager.go    address decode, overlay, iz68000.Memory impl, the chips
+                      on the map and the low memory globals watch
   rom.go              the revision izmac targets and where to fetch one
   video.go            the frame buffer and drawing it to an image
   via.go              the Mac's VIA wiring, over component/mos6522.go
   keyboard.go         key code table and transition queue
   mouse.go            quadrature generation
-  scc.go              where the 8530 sits and which axis is which channel
   iwm.go              stub
   sound.go            sound buffer to audio sink
   traceToolbox.go     A-line trap tracing by name
   traceSadMac.go      Sad Mac error code decoding
-  traceLowMem.go      low memory globals watch
   component/          the chips, knowing nothing of the machine: the 6522
                       copied from izapple2 and extended, and the clock
   scsi/               the bus, the 5380 and the disks on it
