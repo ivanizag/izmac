@@ -1,0 +1,10 @@
+*.rom
+*.bin
+*.dsk
+*.hda
+*.img
+pram.bin
+*.png
+frontend/*/*.vhd
+AGENTS.md
+todo.txt

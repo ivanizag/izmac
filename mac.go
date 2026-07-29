@@ -1,0 +1,307 @@
+package izmac
+
+import (
+	"fmt"
+	"math"
+	"os"
+	"strings"
+	"sync/atomic"
+
+	"github.com/ivanizag/iz68000"
+	"github.com/ivanizag/izmac/component"
+	"github.com/ivanizag/izmac/screen"
+	"github.com/ivanizag/izmac/storage"
+)
+
+// Mac represents all the components and state of the emulated machine
+type Mac struct {
+	Name string
+
+	config   *Configuration
+	cpu      *iz68000.State
+	mm       *memoryManager
+	rom      *rom
+	video    *video
+	via      *via
+	rtc      *component.AppleRTC
+	keyboard *keyboard
+	mouse    *mouse
+	scc      *scc
+	sound    *sound
+
+	commandChannel chan command
+
+	cycles uint64
+
+	// lineCycles counts towards the next scan line, the tick the whole
+	// machine runs on
+	lineCycles   uint64
+	secondCycles uint64
+	line         int
+	frames       uint64
+
+	/*
+		cycleDurationNs is how long a cycle lasts, or zero to run as fast
+		as the host can. It is kept as the bits of a float so that it can
+		be changed by the emulation goroutine, which the speed toggle
+		does, while a frontend reads it to put the speed on the window.
+	*/
+	cycleDurationNs atomic.Uint64
+
+	// currentFreqMHz is what the emulation is reaching, written by the run
+	// loop and read by a frontend putting it on the window, so it is kept
+	// where both can reach it safely
+	currentFreqMHz atomic.Uint64
+
+	paused  atomic.Bool
+	started bool
+
+	cpuTrace     bool
+	toolboxTrace bool
+	sadMacTrace  bool
+	halt         *haltDetector
+}
+
+/*
+scsiFirstDiskId is where the first disk sits on the bus and the rest follow
+it upwards. The Macintosh keeps the id 7 for itself and 0 is the usual place
+for the internal disk, so the disks given on the command line take 0, 1, 2
+and so on up to 6.
+*/
+const scsiFirstDiskId = 0
+
+const (
+	// haltWindow is the span of addresses the loop the ROM ends on covers,
+	// and haltCycles how long it has to run with nothing changing before
+	// it is called a halt. Ten frames is far longer than any wait for an
+	// interrupt and no time at all next to a loop that never ends.
+	haltWindow = 0x40
+	haltCycles = 10 * cyclesPerLine * linesPerFrame
+)
+
+// NewMac builds an emulated Macintosh Plus from a configuration. The default
+// ROM is downloaded if it is the one wanted and it is not on the working
+// directory.
+func NewMac(config *Configuration) (*Mac, error) {
+	err := ensureRom(config, os.Stdout)
+	if err != nil {
+		return nil, err
+	}
+
+	r, err := loadRom(config.RomFile)
+	if err != nil {
+		return nil, err
+	}
+
+	disks := make([]storage.BlockDisk, 0, len(config.DiskFiles))
+	for _, filename := range config.DiskFiles {
+		disk, err := storage.NewBlockDiskFile(filename, false)
+		if err != nil {
+			return nil, err
+		}
+		disks = append(disks, disk)
+	}
+
+	return newMac(config, r, disks), nil
+}
+
+// newMac assembles the machine around an already loaded ROM. The tests use
+// it to run code that no real ROM would contain.
+func newMac(config *Configuration, r *rom, disks []storage.BlockDisk) *Mac {
+	mm := newMemoryManager(config.RamSizeKb, r.data)
+
+	v := newVideo(mm)
+	d := newIwm()
+	mm.iwm = d
+	c := component.NewAppleRTC(config.PramFile)
+	k := newKeyboard()
+	mo := newMouse()
+	so := newSound(mm)
+	sc := newScc()
+	mm.scc = sc
+
+	bus := newScsi5380()
+	for i, d := range disks {
+		bus.attach(newScsiTarget(uint8(scsiFirstDiskId+i), d, config.hasTracer("scsi")))
+	}
+	mm.scsi = bus
+
+	m := &Mac{
+		Name:           "Macintosh Plus",
+		config:         config,
+		rom:            r,
+		mm:             mm,
+		video:          v,
+		rtc:            c,
+		keyboard:       k,
+		mouse:          mo,
+		sound:          so,
+		scc:            sc,
+		via:            newVia(mm, v, d, c, k, mo, so),
+		commandChannel: make(chan command, commandChannelSize),
+		cpuTrace:       config.hasTracer("cpu"),
+		toolboxTrace:   config.hasTracer("toolbox"),
+		sadMacTrace:    config.hasTracer("sadmac"),
+		halt:           newHaltDetector(haltWindow, haltCycles),
+	}
+
+	m.setCycleDuration(config.cycleDurationNs)
+	mm.via = m.via
+
+	m.cpu = iz68000.NewM68000(mm)
+	m.cpu.SetTrace(m.cpuTrace)
+
+	return m
+}
+
+// PutKey queues a key transition for the keyboard. The code is the raw one
+// the hardware sends, from KeyCodes().
+func (m *Mac) PutKey(code uint8, down bool) {
+	m.keyboard.putKey(code, down)
+}
+
+// KeyCodes returns the raw transition codes of the United States keyboard,
+// keyed by a name a frontend can map its own keys to
+func KeyCodes() map[string]uint8 {
+	return keyCodes()
+}
+
+// MoveMouse adds to the movement waiting to be reported, in pixels, positive
+// to the right and down
+func (m *Mac) MoveMouse(dx int, dy int) {
+	m.mouse.move(dx, dy)
+}
+
+// SetMouseButton reports the state of the only button the machine has
+func (m *Mac) SetMouseButton(pressed bool) {
+	m.mouse.setButton(pressed)
+}
+
+// GetVideoSource returns the frame buffer of the machine
+func (m *Mac) GetVideoSource() screen.VideoSource {
+	return m.video
+}
+
+// GetCycles returns the cycles run since the reset
+func (m *Mac) GetCycles() uint64 {
+	return m.cycles
+}
+
+// GetFrames returns the frames elapsed since the reset
+func (m *Mac) GetFrames() uint64 {
+	return m.frames
+}
+
+// GetCurrentFreqMHz returns the speed the emulation is running at
+func (m *Mac) GetCurrentFreqMHz() float64 {
+	return math.Float64frombits(m.currentFreqMHz.Load())
+}
+
+// GetPC returns the program counter, to report where a run ended
+func (m *Mac) GetPC() uint32 {
+	return m.cpu.GetPC()
+}
+
+// WatchWrites reports on the standard output every write to a range of the
+// RAM, with the instruction that made it. It is how a low memory global that
+// should have been filled and was not is tracked down.
+func (m *Mac) WatchWrites(from uint32, to uint32) {
+	m.mm.setWatch(from, to, func(address uint32, value uint8) {
+		fmt.Printf("%09d  $%06x <- $%02x  from $%06x\n",
+			m.cycles, address, value, m.cpu.GetPC())
+	})
+}
+
+// Disasm returns a listing of the instructions from an address, the way a
+// debugger would show them
+func (m *Mac) Disasm(from uint32, instructions int) string {
+	var sb strings.Builder
+
+	pc := from
+	for i := 0; i < instructions; i++ {
+		line, next := m.cpu.DisasmInstruction(pc)
+		sb.WriteString(line)
+		sb.WriteByte('\n')
+		pc = next
+	}
+
+	return sb.String()
+}
+
+// DumpRegisters returns the processor registers, to report where a run ended
+func (m *Mac) DumpRegisters() string {
+	var sb strings.Builder
+
+	for i := 0; i < 8; i++ {
+		fmt.Fprintf(&sb, "D%v %08x  A%v %08x\n",
+			i, m.cpu.GetD(i), i, m.cpu.GetA(i))
+	}
+	fmt.Fprintf(&sb, "PC %08x  SR %04x\n", m.cpu.GetPC(), m.cpu.GetSR())
+
+	return sb.String()
+}
+
+// setCycleDuration and cycleDuration keep the speed where both goroutines can
+// reach it safely
+func (m *Mac) setCycleDuration(ns float64) {
+	m.cycleDurationNs.Store(math.Float64bits(ns))
+}
+
+func (m *Mac) cycleDuration() float64 {
+	return math.Float64frombits(m.cycleDurationNs.Load())
+}
+
+// GetClockMhz returns the clock the emulation is throttled to, or the one of
+// the real machine when it is running free
+func (m *Mac) GetClockMhz() float64 {
+	ns := m.cycleDuration()
+	if ns == 0 {
+		return CPUClockMhz
+	}
+	return 1000.0 / ns
+}
+
+// IsFullSpeed tells if the emulation runs as fast as the host can go
+func (m *Mac) IsFullSpeed() bool {
+	return m.cycleDuration() == 0
+}
+
+// IsPaused returns true when the emulation is stopped
+func (m *Mac) IsPaused() bool {
+	return m.paused.Load()
+}
+
+// IsProfiling returns true when the CPU profiler is requested
+func (m *Mac) IsProfiling() bool {
+	return m.config.Profile
+}
+
+// RomDescription returns the revision of the ROM in use
+func (m *Mac) RomDescription() string {
+	return m.rom.String()
+}
+
+/*
+MediaWarnings returns what could not be used, one message per line. The
+diskette drives are not emulated yet, so an image that turns out to be one is
+reported rather than quietly ignored.
+*/
+func (m *Mac) MediaWarnings() []string {
+	warnings := make([]string, 0, len(m.config.Diskettes))
+	for _, filename := range m.config.Diskettes {
+		warnings = append(warnings,
+			fmt.Sprintf("%v is a diskette and the drives are not emulated yet, it was not attached",
+				filename))
+	}
+	return warnings
+}
+
+// RomWarning returns a message when the ROM loaded is not the revision izmac
+// targets, or an empty string
+func (m *Mac) RomWarning() string {
+	if m.rom.isPreferred() {
+		return ""
+	}
+	return fmt.Sprintf("%v is not the revision izmac targets, %v",
+		m.rom.version.nickname, m.rom.version.notes)
+}
