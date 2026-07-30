@@ -11,6 +11,9 @@ import (
 
 func main() {
 	err := run(os.Args[0], os.Args[1:])
+	if izmac.IsHelpRequested(err) {
+		os.Exit(0)
+	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)

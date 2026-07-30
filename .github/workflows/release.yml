@@ -1,0 +1,132 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+
+  build-linux:
+    name: Build Linux (amd64)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    # Build on ubuntu 22.04 so the binary works on any distro with glibc 2.35+
+    container: ubuntu:22.04
+    steps:
+      - name: Install build dependencies
+        run: |
+          apt-get update
+          apt-get install -y build-essential ca-certificates git \
+            libgl1-mesa-dev libglu1-mesa-dev libx11-dev libxcursor-dev \
+            libxi-dev libxinerama-dev libxrandr-dev libxxf86vm-dev \
+            libasound2-dev pkg-config
+
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      # The workspace is owned by a different user than the container's root
+      - name: Allow git to read the workspace
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Build
+        working-directory: frontend/macebiten
+        run: CGO_ENABLED=1 go build -ldflags "-s -w" -o izmac .
+
+      - name: Package
+        run: tar -czf izmac-linux-amd64.tar.gz -C frontend/macebiten izmac -C ../.. README.md LICENSE
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: izmac-linux-amd64
+          path: izmac-linux-amd64.tar.gz
+
+  build-windows:
+    name: Build Windows (amd64)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      # Ebitengine reaches the Windows APIs without cgo, so this is a plain
+      # cross compile with no toolchain to install
+      - name: Build
+        working-directory: frontend/macebiten
+        run: |
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 \
+            go build -ldflags "-s -w" -o izmac.exe .
+
+      - name: Package
+        run: |
+          zip --junk-paths izmac-windows-amd64.zip frontend/macebiten/izmac.exe README.md LICENSE
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: izmac-windows-amd64
+          path: izmac-windows-amd64.zip
+
+  build-macos:
+    name: Build macOS (universal)
+    runs-on: macos-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Build arm64
+        working-directory: frontend/macebiten
+        run: CGO_ENABLED=1 GOARCH=arm64 go build -ldflags "-s -w" -o izmac-arm64 .
+
+      - name: Build amd64
+        working-directory: frontend/macebiten
+        run: |
+          CGO_ENABLED=1 GOARCH=amd64 CC="clang -arch x86_64" \
+            go build -ldflags "-s -w" -o izmac-amd64 .
+
+      - name: Create universal binary
+        working-directory: frontend/macebiten
+        run: |
+          lipo -create -output izmac izmac-arm64 izmac-amd64
+          lipo -info izmac
+
+      - name: Package
+        run: tar -czf izmac-macos-universal.tar.gz -C frontend/macebiten izmac -C ../.. README.md LICENSE
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: izmac-macos-universal
+          path: izmac-macos-universal.tar.gz
+
+  release:
+    name: Create draft release
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [build-linux, build-windows, build-macos]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v3
+        with:
+          draft: true
+          generate_release_notes: true
+          files: |
+            izmac-linux-amd64.tar.gz
+            izmac-windows-amd64.zip
+            izmac-macos-universal.tar.gz

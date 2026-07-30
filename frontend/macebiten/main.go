@@ -81,6 +81,9 @@ func (g *game) windowTitle() string {
 func main() {
 	config := izmac.NewConfiguration()
 	err := config.ParseFlags(os.Args[0], os.Args[1:], os.Stderr)
+	if izmac.IsHelpRequested(err) {
+		os.Exit(0)
+	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)

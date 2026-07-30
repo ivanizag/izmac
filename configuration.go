@@ -1,6 +1,7 @@
 package izmac
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -98,6 +99,15 @@ func (c *Configuration) ParseFlags(name string, args []string, output io.Writer)
 	}
 
 	return c.Validate()
+}
+
+/*
+IsHelpRequested tells whether parsing the flags failed only because the help
+was asked for. The usage has been printed by then, so a frontend has nothing
+to add and nothing to complain about: it exits quietly and successfully.
+*/
+func IsHelpRequested(err error) bool {
+	return errors.Is(err, flag.ErrHelp)
 }
 
 /*

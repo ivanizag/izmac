@@ -10,6 +10,17 @@ go run ./frontend/macebiten system.img work.img scratch.img
 ```
 
 
+## Installing
+
+No installation required. [Download](https://github.com/ivanizag/izmac/releases)
+the archive for Linux, Windows or macOS and run the single executable inside.
+
+On macOS it can also be installed with homebrew:
+
+```bash
+brew install ivanizag/tap/izmac
+```
+
 ## Running it
 
 izmac needs a 128Kb Macintosh Plus ROM image, if none is provided it is downloaded from archive.org

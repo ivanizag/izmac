@@ -92,6 +92,32 @@ func TestTheTracersAreListed(t *testing.T) {
 	}
 }
 
+/*
+Asking for the help is not a failure. The frontends exit quietly and
+successfully on it, which the Homebrew formula relies on when it runs the
+binary with -h to check the bottle works.
+*/
+func TestAskingForTheHelpIsNotAnError(t *testing.T) {
+	c := NewConfiguration()
+	err := c.ParseFlags("izmac", []string{"-h"}, io.Discard)
+
+	if err == nil {
+		t.Fatal("asking for the help parsed as an ordinary run")
+	}
+	if !IsHelpRequested(err) {
+		t.Errorf("asking for the help gave %v, which is not recognized as it", err)
+	}
+
+	// And a real mistake still is one
+	bad := NewConfiguration().ParseFlags("izmac", []string{"-nosuchflag"}, io.Discard)
+	if bad == nil {
+		t.Fatal("an unknown flag was accepted")
+	}
+	if IsHelpRequested(bad) {
+		t.Error("an unknown flag was taken for a request for the help")
+	}
+}
+
 // A Configuration must be buildable more than once in the same process, which
 // is why the flags do not go on the package level FlagSet
 func TestTheConfigurationCanBeBuiltTwice(t *testing.T) {

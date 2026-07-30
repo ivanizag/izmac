@@ -8,3 +8,9 @@ pram.bin
 frontend/*/*.vhd
 AGENTS.md
 todo.txt
+
+# The binaries the release builds, in case one is built by hand
+frontend/*/izmac
+frontend/*/izmac.exe
+izmac-*.tar.gz
+izmac-*.zip

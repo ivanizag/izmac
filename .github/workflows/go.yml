@@ -1,0 +1,43 @@
+name: Go
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+
+    # Ebitengine needs these to build on Linux. The windowed frontend is
+    # compiled even by `go test ./...`, which builds every package whether it
+    # has tests or not, so they are needed for the tests too.
+    - name: Install the Ebitengine dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libgl1-mesa-dev libglu1-mesa-dev libx11-dev \
+          libxcursor-dev libxi-dev libxinerama-dev libxrandr-dev \
+          libxxf86vm-dev libasound2-dev pkg-config
+
+    - name: Check out code into the Go module directory
+      uses: actions/checkout@v7
+
+    - name: Set up Go 1.x
+      uses: actions/setup-go@v7
+      with:
+        go-version-file: go.mod
+      id: go
+
+    - name: Build
+      run: go build -v ./...
+
+    # The end to end tests need a ROM and a disk image that are not in the
+    # repository, and skip themselves when the files are not there
+    - name: Test
+      run: go test -v ./...
