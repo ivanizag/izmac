@@ -22,11 +22,16 @@ jobs:
         env:
           TAG: ${{ github.event.release.tag_name }}
 
+      # git add, not commit -a: on the first release the formula is a new
+      # file, and -a stages only what git already tracks. Staging it first
+      # still leaves nothing to commit when the contents have not changed,
+      # so a re-run of the same version remains a no-op.
       - name: Commit and push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          if git commit -am "izmac ${{ github.event.release.tag_name }}"; then
+          git add Formula/izmac.rb
+          if git commit -m "izmac ${{ github.event.release.tag_name }}"; then
             git push
           else
             echo "Formula already up to date"
