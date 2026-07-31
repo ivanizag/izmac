@@ -72,6 +72,11 @@ const (
 	// pramSize is the parameter RAM of the Macintosh Plus, twenty bytes
 	pramSize = 20
 
+	// spConfigBothSerial is the SPConfig byte of the parameter RAM with both
+	// ports carrying a serial device, port A on the high nibble and port B
+	// on the low one
+	spConfigBothSerial uint8 = 0x22
+
 	rtcCommandRead uint8 = 1 << 7
 
 	/*
@@ -152,6 +157,7 @@ never drifts but can not be set.
 */
 func NewAppleRTC(pramFile string, wallClock bool) *AppleRTC {
 	r := &AppleRTC{
+		pram:      defaultPram(),
 		pramFile:  pramFile,
 		wallClock: wallClock,
 		seconds:   macSeconds(time.Now()),
@@ -407,10 +413,50 @@ func (r *AppleRTC) writeRegister(value uint8) {
 	}
 }
 
-// loadPram reads the parameter RAM saved by a previous run. A missing or
-// unusable file is not an error: the ROM notices that the contents make no
-// sense and writes its defaults, which is what a Macintosh with a flat
-// battery does.
+/*
+defaultPram is what a machine with no saved parameter RAM starts from. It is
+byte for byte what the ROM writes for itself when it finds the contents
+invalid, with one difference: the two serial ports are marked as in use for a
+serial device instead of free.
+
+That difference keeps AppleTalk off. A System that finds a free port takes it
+for AppleTalk, and the LocalTalk driver then programs the SCC for a frame and
+waits, without a timeout, for the interrupt that says the frame went out. The
+SCC here is only as much of the chip as the mouse needs, so that interrupt
+never comes and the startup hangs: System 7.5 stops on its Starting up
+screen. Leaving the ports spoken for is what a Macintosh with AppleTalk
+turned off in the Chooser looks like, and it boots.
+
+	$00 SPValid   $a8, the byte that says the rest is worth reading
+	$01 SPATalkA  the AppleTalk node hints, of no use with it off
+	$02 SPATalkB
+	$03 SPConfig  the port use, port A on the high nibble and port B on
+	              the low one: 0 free, 1 AppleTalk, 2 a serial device
+	$04 SPPortA   the two port configurations, 9600 baud and 8N1
+	$06 SPPortB
+	$08 SPAlarm   the alarm time, never
+	$0c SPFont    the application font
+	$0e SPKbd     the keyboard repeat rate and threshold
+	$0f SPPrint   the printer
+	$10 SPVolCtl  the speaker volume
+	$11 SPClikCaret  the double click and caret blink times
+	$12 SPMisc1
+	$13 SPMisc2   the mouse scaling and the disk to start from
+*/
+func defaultPram() [pramSize]uint8 {
+	return [pramSize]uint8{
+		0xa8, 0x00, 0x00, spConfigBothSerial,
+		0xcc, 0x0a, 0xcc, 0x0a,
+		0x00, 0x00, 0x00, 0x00,
+		0x00, 0x02, 0x63, 0x00,
+		0x03, 0x88, 0x00, 0x4c,
+	}
+}
+
+// loadPram reads the parameter RAM saved by a previous run, leaving the
+// defaults in place when there is nothing to read. A missing or unusable file
+// is not an error: it is a machine that has not run before, or one whose
+// battery went flat.
 func (r *AppleRTC) loadPram() {
 	if r.pramFile == "" {
 		return
