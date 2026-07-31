@@ -9,7 +9,7 @@ and packaging decisions taken since.
 ## Scope
 
 - **Machine**: Macintosh Plus, 1 MB RAM (4 MB later), 128 KB ROM.
-- **Storage**: SCSI first. The IWM is the long tail, not the way in.
+- **Storage**: SCSI first, then the IWM. Both are done.
 - **Timing**: instruction level, not cycle accurate. The memory interface stays shaped so
   it could be tightened later.
 - **Pure Go**: no cgo in the core, so the web frontend stays possible.
@@ -187,7 +187,7 @@ port A bit 5**. Page III-35.
 
 | Selector | Register | Meaning |
 |---|---|---|
-| 0 | DIRTN | head step direction |
+| 0 | DIRTN | head step direction, **1 steps back towards the track 0** |
 | 1 | CSTIN | **0 only when a disk is in the drive** |
 | 2 | STEP | head stepping; the drive sets it back to 1 after ~12 ms |
 | 3 | WRTPRT | 0 whenever the disk is locked |
@@ -196,14 +196,83 @@ port A bit 5**. Page III-35.
 | 7 | TACH | 60 pulses per rotation |
 | 8, 9 | RDDATA0, RDDATA1 | data from the lower and upper heads |
 | 12 | SIDES | 0 single sided, **1 double sided** |
-| 15 | DRVIN | **0 if a drive is connected**, floats to 1 if not |
+| 13 | /READY | **0 when the drive is up to speed**, not in the book |
+| 14 | DRVIN | **0 if a drive is connected**, floats to 1 if not |
+| 15 | NEWINTF | **1 on the 800K drive of the Plus**, not in the book |
 
-To read one: turn Q7 off, turn Q6 on, select the register, and the bit appears in the **high
-bit** of `q7L`. Turn Q6 back off afterwards or the Disk Driver will not recognise the state.
+**The book's table is the 400K drive and the Plus has the 800K one.** `SonyEqu.a` of the ROM
+sources gives the same registers in its own order, CA1, CA0, SEL and CA2, and converting them
+lands on the book's table with three differences that matter:
 
-Writing goes through LSTRB with CA1, CA0 and SEL selecting DIRTN, STEP, MOTORON or EJECT and
-CA2 carrying the value; LSTRB must be held high at least 1 µs and under 1 ms, except for an
-eject which needs half a second.
+- **DRVIN is 14, not 15.** `DrvExstAdr` is 13 in the driver's order, which is selector 14 here.
+  Answering only 15 leaves the ROM hanging on an empty drive queue.
+- **15 is a different line altogether**, `NewIntfAdr`, and it is **not active low**. The driver
+  reads it once at startup with `MOVEQ #$F,D0 ... SMI.B NewIntf` and takes a one to mean the
+  drive regulates its own speed.
+- **13 is /READY**, `ReadyAdr`, which `Sony_Seek` polls a thousand times with a millisecond
+  between before giving up.
+
+**Reporting the new interface is what makes the speed problem disappear.** With it low, the
+driver believes it has a 400K drive and `Sony_MakeSpdTbl` calibrates the motor: it sets a pulse
+width through the low bytes of the sound buffer, times fifteen TACH edges four times over at
+two different settings, and interpolates a table for the five bands. With it high the whole
+routine is `MOVE #$1F40,D0; BRA WakeUp`, an 800 ms wait, and `Sony_SetSpeed` forces the pulse
+width to zero. The tachometer still has to move, but nothing measures it.
+
+To read a register: turn Q7 off, turn Q6 on, select the register, and the bit appears in the
+**high bit** of `q7L`. Turn Q6 back off afterwards or the Disk Driver will not recognise the
+state.
+
+Writing goes through LSTRB with CA1, CA0 and SEL selecting DIRTN, STEP, MOTORON or EJECT — the
+registers 0, 2, 4 and 6 of those three bits — and CA2 carrying the value. All of them are
+active low except the eject, which happens on a one. LSTRB must be held high at least 1 µs and
+under 1 ms, except for an eject which needs half a second.
+
+**The head is not latched.** `Sony_AdrDisk` moves the four lines one at a time, so on the way
+from one register to another it passes through others, and two of those are the read data pair
+at 8 and 9. Taking the head from the lines as they move picks up a state the driver was only
+passing through; it has to be taken when a byte is actually read or written.
+
+### The diskette itself
+
+Group coded recording, six bits carried in eight, verified against `DT_Sony_NiblTbl` and the
+read and write engines of `plus/resources/res_drvr_sony.s`.
+
+| | |
+|---|---|
+| Bit rate | 489.6 kbit/s, so 61200 bytes a second |
+| **CPU cycles per disk byte** | **exactly 128** |
+| Tracks | 80 a side, 1 or 2 sides |
+| Sectors per track | 12, 11, 10, 9, 8 in five bands of sixteen tracks |
+| Rotation | 394, 429, 472, 525, 590 rpm over the same bands |
+| Sector | 12 tag bytes and 512 of data |
+
+The drive turns slower the further out the head is so that a bit is the same length of track
+everywhere, which is why an outer track holds fewer sectors. **None of those speeds has to
+appear in the emulation.** A bit lasts the same time in every band, so a byte does, so a track
+of twelve sectors simply takes half as long again to go round as one of eight: building every
+track out of a fixed **778 bytes per sector** gives the right rotation for all five bands for
+free. 12 × 778 × 128 cycles is 394 rpm without anyone saying so.
+
+A sector on the track is a run of self sync, an address field of `D5 AA 96` and five values
+closed by `DE AA FF`, a short run of sync, and a data field of `D5 AA AD`, the sector number,
+699 nibbles, four of checksum and `DE AA FF`. The address field carries the track split over
+two values with the side on the bit 5 of the second, and the low value is the exclusive or of
+the other four.
+
+**The data field is scrambled as it is written.** Three running bytes are carried through the
+sector and every byte is exclusive ored with one of them before being encoded; the three are
+the checksum the driver compares at the end, so one pass does both. The carry into the first
+addition of a group is the bit rotated out of the third running byte, and the carry out of each
+addition feeds the next. `SONY_RDDATA_CONT_3` is the authority and the sequence is short enough
+to copy: `ADD.B D7,D3`, `ROL.B #1,D7`, `EOR.B D7,D2`, `ADDX.B D2,D5`, and so on round the three.
+
+**Self sync is a bit level thing and izmac has no bits.** The real pattern slips a zero bit in
+so a shift register finds the byte boundary again. Handing whole bytes over means a run of `$FF`
+does the same job: the driver waits for bytes with the top bit set and then looks for a mark,
+and `$FF` is a byte and is not a mark. Neither `$D5` nor `$AA` is a nibble, so a mark cannot
+turn up inside data and the scan cannot be fooled. `$DE` **is** a nibble, which is why the
+closing three bytes are never scanned for, only checked at a known offset.
 
 ### Keyboard protocol
 
@@ -268,8 +337,15 @@ map, the letters `ER`, and no diskette carries one; failing that, an image of ex
 800K is a diskette because those are the only sizes the drives of this machine make, and
 anything else is a hard disk.
 
-A diskette is reported and set aside rather than quietly dropped. The drives are not emulated
-yet, and a file that vanishes without a word is worse than one refused.
+A diskette goes in a drive, the internal one first and then the external. A DiskCopy 4.2 image
+says what it is in its own header and is recognised before the size is looked at, since the
+file starts with the name of the volume and that could say anything.
+
+A diskette is held whole in memory, 800Kb of sectors and 19Kb of tags at the very most, and the
+file is rewritten complete when something changes. That is what makes DiskCopy bearable: its
+checksums cover the whole file and would otherwise be recomputed against it on every sector.
+The write back happens when the motor stops, which the driver does a few seconds after it has
+finished, so the image on the host follows what the Macintosh believes it has saved.
 
 ## Package structure
 
@@ -289,14 +365,18 @@ izmac/
   via.go              the Mac's VIA wiring, over component/mos6522.go
   keyboard.go         key code table and transition queue
   mouse.go            quadrature generation
-  iwm.go              stub
+  iwm.go              the floppy controller: the soft switches, the status,
+                      the data register and the handshake
+  iwmDrive.go         a drive: the motor, the head, the lines it reports and
+                      the track going past
   sound.go            sound buffer to audio sink
   traceToolbox.go     A-line trap tracing by name
   traceSadMac.go      Sad Mac error code decoding
   component/          the chips, knowing nothing of the machine: the 6522
                       copied from izapple2 and extended, and the clock
   scsi/               the bus, the 5380 and the disks on it
-  storage/            the files read off the host: images, their kind, the ROM
+  storage/            the files read off the host: images, their kind, the ROM,
+                      the group coded recording and the diskette layout
   frontend/macebiten/
   frontend/headless/
   doc/
@@ -419,6 +499,28 @@ The ROM disassembly at `../macdocs/mac_rom` gave four of these directly and conf
 shows the probe asking for 256 bytes of a block, `plus/hw/interrupts.s` shows the mouse handler
 reading register 15, and `plus/boot/vectors.s` states the `$420000` test outright.
 
+**The diskette drives work, both of them, in both directions.** The machine reads, writes and
+formats: it initializes a blank image of the right size into a Macintosh volume and mounts it,
+which is the end to end test. Almost all of it was read off `include/sonyequ.inc` and
+`plus/resources/res_drvr_sony.s` rather than worked out, and the two places it was worked out
+instead are two of the three things that went wrong.
+
+1. **The new interface line, selector 15, is what decides everything else.** Reported low, the
+   driver believes it has a 400K drive and goes off to measure the rotation on the tachometer
+   and correct it with a pulse width through the sound buffer. Reported high it waits 800 ms and
+   gets on with it. One bit is the difference between emulating a speed servo and not.
+2. **The second head is at selector 9, not 10.** An arithmetic slip converting `SonyEqu.a`'s
+   order, and the book had it right all along. It showed up as the far side of a track reading
+   as the near one, which is the kind of thing only a test that compares against the image
+   catches: every sector read fine, they were simply the wrong sectors.
+3. **The head must not be latched when the phase lines move.** `Sony_AdrDisk` sets the four
+   lines one at a time and passes through the read data pair on the way to somewhere else.
+
+The number worth remembering is that **a disk byte is exactly 128 processor cycles**, which
+falls out of 489.6 kbit/s against 7.8336MHz and makes the whole thing a counter. The one worth
+remembering after that is **778 bytes per sector**, which gets all five rotation speeds right
+without any of them being written down.
+
 ## Worth building early
 
 Bring-up tooling, all of it cheap and all of it paying for itself many times over:
@@ -445,9 +547,12 @@ levels. What is left:
    moves and the ROM waits for it at `$4007d4`. This is the live bug.
 2. **The IWM status register bit layout.** That bit 5 reports the drive enable and the low
    five bits read back the mode was worked out from the ROM's own code, not from a
-   datasheet. It works; the rest of the bits are unknown.
-3. **Selector 10 of the drive status lines**, which the Plus polls and the book's 400K table
-   does not list.
+   datasheet. It works; the rest of the bits are unknown. The same goes for the handshake
+   register: the top bit paces a write and the one below it reports an underrun that izmac
+   cannot have.
+3. ~~**Selector 10 of the drive status lines**~~, which was an arithmetic slip: converting
+   `SonyEqu.a`'s CA1, CA0, SEL, CA2 order correctly puts the second head at **9**, exactly where
+   the book has it. What the Plus really polls and the book does not list are 13 and 15, above.
 
 ## References
 

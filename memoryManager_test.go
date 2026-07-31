@@ -14,7 +14,7 @@ func newTestMemoryManager(ramSizeKb int) *memoryManager {
 	for i := range rom {
 		rom[i] = uint8(i)
 	}
-	return newMemoryManager(ramSizeKb, rom)
+	return newMemoryManager(ramSizeKb, rom, false)
 }
 
 func TestOverlayPutsTheRomOnTheResetVectors(t *testing.T) {

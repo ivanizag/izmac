@@ -25,7 +25,7 @@ func newTestVia(t *testing.T) (*via, *memoryManager, *video) {
 
 	mm := newTestMemoryManager(1024)
 	v := newVideo(mm)
-	return newVia(mm, v, newIwm(), component.NewAppleRTC("", false), newKeyboard(), newMouse(), newSound(mm)), mm, v
+	return newVia(mm, v, newIwm(false), component.NewAppleRTC("", false), newKeyboard(), newMouse(), newSound(mm)), mm, v
 }
 
 func TestTheViaRegistersAreEvery512Bytes(t *testing.T) {

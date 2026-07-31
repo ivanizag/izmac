@@ -181,7 +181,7 @@ func TestFullSpeedReachesTheMachine(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	m := newMac(config, storage.RomFromData(make([]uint8, storage.RomSize)), nil)
+	m := mustNewMac(t, config, storage.RomFromData(make([]uint8, storage.RomSize)), nil, nil)
 	if !m.IsFullSpeed() {
 		t.Error("the machine is throttled with the full speed option")
 	}
@@ -201,7 +201,7 @@ func TestTheSpeedCanBeToggled(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	m := newMac(config, storage.RomFromData(make([]uint8, storage.RomSize)), nil)
+	m := mustNewMac(t, config, storage.RomFromData(make([]uint8, storage.RomSize)), nil, nil)
 	if m.IsFullSpeed() {
 		t.Fatal("the machine starts unthrottled by default")
 	}
@@ -230,7 +230,7 @@ func TestTogglingFromFullSpeedGivesTheRealOne(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	m := newMac(config, storage.RomFromData(make([]uint8, storage.RomSize)), nil)
+	m := mustNewMac(t, config, storage.RomFromData(make([]uint8, storage.RomSize)), nil, nil)
 	m.toggleSpeed()
 
 	if m.IsFullSpeed() {
@@ -300,5 +300,56 @@ func TestMoreDisksThanTheBusTakesIsRefused(t *testing.T) {
 	if err := c.ParseFlags("izmac", args, io.Discard); err == nil {
 		t.Errorf("%v disks were accepted on a bus that takes %v",
 			scsi.TargetCount+1, scsi.TargetCount)
+	}
+}
+
+func TestTheFloppyFlagCanBeRepeated(t *testing.T) {
+	c := NewConfiguration()
+	err := c.ParseFlags("izmac",
+		[]string{"-rom", "rom.bin", "-floppy", "one.dsk", "-floppy", "two.dsk"}, io.Discard)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(c.Diskettes) != 2 || c.Diskettes[0] != "one.dsk" || c.Diskettes[1] != "two.dsk" {
+		t.Errorf("the diskettes are %v, wanted both in the order given", c.Diskettes)
+	}
+}
+
+func TestMoreDiskettesThanThereAreDrivesIsRefused(t *testing.T) {
+	args := []string{"-rom", "rom.bin"}
+	for i := 0; i <= DriveCount; i++ {
+		args = append(args, "-floppy", "floppy.dsk")
+	}
+
+	c := NewConfiguration()
+	if err := c.ParseFlags("izmac", args, io.Discard); err == nil {
+		t.Errorf("%v diskettes were accepted by a machine with %v drives",
+			DriveCount+1, DriveCount)
+	}
+}
+
+// A DiskCopy image is bigger than the diskette it holds, so its size says
+// nothing and it has to be recognised by its header
+func TestADiskCopyFileIsSortedAsADiskette(t *testing.T) {
+	data := make([]uint8, 84+800*1024)
+	data[0] = 4
+	copy(data[1:], "Work")
+	data[64], data[65], data[66], data[67] = 0x00, 0x0c, 0x80, 0x00 // 800Kb
+	data[82], data[83] = 0x01, 0x00                                 // What says it is one
+
+	filename := filepath.Join(t.TempDir(), "image.dc42")
+	if err := os.WriteFile(filename, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	c := NewConfiguration()
+	if err := c.AddFiles([]string{filename}); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(c.Diskettes) != 1 || len(c.DiskFiles) != 0 {
+		t.Errorf("a DiskCopy image gave %v diskettes and %v disks, wanted one diskette",
+			len(c.Diskettes), len(c.DiskFiles))
 	}
 }

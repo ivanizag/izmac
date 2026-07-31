@@ -29,6 +29,7 @@ type Mac struct {
 	scc      *component.SCC8530
 	sound    *sound
 	scsi     *scsi.Bus
+	iwm      *iwm
 
 	commandChannel chan command
 
@@ -103,13 +104,25 @@ func NewMac(config *Configuration) (*Mac, error) {
 		disks = append(disks, disk)
 	}
 
-	return newMac(config, r, disks), nil
+	// The diskettes go in the drives in the order they were named, the
+	// internal one first
+	diskettes := make([]*storage.FloppyDisk, 0, len(config.Diskettes))
+	for _, filename := range config.Diskettes {
+		diskette, err := storage.NewFloppyDisk(filename, false)
+		if err != nil {
+			return nil, err
+		}
+		diskettes = append(diskettes, diskette)
+	}
+
+	return newMac(config, r, disks, diskettes)
 }
 
 // newMac assembles the machine around an already loaded ROM. The tests use
 // it to run code that no real ROM would contain.
-func newMac(config *Configuration, r *storage.Rom, disks []storage.BlockDisk) *Mac {
-	mm := newMemoryManager(config.RamSizeKb, r.Data())
+func newMac(config *Configuration, r *storage.Rom, disks []storage.BlockDisk,
+	diskettes []*storage.FloppyDisk) (*Mac, error) {
+	mm := newMemoryManager(config.RamSizeKb, r.Data(), config.hasTracer("floppy"))
 
 	v := newVideo(mm)
 	c := component.NewAppleRTC(config.PramFile, config.WallClock)
@@ -133,6 +146,7 @@ func newMac(config *Configuration, r *storage.Rom, disks []storage.BlockDisk) *M
 		sound:          so,
 		scsi:           mm.scsi,
 		scc:            mm.scc,
+		iwm:            mm.iwm,
 		via:            newVia(mm, v, mm.iwm, c, k, mo, so),
 		commandChannel: make(chan command, commandChannelSize),
 		cpuTrace:       config.hasTracer("cpu"),
@@ -147,7 +161,17 @@ func newMac(config *Configuration, r *storage.Rom, disks []storage.BlockDisk) *M
 	m.cpu = iz68000.NewM68000(mm)
 	m.cpu.SetTrace(m.cpuTrace)
 
-	return m
+	for i, diskette := range diskettes {
+		if i >= driveCount {
+			return nil, fmt.Errorf("the machine has %v diskette drives, %v were given",
+				driveCount, len(diskettes))
+		}
+		if err := mm.iwm.drives[i].insert(diskette); err != nil {
+			return nil, err
+		}
+	}
+
+	return m, nil
 }
 
 // DiskDescription names an attached disk for a frontend to report
@@ -170,6 +194,89 @@ func (m *Mac) GetDisks() []DiskDescription {
 		})
 	}
 	return described
+}
+
+// DisketteDescription is what is in a diskette drive, for a frontend to
+// report and to build its menu from
+type DisketteDescription struct {
+	// Drive is DriveInternal or DriveExternal
+	Drive int
+	// Name is how the drive is known, "internal" or "external"
+	Name string
+	// Image is the diskette in it, empty when the drive is
+	Image string
+	// ReadOnly tells whether the diskette is locked
+	ReadOnly bool
+}
+
+// The diskette drives of the machine, the one inside and the one on the port
+// at the back
+const (
+	DriveInternal = driveInternal
+	DriveExternal = driveExternal
+
+	// DriveCount is how many of them there are
+	DriveCount = driveCount
+)
+
+/*
+GetDiskettes describes both drives, empty or not. It is safe to call from a
+frontend while the machine runs: what it reports is published by the
+emulation as it changes rather than being read out from under it.
+*/
+func (m *Mac) GetDiskettes() []DisketteDescription {
+	described := make([]DisketteDescription, 0, driveCount)
+
+	for i, d := range m.iwm.drives {
+		image, readOnly := d.mounted()
+		described = append(described, DisketteDescription{
+			Drive:    i,
+			Name:     d.name,
+			Image:    image,
+			ReadOnly: readOnly,
+		})
+	}
+
+	return described
+}
+
+/*
+InsertDiskette puts an image in one of the drives. It is how the machine is
+set up before it runs; once it is running a frontend goes through
+SendInsertDiskette instead, so that the drive is not changed under the
+emulation.
+*/
+func (m *Mac) InsertDiskette(drive int, filename string) error {
+	if drive < 0 || drive >= driveCount {
+		return fmt.Errorf("the machine has no diskette drive %v", drive)
+	}
+
+	disk, err := storage.NewFloppyDisk(filename, false)
+	if err != nil {
+		return err
+	}
+
+	return m.iwm.drives[drive].insert(disk)
+}
+
+// EjectDiskette takes the diskette out of a drive, writing back anything the
+// machine had left on it
+func (m *Mac) EjectDiskette(drive int) error {
+	if drive < 0 || drive >= driveCount {
+		return fmt.Errorf("the machine has no diskette drive %v", drive)
+	}
+
+	return m.iwm.drives[drive].eject()
+}
+
+/*
+FlushDiskettes writes back whatever the machine has changed and not yet been
+asked to store, which happens when it is closed down with a disk still in a
+drive. The emulation does it by itself as a motor stops, so this is the
+unusual path rather than the usual one.
+*/
+func (m *Mac) FlushDiskettes() error {
+	return m.iwm.flush()
 }
 
 // PutKey queues a key transition for the keyboard. The code is the raw one
@@ -310,12 +417,18 @@ func (m *Mac) Summary() []string {
 			disk.Id, disk.Name, disk.Blocks))
 	}
 
-	// The diskette drives are not emulated yet, so an image that turns out
-	// to be one is reported rather than quietly ignored
-	for _, filename := range m.config.Diskettes {
-		lines = append(lines, fmt.Sprintf(
-			"Warning: %v is a diskette and the drives are not emulated yet, it was not attached",
-			filename))
+	for _, diskette := range m.GetDiskettes() {
+		if diskette.Image == "" {
+			lines = append(lines, fmt.Sprintf("Floppy %v: empty", diskette.Name))
+			continue
+		}
+
+		locked := ""
+		if diskette.ReadOnly {
+			locked = ", locked"
+		}
+		lines = append(lines, fmt.Sprintf("Floppy %v: %v%v",
+			diskette.Name, diskette.Image, locked))
 	}
 
 	return lines

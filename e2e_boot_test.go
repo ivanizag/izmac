@@ -50,7 +50,7 @@ func newOverlayTestMac(t *testing.T) *Mac {
 	config.RomFile = "<test>"
 	config.Trace = "sadmac"
 
-	return newMac(config, storage.RomFromData(buildOverlayTestRom()), nil)
+	return mustNewMac(t, config, storage.RomFromData(buildOverlayTestRom()), nil, nil)
 }
 
 func TestTheRomLeavesTheOverlayMap(t *testing.T) {

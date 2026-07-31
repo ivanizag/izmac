@@ -23,8 +23,8 @@ type Configuration struct {
 	// they take the target ids
 	DiskFiles []string
 
-	// Diskettes are the images that turned out to be diskettes, which the
-	// machine can not use yet
+	// Diskettes are the images that turned out to be diskettes, in the
+	// order they go in the drives: the internal one and then the external
 	Diskettes []string
 
 	// PramFile is where the parameter RAM is persisted between runs
@@ -158,6 +158,9 @@ func (c *Configuration) AddFlags(fs *flag.FlagSet) {
 			defaultRomFile+" if not given and not already there")
 	fs.Var((*stringList)(&c.DiskFiles), "disk",
 		"disk image to attach to the SCSI bus, repeat for more than one")
+	fs.Var((*stringList)(&c.Diskettes), "floppy",
+		"400K or 800K diskette image, plain or DiskCopy 4.2, to put in a "+
+			"drive. Repeat for the external drive as well")
 	fs.StringVar(&c.PramFile, "pram", c.PramFile,
 		"path to the file where the parameter RAM is persisted")
 	fs.BoolVar(&c.WallClock, "wallclock", c.WallClock,
@@ -171,7 +174,7 @@ func (c *Configuration) AddFlags(fs *flag.FlagSet) {
 			"7.8336Mhz of the machine, '"+speedFull+"' for as fast as "+
 			"possible, or a decimal number")
 	fs.StringVar(&c.Trace, "trace", c.Trace,
-		"comma separated list of tracers to enable: cpu, toolbox, sadmac, scsi")
+		"comma separated list of tracers to enable: cpu, toolbox, sadmac, scsi, floppy")
 	fs.BoolVar(&c.Profile, "profile", c.Profile,
 		"generate a CPU profile")
 }
@@ -190,6 +193,11 @@ func (c *Configuration) Validate() error {
 	if len(c.DiskFiles) > scsi.TargetCount {
 		return fmt.Errorf("the bus takes %v disks, %v were given",
 			scsi.TargetCount, len(c.DiskFiles))
+	}
+
+	if len(c.Diskettes) > DriveCount {
+		return fmt.Errorf("the machine has %v diskette drives, %v images were given",
+			DriveCount, len(c.Diskettes))
 	}
 
 	return c.parseSpeed()

@@ -103,7 +103,7 @@ func (m *memoryManager) notifyWatch(address uint32, value uint8) {
 	}
 }
 
-func newMemoryManager(ramSizeKb int, romData []uint8) *memoryManager {
+func newMemoryManager(ramSizeKb int, romData []uint8, floppyTrace bool) *memoryManager {
 	ramSize := uint32(ramSizeKb) * 1024
 	m := &memoryManager{
 		ram:     make([]uint8, ramSize),
@@ -115,7 +115,7 @@ func newMemoryManager(ramSizeKb int, romData []uint8) *memoryManager {
 
 	m.scsi = scsi.NewBus()
 	m.scc = component.NewSCC8530()
-	m.iwm = newIwm()
+	m.iwm = newIwm(floppyTrace)
 
 	return m
 }

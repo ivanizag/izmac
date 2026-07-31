@@ -22,6 +22,12 @@ const (
 	CommandToggleSpeed
 	// CommandShowSpeed prints the speed the emulation is reaching
 	CommandShowSpeed
+	// CommandInsertDiskette puts an image in one of the drives, and
+	// CommandEjectDiskette takes one out. Both are sent with
+	// SendDisketteCommand rather than SendCommand, since they carry which
+	// drive is meant.
+	CommandInsertDiskette
+	CommandEjectDiskette
 )
 
 type command interface {
@@ -39,6 +45,33 @@ func (c *commandSimple) getId() int {
 // SendCommand enqueues a command to the emulation goroutine
 func (m *Mac) SendCommand(commandId int) {
 	m.commandChannel <- &commandSimple{id: commandId}
+}
+
+// commandDiskette is a command about one of the diskette drives
+type commandDiskette struct {
+	id       int
+	drive    int
+	filename string
+}
+
+func (c *commandDiskette) getId() int {
+	return c.id
+}
+
+/*
+SendDisketteCommand enqueues a change to one of the diskette drives. It goes
+through the channel rather than being done where it is asked for because a
+frontend runs on its own goroutine and the drive belongs to the emulation:
+taking a disk out from under a read would be a race over more than the drive.
+
+The filename is only read by CommandInsertDiskette.
+*/
+func (m *Mac) SendDisketteCommand(commandId int, drive int, filename string) {
+	m.commandChannel <- &commandDiskette{
+		id:       commandId,
+		drive:    drive,
+		filename: filename,
+	}
 }
 
 // toggleSpeed switches between the speed configured and full speed, and back
@@ -80,9 +113,32 @@ func (m *Mac) executeCommands() bool {
 				m.toggleSpeed()
 			case CommandShowSpeed:
 				fmt.Printf("Running at %.2f Mhz\n", m.GetCurrentFreqMHz())
+			case CommandInsertDiskette, CommandEjectDiskette:
+				m.executeDisketteCommand(c)
 			}
 		default:
 			return false
 		}
+	}
+}
+
+// executeDisketteCommand runs a change to a drive, reporting what went wrong
+// on the standard output. There is nowhere else to put it: the frontend that
+// asked for it has gone on with its own frame by now.
+func (m *Mac) executeDisketteCommand(c command) {
+	command, ok := c.(*commandDiskette)
+	if !ok {
+		return
+	}
+
+	var err error
+	if command.id == CommandInsertDiskette {
+		err = m.InsertDiskette(command.drive, command.filename)
+	} else {
+		err = m.EjectDiskette(command.drive)
+	}
+
+	if err != nil {
+		fmt.Printf("Floppy: %v\n", err)
 	}
 }

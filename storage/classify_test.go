@@ -3,6 +3,7 @@ package storage
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -52,7 +53,7 @@ func TestTheDisketteSizesAreRecognized(t *testing.T) {
 }
 
 func TestAnythingElseIsAHardDisk(t *testing.T) {
-	for _, size := range []int{BlockSize, 20 * 1024 * 1024, 1440 * 1024} {
+	for _, size := range []int{BlockSize, 20 * 1024 * 1024, 5 * 1024 * 1024} {
 		filename := writeImage(t, size, false)
 
 		kind, err := Classify(filename)
@@ -68,5 +69,35 @@ func TestAnythingElseIsAHardDisk(t *testing.T) {
 func TestAnImageThatIsNotThereIsAnError(t *testing.T) {
 	if _, err := Classify(filepath.Join(t.TempDir(), "missing.img")); err == nil {
 		t.Error("an image that is not there was classified anyway")
+	}
+}
+
+/*
+A 1.44Mb image is a diskette and is sorted as one, even though this machine
+can not read it. It would otherwise be left to fall through to the SCSI bus
+and be attached there as a hard disk, which looks like it worked and is the
+worst of the answers available: what the file really is is the right System on
+the wrong kind of disk, and saying so is the only useful thing to do with it.
+*/
+func TestAnUnreadableDisketteIsStillADiskette(t *testing.T) {
+	for _, size := range []int{floppySize720K, floppySize1440K} {
+		filename := writeImage(t, size, false)
+
+		kind, err := Classify(filename)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if kind != KindFloppy {
+			t.Errorf("an image of %v bytes was taken for a %v", size, kind)
+		}
+
+		_, err = NewFloppyDisk(filename, false)
+		if err == nil {
+			t.Fatalf("an image of %v bytes was opened as a diskette", size)
+		}
+		if !strings.Contains(err.Error(), "SuperDrive") {
+			t.Errorf("opening a %v byte image said %q, which does not say why",
+				size, err)
+		}
 	}
 }
