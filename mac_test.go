@@ -7,9 +7,9 @@ import (
 	"github.com/ivanizag/izmac/storage"
 )
 
-// mustNewMac assembles a machine for a test, failing it rather than making
+// ensureNewMac assembles a machine for a test, failing it rather than making
 // every caller deal with a configuration it wrote itself
-func mustNewMac(t *testing.T, config *Configuration, r *storage.Rom,
+func ensureNewMac(t *testing.T, config *Configuration, r *storage.Rom,
 	disks []storage.BlockDisk, diskettes []*storage.FloppyDisk) *Mac {
 	t.Helper()
 
@@ -39,7 +39,7 @@ func TestADisketteGoesInTheInternalDrive(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	m := mustNewMac(t, config, storage.RomFromData(make([]uint8, storage.RomSize)),
+	m := ensureNewMac(t, config, storage.RomFromData(make([]uint8, storage.RomSize)),
 		nil, []*storage.FloppyDisk{diskette})
 
 	drives := m.GetDiskettes()
@@ -79,7 +79,7 @@ func TestTheDisksTakeTheIdsInOrder(t *testing.T) {
 		storage.NewBlockDiskMemory(32),
 		storage.NewBlockDiskMemory(64),
 	}
-	m := mustNewMac(t, config, storage.RomFromData(make([]uint8, storage.RomSize)), disks, nil)
+	m := ensureNewMac(t, config, storage.RomFromData(make([]uint8, storage.RomSize)), disks, nil)
 
 	described := m.GetDisks()
 	if len(described) != len(disks) {

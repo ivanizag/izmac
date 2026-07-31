@@ -2,7 +2,6 @@ package izmac
 
 import (
 	"fmt"
-	"io/fs"
 	"math"
 	"os"
 	"strings"
@@ -228,17 +227,29 @@ emulation as it changes rather than being read out from under it.
 func (m *Mac) GetDiskettes() []DisketteDescription {
 	described := make([]DisketteDescription, 0, driveCount)
 
-	for i, d := range m.iwm.drives {
-		image, readOnly := d.mounted()
-		described = append(described, DisketteDescription{
-			Drive:    i,
-			Name:     d.name,
-			Image:    image,
-			ReadOnly: readOnly,
-		})
+	for drive := range m.iwm.drives {
+		described = append(described, m.GetDiskette(drive))
 	}
 
 	return described
+}
+
+// GetDiskette describes one drive, which is what a menu line asks about as it
+// is drawn. It is safe to call while the machine runs, as GetDiskettes is.
+func (m *Mac) GetDiskette(drive int) DisketteDescription {
+	if drive < 0 || drive >= driveCount {
+		return DisketteDescription{Drive: drive}
+	}
+
+	d := m.iwm.drives[drive]
+	image, readOnly := d.mounted()
+
+	return DisketteDescription{
+		Drive:    drive,
+		Name:     d.name,
+		Image:    image,
+		ReadOnly: readOnly,
+	}
 }
 
 /*
@@ -278,91 +289,6 @@ unusual path rather than the usual one.
 */
 func (m *Mac) FlushDiskettes() error {
 	return m.iwm.flush()
-}
-
-/*
-PathOfDroppedImage returns the path of the first file in a set dropped on a
-window, which is how a frontend is handed one and how a diskette gets into a
-drive without being named on the command line.
-
-It takes the files as a file system because that is what a frontend has: they
-arrive named rather than opened. The path is what izmac needs, since a
-diskette is written back to where it came from, and it is recovered by opening
-the file and asking what it was opened as.
-
-Nothing dropped is the answer on almost every frame, and the file system is
-nil then. That has to be the quiet answer rather than a crash.
-
-A file that is not on a real disk is passed over, which is what a browser
-hands out: the file exists only inside the page and there would be nowhere to
-write a changed diskette back to. So is a folder, which holds no diskette.
-*/
-func PathOfDroppedImage(dropped fs.FS) (string, bool) {
-	if dropped == nil {
-		return "", false
-	}
-
-	entries, err := fs.ReadDir(dropped, ".")
-	if err != nil {
-		return "", false
-	}
-
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-
-		file, err := dropped.Open(entry.Name())
-		if err != nil {
-			continue
-		}
-
-		real, ok := file.(*os.File)
-		if !ok {
-			file.Close()
-			continue
-		}
-
-		name := real.Name()
-		file.Close()
-
-		return name, true
-	}
-
-	return "", false
-}
-
-/*
-ShortImageName is an image without the directories in front of it, shortened
-from the middle if it is still long, for a frontend drawing it on a line of a
-fixed width.
-
-The cut is by characters and not by bytes: a name with an accent in it would
-otherwise be cut through the middle of one and drawn with a replacement
-character where it happened.
-*/
-func ShortImageName(path string) string {
-	name := path
-	for i := len(path) - 1; i >= 0; i-- {
-		if path[i] == '/' || path[i] == '\\' {
-			name = path[i+1:]
-			break
-		}
-	}
-
-	const (
-		longest = 24
-		gap     = 3 // The "..." that goes where the middle was
-	)
-
-	letters := []rune(name)
-	if len(letters) > longest {
-		front := (longest - gap) / 2
-		back := longest - gap - front
-		name = string(letters[:front]) + "..." + string(letters[len(letters)-back:])
-	}
-
-	return name
 }
 
 // PutKey queues a key transition for the keyboard. The code is the raw one

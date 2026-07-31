@@ -41,8 +41,9 @@ func (g *game) Update() error {
 	}
 
 	// A diskette image dropped on the window goes in a drive
-	if filename, dropped := droppedFile(); dropped {
-		g.menu.say(insertDropped(g.m, filename))
+	if filename, dropped := pathOfDropped(ebiten.DroppedFiles()); dropped {
+		message := insertDropped(g.m, filename)
+		g.menu.say(message)
 	}
 
 	if g.paused != g.m.IsPaused() {

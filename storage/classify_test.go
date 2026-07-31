@@ -95,9 +95,9 @@ func TestAnUnreadableDisketteIsStillADiskette(t *testing.T) {
 		if err == nil {
 			t.Fatalf("an image of %v bytes was opened as a diskette", size)
 		}
-		if !strings.Contains(err.Error(), "SuperDrive") {
-			t.Errorf("opening a %v byte image said %q, which does not say why",
-				size, err)
+		if !strings.Contains(err.Error(), "800Kb") {
+			t.Errorf("opening a %v byte image said %q, which does not say what "+
+				"the machine can read", size, err)
 		}
 	}
 }

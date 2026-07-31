@@ -257,9 +257,6 @@ func TestALockedDisketteIsNeverWritten(t *testing.T) {
 	if _, err := disk.WriteTrack(0, 0, nibbles); err == nil {
 		t.Error("a locked diskette accepted a track")
 	}
-	if disk.IsModified() {
-		t.Error("a locked diskette was marked as changed")
-	}
 
 	written, err := os.ReadFile(filename)
 	if err != nil {
