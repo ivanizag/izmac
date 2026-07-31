@@ -312,23 +312,57 @@ func TestTheParameterRamSurvivesARestart(t *testing.T) {
 	}
 }
 
-// A missing or damaged file is not an error. The ROM notices that the
-// contents make no sense and writes its defaults, as it does for a Macintosh
-// with a flat battery.
-func TestAnUnusableParameterRamFileIsIgnored(t *testing.T) {
+// A missing or damaged file is not an error, it is a machine that has not run
+// before or one whose battery went flat. Either way it starts on the defaults.
+func TestAnUnusableParameterRamFileLeavesTheDefaults(t *testing.T) {
 	dir := t.TempDir()
 
 	missing := filepath.Join(dir, "missing.bin")
-	if r := NewAppleRTC(missing, false); r.pram != [pramSize]uint8{} {
-		t.Error("a missing file did not leave the parameter RAM empty")
+	if r := NewAppleRTC(missing, false); r.pram != defaultPram() {
+		t.Error("a missing file did not leave the parameter RAM on its defaults")
 	}
 
 	short := filepath.Join(dir, "short.bin")
 	if err := os.WriteFile(short, []uint8{1, 2, 3}, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if r := NewAppleRTC(short, false); r.pram != [pramSize]uint8{} {
+	if r := NewAppleRTC(short, false); r.pram != defaultPram() {
 		t.Error("a file of the wrong size was loaded anyway")
+	}
+}
+
+/*
+The defaults have to be valid as far as the ROM is concerned and have both
+serial ports spoken for, which is what keeps a System from turning AppleTalk
+on and hanging the startup on an SCC that can not carry it.
+*/
+func TestTheDefaultParameterRamKeepsAppleTalkOff(t *testing.T) {
+	pram := defaultPram()
+
+	const (
+		spValid   = 0x00
+		spConfig  = 0x03
+		validMark = 0xa8
+	)
+
+	if pram[spValid] != validMark {
+		t.Errorf("SPValid is $%02x, the ROM would throw the defaults away and write its own",
+			pram[spValid])
+	}
+
+	for _, port := range []struct {
+		name string
+		use  uint8
+	}{
+		{"A", pram[spConfig] >> 4},
+		{"B", pram[spConfig] & 0x0f},
+	} {
+		if port.use == 0 {
+			t.Errorf("the port %v is free, a System would take it for AppleTalk", port.name)
+		}
+		if port.use == 1 {
+			t.Errorf("the port %v is set to AppleTalk", port.name)
+		}
 	}
 }
 
