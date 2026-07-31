@@ -111,6 +111,133 @@ func TestTheMachineKeepsToItsClock(t *testing.T) {
 	}
 }
 
+/*
+The pacing a click asks for. A double click is two clicks close enough
+together in ticks of the machine, and the ticks come from the emulated cycles,
+so a machine running free counts hundreds of them between two clicks that were
+a moment apart on the host and never sees the pair.
+*/
+func TestAClickHoldsTheMachineToItsClock(t *testing.T) {
+	m := newTestMac(t)
+	m.setCycleDuration(0)
+
+	if m.pacedCycleDuration() != 0 {
+		t.Error("the machine is not running free before the click")
+	}
+
+	m.SetMouseButton(true)
+
+	if got := m.pacedCycleDuration(); got != cycleDurationOf(CPUClockMhz) {
+		t.Errorf("a cycle takes %vns after the click, wanted the %vns of the real clock",
+			got, cycleDurationOf(CPUClockMhz))
+	}
+}
+
+// Both edges hold, because the gap that has to be measured is the one from
+// the release of the first click to the press of the second
+func TestReleasingTheButtonHoldsAsWell(t *testing.T) {
+	m := newTestMac(t)
+	m.setCycleDuration(0)
+
+	m.SetMouseButton(true)
+
+	// Out of the way, so that what is left is what the release asked for
+	m.realTimeUntilNs.Store(0)
+	m.SetMouseButton(false)
+
+	if m.realTimeUntilNs.Load() == 0 {
+		t.Error("the release did not hold")
+	}
+	if got := m.pacedCycleDuration(); got != cycleDurationOf(CPUClockMhz) {
+		t.Errorf("a cycle takes %vns after the release, wanted the %vns of the real clock",
+			got, cycleDurationOf(CPUClockMhz))
+	}
+}
+
+// The button is reported every frame by a frontend and not only when it
+// moves, so a state that is already the one held has nothing to hold for
+func TestTheButtonStandingStillDoesNotHold(t *testing.T) {
+	m := newTestMac(t)
+	m.setCycleDuration(0)
+
+	m.SetMouseButton(false)
+
+	if m.realTimeUntilNs.Load() != 0 {
+		t.Error("a button that did not change asked for a hold")
+	}
+	if m.pacedCycleDuration() != 0 {
+		t.Error("the machine is not running free with the button untouched")
+	}
+}
+
+// Once the hold has run out the machine goes back to what it was told to run
+// at, and the deadline is dropped so that the loop has nothing left to check
+func TestTheHoldRunsOutAndIsForgotten(t *testing.T) {
+	m := newTestMac(t)
+	m.setCycleDuration(0)
+
+	m.SetMouseButton(true)
+	m.realTimeUntilNs.Store(time.Now().Add(-time.Millisecond).UnixNano())
+
+	if got := m.pacedCycleDuration(); got != 0 {
+		t.Errorf("a cycle takes %vns after the hold ran out, wanted the machine running free", got)
+	}
+	if m.realTimeUntilNs.Load() != 0 {
+		t.Error("the hold that ran out was left behind")
+	}
+}
+
+// A machine put below its own clock to watch something happen is left there,
+// the hold only ever slows one down
+func TestTheHoldDoesNotSpeedUpASlowMachine(t *testing.T) {
+	m := newTestMac(t)
+	slow := cycleDurationOf(1.0)
+	m.setCycleDuration(slow)
+
+	m.SetMouseButton(true)
+
+	if got := m.pacedCycleDuration(); got != slow {
+		t.Errorf("a cycle takes %vns after the click, wanted the %vns it was configured for",
+			got, slow)
+	}
+}
+
+/*
+And the run loop honouring the hold, which is the part of it the frequency it
+reports can be watched for. A machine running free comes into the throttled
+branch with a reference time from long before, so this is also the check that
+it resynchronizes there rather than sitting out the hold in one long sleep.
+*/
+func TestAClickSlowsTheRunningMachineDown(t *testing.T) {
+	if testing.Short() {
+		t.Skip("this one watches the clock for a moment")
+	}
+
+	m := newTestMac(t)
+	m.setCycleDuration(0)
+	go m.Run()
+	defer m.SendCommand(CommandKill)
+
+	time.Sleep(200 * time.Millisecond)
+
+	free := m.GetCurrentFreqMHz()
+	if free < CPUClockMhz*2 {
+		t.Skipf("the host only reaches %.2f MHz running free, there is nothing to slow down", free)
+	}
+
+	m.SetMouseButton(true)
+
+	// Long enough for the speed to be measured again, which is once every
+	// million cycles and so about every eighth of a second once it is held
+	// down, and well short of the second the hold lasts
+	time.Sleep(400 * time.Millisecond)
+
+	if held := m.GetCurrentFreqMHz(); held > CPUClockMhz*2 {
+		t.Errorf("the machine is running at %.2f MHz after a click, wanted about %.2f",
+			held, CPUClockMhz)
+	}
+}
+
 // A spin is one scan line of emulated time, so the loop looks at the clock
 // and at the command channel that often
 func TestASpinIsAScanLine(t *testing.T) {

@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"github.com/ivanizag/iz68000"
 	"github.com/ivanizag/izmac/component"
@@ -53,6 +54,15 @@ type Mac struct {
 	// loop and read by a frontend putting it on the window, so it is kept
 	// where both can reach it safely
 	currentFreqMHz atomic.Uint64
+
+	/*
+		realTimeUntilNs is the wall clock, as Unix nanoseconds, that a click
+		is holding the machine down to its own speed until, or zero when
+		nothing is. A frontend sets it from its own goroutine and the run
+		loop clears it once it has run out, which leaves the loop with a
+		single atomic to read while the machine is running free.
+	*/
+	realTimeUntilNs atomic.Int64
 
 	paused  atomic.Bool
 	started bool
@@ -190,9 +200,21 @@ func (m *Mac) MoveMouse(dx int, dy int) {
 	m.mouse.move(dx, dy)
 }
 
-// SetMouseButton reports the state of the only button the machine has
+/*
+SetMouseButton reports the state of the only button the machine has.
+
+A click is also what puts the machine back on its own clock for a moment. The
+ROM tells a double click from two single ones by the ticks between them, and a
+tick comes from the vertical blanking, which is counted in emulated cycles:
+running free, the fifth of a second a person leaves between two clicks is
+hundreds of ticks to the machine and the second click lands long after the
+window the first one opened. Slowing down around the click puts the two back
+within the same distance of each other that they are on the host.
+*/
 func (m *Mac) SetMouseButton(pressed bool) {
-	m.mouse.setButton(pressed)
+	if m.mouse.setButton(pressed) {
+		m.holdRealTime()
+	}
 }
 
 // GetCycles returns the cycles run since the reset
@@ -262,6 +284,56 @@ func (m *Mac) setCycleDuration(ns float64) {
 
 func (m *Mac) cycleDuration() float64 {
 	return math.Float64frombits(m.cycleDurationNs.Load())
+}
+
+/*
+realTimeHold is how long a click keeps the machine on its own clock. What has
+to fit inside it is the gap a person leaves between the two clicks of a double
+one, measured against the DoubleTime low memory global: eight ticks, an
+eighth of a second, as the machine comes out of the box and about half a
+second at the slowest the control panel goes. A second leaves room for the
+slowest setting and is short enough that the machine is running free again
+before anyone waiting on it notices.
+*/
+const realTimeHold = time.Second
+
+// holdRealTime asks the run loop to pace the machine at its own clock for a
+// while, whatever speed it was told to run at
+func (m *Mac) holdRealTime() {
+	m.realTimeUntilNs.Store(time.Now().Add(realTimeHold).UnixNano())
+}
+
+/*
+pacedCycleDuration is how long a cycle has to take right now: the duration
+configured, or the one of the real clock while a click is holding the machine
+back.
+
+The hold only ever slows the machine down. One asked to run below its own
+clock, to watch something happen, is left where it was put.
+*/
+func (m *Mac) pacedCycleDuration() float64 {
+	ns := m.cycleDuration()
+
+	until := m.realTimeUntilNs.Load()
+	if until == 0 {
+		return ns
+	}
+
+	if time.Now().UnixNano() >= until {
+		/*
+			The hold has run out. Compared before it is swapped so that a
+			click arriving between the load and here is not dropped along
+			with it: the swap fails, and the deadline that click wrote
+			stands.
+		*/
+		m.realTimeUntilNs.CompareAndSwap(until, 0)
+		return ns
+	}
+
+	if realNs := cycleDurationOf(CPUClockMhz); ns == 0 || ns < realNs {
+		return realNs
+	}
+	return ns
 }
 
 // clockMhz returns the clock the emulation is throttled to, or the one of
