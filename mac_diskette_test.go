@@ -1,7 +1,6 @@
-package main
+package izmac
 
 import (
-	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,16 +9,17 @@ import (
 )
 
 /*
-Nothing has been dropped on almost every frame there ever is, and ebiten says
-so by handing over no file system at all rather than an empty one. Asking it
-for its contents is what crashed the frontend the first time it ran.
+Nothing has been dropped on almost every frame there ever is, and a frontend
+says so by handing over no file system at all rather than an empty one. Asking
+it for its contents is what crashed the windowed frontend the first time it
+was run.
 */
 func TestNothingDroppedIsNotAFile(t *testing.T) {
-	if name, ok := pathOfDropped(nil); ok {
+	if name, ok := PathOfDroppedImage(nil); ok {
 		t.Errorf("a nil file system gave the file %q", name)
 	}
 
-	if name, ok := pathOfDropped(fstest.MapFS{}); ok {
+	if name, ok := PathOfDroppedImage(fstest.MapFS{}); ok {
 		t.Errorf("an empty file system gave the file %q", name)
 	}
 }
@@ -34,7 +34,7 @@ func TestADroppedFileThatIsNotOnTheHostIsIgnored(t *testing.T) {
 		"disk.dsk": &fstest.MapFile{Data: []uint8("not a real file")},
 	}
 
-	if name, ok := pathOfDropped(made); ok {
+	if name, ok := PathOfDroppedImage(made); ok {
 		t.Errorf("a file system of made up files gave the file %q", name)
 	}
 }
@@ -49,7 +49,7 @@ func TestADroppedFileGivesItsPath(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	name, ok := pathOfDropped(os.DirFS(dir))
+	name, ok := PathOfDroppedImage(os.DirFS(dir))
 	if !ok {
 		t.Fatal("a real file dropped on the window was not taken")
 	}
@@ -67,7 +67,7 @@ func TestADroppedFolderIsPassedOver(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if name, ok := pathOfDropped(os.DirFS(dir)); ok {
+	if name, ok := PathOfDroppedImage(os.DirFS(dir)); ok {
 		t.Errorf("a folder gave the file %q", name)
 	}
 
@@ -77,14 +77,14 @@ func TestADroppedFolderIsPassedOver(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	name, ok := pathOfDropped(os.DirFS(dir))
+	name, ok := PathOfDroppedImage(os.DirFS(dir))
 	if !ok || name != wanted {
 		t.Errorf("the file beside the folder came back as %q, %v", name, ok)
 	}
 }
 
-// baseName is what the menu and the messages are drawn from, and a line of
-// the menu is only so wide
+// ShortImageName is what a menu and its messages are drawn from, and a line
+// of a menu is only so wide
 func TestALongNameIsShortenedFromTheMiddle(t *testing.T) {
 	for _, c := range []struct{ path, wanted string }{
 		{"work.dsk", "work.dsk"},
@@ -93,7 +93,7 @@ func TestALongNameIsShortenedFromTheMiddle(t *testing.T) {
 		{"/disks/a-very-long-diskette-name-indeed.dsk", "a-very-lon...-indeed.dsk"},
 		{"/disks/discos con acentuación en el nombre.dsk", "discos con... nombre.dsk"},
 	} {
-		if got := baseName(c.path); got != c.wanted {
+		if got := ShortImageName(c.path); got != c.wanted {
 			t.Errorf("%q came out as %q, wanted %q", c.path, got, c.wanted)
 		}
 	}
@@ -103,12 +103,9 @@ func TestALongNameIsShortenedFromTheMiddle(t *testing.T) {
 		"/disks/" + strings.Repeat("x", 300) + ".dsk",
 		"/disks/" + strings.Repeat("ñ", 300) + ".dsk",
 	} {
-		if got := baseName(name); len([]rune(got)) > 24 {
+		if got := ShortImageName(name); len([]rune(got)) > 24 {
 			t.Errorf("a very long name came out %v characters long: %q",
 				len([]rune(got)), got)
 		}
 	}
 }
-
-// The interface ebiten hands over is the one this expects
-var _ fs.FS = fstest.MapFS{}
