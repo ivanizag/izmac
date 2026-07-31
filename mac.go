@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"github.com/ivanizag/iz68000"
 	"github.com/ivanizag/izmac/component"
@@ -58,6 +59,14 @@ type Mac struct {
 	paused  atomic.Bool
 	started bool
 
+	/*
+		stopped is closed when the run loop has finished. Sending the kill
+		command only asks it to: a frontend that returned as soon as it had
+		asked would let the process end with a changed diskette still in
+		hand, so it waits for this.
+	*/
+	stopped chan struct{}
+
 	cpuTrace     bool
 	toolboxTrace bool
 	sadMacTrace  bool
@@ -95,8 +104,8 @@ func NewMac(config *Configuration) (*Mac, error) {
 		return nil, err
 	}
 
-	disks := make([]storage.BlockDisk, 0, len(config.DiskFiles))
-	for _, filename := range config.DiskFiles {
+	disks := make([]storage.BlockDisk, 0, len(config.HardDisks))
+	for _, filename := range config.HardDisks {
 		disk, err := storage.NewBlockDiskFile(filename, false)
 		if err != nil {
 			return nil, err
@@ -149,6 +158,7 @@ func newMac(config *Configuration, r *storage.Rom, disks []storage.BlockDisk,
 		iwm:            mm.iwm,
 		via:            newVia(mm, v, mm.iwm, c, k, mo, so),
 		commandChannel: make(chan command, commandChannelSize),
+		stopped:        make(chan struct{}),
 		cpuTrace:       config.hasTracer("cpu"),
 		toolboxTrace:   config.hasTracer("toolbox"),
 		sadMacTrace:    config.hasTracer("sadmac"),
@@ -199,8 +209,6 @@ func (m *Mac) GetDisks() []DiskDescription {
 // DisketteDescription is what is in a diskette drive, for a frontend to
 // report and to build its menu from
 type DisketteDescription struct {
-	// Drive is DriveInternal or DriveExternal
-	Drive int
 	// Name is how the drive is known, "internal" or "external"
 	Name string
 	// Image is the diskette in it, empty when the drive is
@@ -220,32 +228,19 @@ const (
 )
 
 /*
-GetDiskettes describes both drives, empty or not. It is safe to call from a
-frontend while the machine runs: what it reports is published by the
-emulation as it changes rather than being read out from under it.
+GetDiskette describes one drive, empty or not. It is safe to call from a
+frontend while the machine runs: what it reports is published by the emulation
+as it changes rather than being read out from under it.
 */
-func (m *Mac) GetDiskettes() []DisketteDescription {
-	described := make([]DisketteDescription, 0, driveCount)
-
-	for drive := range m.iwm.drives {
-		described = append(described, m.GetDiskette(drive))
-	}
-
-	return described
-}
-
-// GetDiskette describes one drive, which is what a menu line asks about as it
-// is drawn. It is safe to call while the machine runs, as GetDiskettes is.
 func (m *Mac) GetDiskette(drive int) DisketteDescription {
 	if drive < 0 || drive >= driveCount {
-		return DisketteDescription{Drive: drive}
+		return DisketteDescription{}
 	}
 
 	d := m.iwm.drives[drive]
 	image, readOnly := d.mounted()
 
 	return DisketteDescription{
-		Drive:    drive,
 		Name:     d.name,
 		Image:    image,
 		ReadOnly: readOnly,
@@ -283,12 +278,30 @@ func (m *Mac) EjectDiskette(drive int) error {
 
 /*
 FlushDiskettes writes back whatever the machine has changed and not yet been
-asked to store, which happens when it is closed down with a disk still in a
-drive. The emulation does it by itself as a motor stops, so this is the
-unusual path rather than the usual one.
+asked to store. The emulation does it by itself as a motor stops, and the kill
+command does it before the run loop ends, so a frontend only needs this if it
+drives the machine with RunFrames and never starts that loop.
 */
 func (m *Mac) FlushDiskettes() error {
 	return m.iwm.flush()
+}
+
+/*
+WaitUntilStopped waits for the run loop to finish, which is what the kill
+command asks it to do, and answers whether it did within the time given.
+
+Waiting matters because stopping is where a diskette the machine has changed
+reaches the host. The loop gets there within a spin of the command channel,
+which is a scan line of instructions and at most a tenth of a second of
+throttling, so anything much over that is long enough.
+*/
+func (m *Mac) WaitUntilStopped(timeout time.Duration) bool {
+	select {
+	case <-m.stopped:
+		return true
+	case <-time.After(timeout):
+		return false
+	}
 }
 
 // PutKey queues a key transition for the keyboard. The code is the raw one
@@ -429,7 +442,8 @@ func (m *Mac) Summary() []string {
 			disk.Id, disk.Name, disk.Blocks))
 	}
 
-	for _, diskette := range m.GetDiskettes() {
+	for drive := 0; drive < driveCount; drive++ {
+		diskette := m.GetDiskette(drive)
 		if diskette.Image == "" {
 			lines = append(lines, fmt.Sprintf("Floppy %v: empty", diskette.Name))
 			continue

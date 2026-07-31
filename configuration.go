@@ -19,9 +19,9 @@ type Configuration struct {
 	// default: the ROM is copyrighted and can not be distributed.
 	RomFile string
 
-	// DiskFiles are the disk images attached to the SCSI bus, in the order
+	// HardDisks are the disk images attached to the SCSI bus, in the order
 	// they take the target ids
-	DiskFiles []string
+	HardDisks []string
 
 	// Diskettes are the images that turned out to be diskettes, in the
 	// order they go in the drives: the internal one and then the external
@@ -129,7 +129,7 @@ func (c *Configuration) AddFiles(filenames []string) error {
 		if kind == storage.KindFloppy {
 			c.Diskettes = append(c.Diskettes, filename)
 		} else {
-			c.DiskFiles = append(c.DiskFiles, filename)
+			c.HardDisks = append(c.HardDisks, filename)
 		}
 	}
 
@@ -156,7 +156,7 @@ func (c *Configuration) AddFlags(fs *flag.FlagSet) {
 	fs.StringVar(&c.RomFile, "rom", c.RomFile,
 		"path to the Macintosh Plus ROM image, 128Kb. Downloaded to "+
 			defaultRomFile+" if not given and not already there")
-	fs.Var((*stringList)(&c.DiskFiles), "hd",
+	fs.Var((*stringList)(&c.HardDisks), "hd",
 		"hard disk image to attach to the SCSI bus, repeat for more than one")
 	fs.Var((*stringList)(&c.Diskettes), "floppy",
 		"400K or 800K diskette image, plain or DiskCopy 4.2, to put in a "+
@@ -190,9 +190,9 @@ func (c *Configuration) Validate() error {
 		return fmt.Errorf("unsupported RAM size %vKb, use 1024 or 4096", c.RamSizeKb)
 	}
 
-	if len(c.DiskFiles) > scsi.TargetCount {
+	if len(c.HardDisks) > scsi.TargetCount {
 		return fmt.Errorf("the bus takes %v disks, %v were given",
-			scsi.TargetCount, len(c.DiskFiles))
+			scsi.TargetCount, len(c.HardDisks))
 	}
 
 	if len(c.Diskettes) > DriveCount {

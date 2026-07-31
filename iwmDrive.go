@@ -65,7 +65,6 @@ type drive struct {
 	trackData   []uint8
 	trackNumber int
 	trackSide   int
-	trackLoaded bool
 	trackDirty  bool
 
 	/*
@@ -137,24 +136,20 @@ func (d *drive) insert(disk *storage.FloppyDisk) error {
 		trust it either: it marks the track unknown when it sees a disk go
 		in and recalibrates to the track 0 before reading anything.
 	*/
-	d.trackLoaded = false
 	d.trackDirty = false
 	d.trackData = nil
 	d.publish()
 
 	if d.trace {
+		locked := ""
+		if disk.IsReadOnly() {
+			locked = ", locked"
+		}
 		fmt.Printf("Floppy %v: %v inserted, %v sides%v\n",
-			d.name, disk.Name(), disk.Sides(), lockedNote(disk))
+			d.name, disk.Name(), disk.Sides(), locked)
 	}
 
 	return nil
-}
-
-func lockedNote(disk *storage.FloppyDisk) string {
-	if disk.IsReadOnly() {
-		return ", locked"
-	}
-	return ""
 }
 
 // eject writes back whatever is pending and takes the diskette out
@@ -171,7 +166,6 @@ func (d *drive) eject() error {
 
 	d.disk = nil
 	d.trackData = nil
-	d.trackLoaded = false
 	d.trackDirty = false
 	d.motorOn = false
 	d.publish()
@@ -268,7 +262,7 @@ func (d *drive) loadTrack() {
 	if d.disk == nil {
 		return
 	}
-	if d.trackLoaded && d.trackNumber == d.track && d.trackSide == d.side {
+	if len(d.trackData) != 0 && d.trackNumber == d.track && d.trackSide == d.side {
 		return
 	}
 
@@ -276,7 +270,6 @@ func (d *drive) loadTrack() {
 		fmt.Printf("Floppy %v: %v\n", d.name, err)
 	}
 
-	d.trackLoaded = false
 	d.trackData = nil
 
 	if d.side >= d.disk.Sides() {
@@ -296,7 +289,6 @@ func (d *drive) loadTrack() {
 	d.trackData = data
 	d.trackNumber = d.track
 	d.trackSide = d.side
-	d.trackLoaded = true
 
 	if d.trace {
 		fmt.Printf("Floppy %v: track %v side %v under the head, %v bytes\n",

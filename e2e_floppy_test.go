@@ -109,21 +109,27 @@ func masterDirectoryBlockSignature(image []uint8) uint16 {
 	return uint16(image[masterDirectoryBlock])<<8 | uint16(image[masterDirectoryBlock+1])
 }
 
+/*
+pointerAt is where the ROM has put the pointer, across and down. It keeps it
+in RawMouse, the two words at $082c, which is the only way to find out from
+here: the pointer is drawn by the machine and the mouse is only pushed.
+*/
+func pointerAt(m *Mac) (int16, int16) {
+	const rawMouseV, rawMouseH = 0x082c, 0x082e
+
+	v := int16(uint16(m.mm.Peek(rawMouseV))<<8 | uint16(m.mm.Peek(rawMouseV+1)))
+	h := int16(uint16(m.mm.Peek(rawMouseH))<<8 | uint16(m.mm.Peek(rawMouseH+1)))
+
+	return h, v
+}
+
 // moveMouseTo pushes the pointer to a place on the screen a bit at a time,
 // since the ROM scales what the mouse reports and one push does not arrive
 func moveMouseTo(t *testing.T, m *Mac, wantH int16, wantV int16) {
 	t.Helper()
 
-	const rawMouseV, rawMouseH = 0x082c, 0x082e
-
-	at := func() (int16, int16) {
-		v := int16(uint16(m.mm.Peek(rawMouseV))<<8 | uint16(m.mm.Peek(rawMouseV+1)))
-		h := int16(uint16(m.mm.Peek(rawMouseH))<<8 | uint16(m.mm.Peek(rawMouseH+1)))
-		return h, v
-	}
-
 	for try := 0; try < 60; try++ {
-		h, v := at()
+		h, v := pointerAt(m)
 		if h == wantH && v == wantV {
 			return
 		}
@@ -131,7 +137,7 @@ func moveMouseTo(t *testing.T, m *Mac, wantH int16, wantV int16) {
 		m.RunFrames(3)
 	}
 
-	h, v := at()
+	h, v := pointerAt(m)
 	t.Fatalf("the pointer stopped at %v,%v on the way to %v,%v", h, v, wantH, wantV)
 }
 

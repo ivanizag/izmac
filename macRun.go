@@ -48,8 +48,14 @@ const (
 	cyclesPerSpin = cyclesPerLine
 )
 
-// Run starts the emulation
+/*
+Run starts the emulation and does not return until it is killed. Closing the
+stopped channel on the way out is what lets a frontend know that everything
+the machine had in hand has been put away.
+*/
 func (m *Mac) Run() {
+	defer close(m.stopped)
+
 	m.reset()
 	m.paused.Store(false)
 

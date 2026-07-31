@@ -156,13 +156,10 @@ func (d *iwm) setStrobe(on bool) {
 	rising := on && !d.lstrb
 	d.lstrb = on
 
-	if rising {
-		d.selected().setControl(d.controlSelector(), d.ca2)
+	if !rising {
+		return
 	}
-}
 
-// controlSelector is the control line being written, CA1, CA0 and SEL
-func (d *iwm) controlSelector() uint8 {
 	var selector uint8
 	if d.ca1 {
 		selector |= 1 << 2
@@ -173,7 +170,8 @@ func (d *iwm) controlSelector() uint8 {
 	if d.headSelect {
 		selector |= 1
 	}
-	return selector
+
+	d.selected().setControl(selector, d.ca2)
 }
 
 /*

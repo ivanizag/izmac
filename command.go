@@ -97,6 +97,16 @@ func (m *Mac) executeCommands() bool {
 		case c := <-m.commandChannel:
 			switch c.getId() {
 			case CommandKill:
+				/*
+					The last chance to put anything away. A diskette the
+					machine has changed is written back when its motor
+					stops, and the driver leaves the motor running for a
+					couple of seconds after it has finished, so quitting
+					just after saving a file would otherwise lose it.
+				*/
+				if err := m.FlushDiskettes(); err != nil {
+					fmt.Printf("Floppy: %v\n", err)
+				}
 				return true
 			case CommandReset:
 				m.reset()

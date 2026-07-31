@@ -81,14 +81,14 @@ const (
 )
 
 const (
-	// TagSize is the tag bytes carried with every sector, ahead of the data.
+	// tagSize is the tag bytes carried with every sector, ahead of the data.
 	// The file system used them and a plain image has nowhere to keep them,
 	// so they come out as zeros unless the image is a DiskCopy one.
-	TagSize = 12
+	tagSize = 12
 
 	// sectorSize is what a sector holds once the tags are counted in, and
 	// what the encoding of a data field covers
-	sectorSize = TagSize + BlockSize
+	sectorSize = tagSize + BlockSize
 
 	/*
 		The self sync the drive needs to find the byte boundary again is a
@@ -331,7 +331,7 @@ the other, sectorSize bytes each.
 func encodeTrack(track int, side int, sides int, sectorData []uint8) ([]uint8, error) {
 	g := newGcr()
 
-	sectors := SectorsInTrack(track)
+	sectors := sectorsInTrack(track)
 	if len(sectorData) != sectors*sectorSize {
 		return nil, fmt.Errorf("the track %v holds %v sectors, %v bytes were given",
 			track, sectors, len(sectorData))
@@ -356,7 +356,7 @@ func encodeTrack(track int, side int, sides int, sectorData []uint8) ([]uint8, e
 }
 
 /*
-DecodeTrack reads the sectors back out of the bytes of a track, which is what
+decodeTrack reads the sectors back out of the bytes of a track, which is what
 turns what the machine wrote into something to store in the image. It returns
 the tags and data of every sector it could make sense of, keyed by the sector
 number in the address field.
@@ -365,7 +365,7 @@ A track is a loop, so a sector can start near the end of the buffer and finish
 at the beginning. Reading is done through an index that wraps for that reason,
 over a window of one and a bit turns so that such a sector is seen whole.
 */
-func DecodeTrack(track []uint8) map[int][]uint8 {
+func decodeTrack(track []uint8) map[int][]uint8 {
 	g := newGcr()
 
 	sectors := make(map[int][]uint8)

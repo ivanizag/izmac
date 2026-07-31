@@ -6,14 +6,22 @@ import "testing"
 const (
 	iwmBaseAddress = 0xdf_e1ff
 
-	iwmSwCa0L  = 0
-	iwmSwEnblL = 8
-	iwmSwEnblH = 9
-	iwmSwSelL  = 10
-	iwmSwQ6L   = 12
-	iwmSwQ6H   = 13
-	iwmSwQ7L   = 14
-	iwmSwQ7H   = 15
+	iwmSwCa0L   = 0
+	iwmSwCa0H   = 1
+	iwmSwCa1L   = 2
+	iwmSwCa1H   = 3
+	iwmSwCa2L   = 4
+	iwmSwCa2H   = 5
+	iwmSwLstrbL = 6
+	iwmSwLstrbH = 7
+	iwmSwEnblL  = 8
+	iwmSwEnblH  = 9
+	iwmSwSelL   = 10
+	iwmSwSelH   = 11
+	iwmSwQ6L    = 12
+	iwmSwQ6H    = 13
+	iwmSwQ7L    = 14
+	iwmSwQ7H    = 15
 )
 
 func iwmAddress(reg uint32) uint32 {
