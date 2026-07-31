@@ -154,6 +154,7 @@ func (m *Mac) tick(cycles uint64) {
 	m.lineCycles += cycles
 
 	m.via.tick(cycles)
+	m.iwm.tick(cycles)
 
 	m.secondCycles += cycles
 	if m.secondCycles >= cyclesPerSecond {
@@ -239,6 +240,7 @@ func (m *Mac) Reset() {
 func (m *Mac) reset() {
 	m.started = true
 	m.via.reset()
+	m.iwm.reset()
 	m.scc.Reset()
 	m.mouse.reset()
 	m.keyboard.reset()

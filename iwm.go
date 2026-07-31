@@ -1,12 +1,34 @@
 package izmac
 
 /*
-The Integrated Woz Machine is the floppy controller. Emulating the drives is
-the long tail of this project and is not the way into it, but the ROM talks
-to the chip on the power on path long before it looks for a disk, so it needs
-something here that answers the way the hardware would.
+The Integrated Woz Machine is the floppy controller, and the two Sony drives
+of the Macintosh Plus hang off it.
 
-What the ROM does first is check that the chip is there:
+The sixteen addresses it answers at are soft switches rather than registers,
+each one setting or clearing a line, and they are 512 bytes apart as the VIA
+ones are. Touching one takes effect whether the access is a read or a write.
+
+	 0,1  CA0     the phase lines, which pick which of the sixteen status
+	 2,3  CA1     lines of the drive is being asked about and which of the
+	 4,5  CA2     four control lines is about to be written
+	 6,7  LSTRB   the strobe that latches a control line
+	 8,9  ENABLE  powers the drive up
+	10,11 SELECT  which of the two drives, the internal one or the external
+	12,13 Q6      together, what a read or a write reaches
+	14,15 Q7
+
+The fourth bit of the status line selector is not here at all: it is the SEL
+line, which comes from the bit 5 of the VIA port A.
+
+What Q6 and Q7 reach:
+
+	Q6 low,  Q7 low   the data going to and from the disk
+	Q6 high, Q7 low   the status, with the selected drive line on the top bit
+	Q6 low,  Q7 high  the handshake, which says a byte can be written
+	Q6 high, Q7 high  the mode register with the drive off, data with it on
+
+The ROM checks the chip is there before anything else works, long before it
+looks for a disk:
 
 	TST.B   ($1000,A0)      the enable line low, the drive off
 	TST.B   ($1a00,A0)      Q6 high
@@ -17,14 +39,6 @@ What the ROM does first is check that the chip is there:
 	CMP.B   D0,D2
 	BEQ     ...
 	MOVE.B  D0,($1e00,A0)   Q7 high, write the mode register
-
-So the mode register has to be writable and has to show up on the low five
-bits of the status, and the enable has to be reported. Everything else here
-is what an unconnected drive would look like.
-
-The sixteen addresses are soft switches rather than registers, each one
-setting or clearing a line, and they are 512 bytes apart as the VIA ones are.
-Touching one takes effect whether the access is a read or a write.
 */
 type iwm struct {
 	ca0   bool
@@ -32,9 +46,9 @@ type iwm struct {
 	ca2   bool
 	lstrb bool
 
-	// enable is the drive motor and select line
+	// enable is the drive power line
 	enable bool
-	// sel picks between the two drives
+	// sel picks between the two drives, low for the internal one
 	sel bool
 	// headSelect is the SEL line, driven by the VIA port A bit 5. It is
 	// part of the selector of the drive status lines.
@@ -45,7 +59,19 @@ type iwm struct {
 	q7 bool
 
 	mode uint8
+
+	// The two drives of the machine, the internal one and the external
+	drives [driveCount]*drive
 }
+
+const (
+	// driveCount is the drives the Macintosh Plus can have: the one inside
+	// and one on the port at the back
+	driveCount = 2
+
+	driveInternal = 0
+	driveExternal = 1
+)
 
 const (
 	// iwmModeMask is the part of the mode register that reads back on the
@@ -54,17 +80,31 @@ const (
 
 	// iwmStatusEnable is the drive enable, the bit the ROM waits on
 	iwmStatusEnable uint8 = 1 << 5
-	// iwmStatusSense is the selected status line of the drive. With no
-	// drive connected the line is not pulled down.
+	// iwmStatusSense is the selected status line of the drive. The lines
+	// are active low, so a line pulled down is a zero here.
 	iwmStatusSense uint8 = 1 << 7
 
-	// iwmHandshakeReady says the write buffer is empty and that there was
-	// no underrun, so that a write never waits forever
-	iwmHandshakeReady uint8 = 0xc0
+	// iwmHandshakeUnderrun says the last byte written went out in time.
+	// Nothing here can be late, so it is always set.
+	iwmHandshakeUnderrun uint8 = 1 << 6
+	// iwmHandshakeReady says the write buffer is empty and the next byte
+	// can be handed over
+	iwmHandshakeReady uint8 = 1 << 7
 )
 
-func newIwm() *iwm {
-	return &iwm{}
+func newIwm(trace bool) *iwm {
+	return &iwm{drives: [driveCount]*drive{
+		newDrive("internal", trace),
+		newDrive("external", trace),
+	}}
+}
+
+// selected is the drive the SELECT line is pointing at
+func (d *iwm) selected() *drive {
+	if d.sel {
+		return d.drives[driveExternal]
+	}
+	return d.drives[driveInternal]
 }
 
 // iwmRegister returns the soft switch an address touches
@@ -94,7 +134,7 @@ func (d *iwm) applySwitch(reg uint8) {
 	case 2:
 		d.ca2 = on
 	case 3:
-		d.lstrb = on
+		d.setStrobe(on)
 	case 4:
 		d.enable = on
 	case 5:
@@ -106,27 +146,90 @@ func (d *iwm) applySwitch(reg uint8) {
 	}
 }
 
+/*
+setStrobe drives LSTRB, which is how the machine writes to the drive rather
+than reading from it. The three lines CA1, CA0 and SEL pick which of the four
+control lines is meant and CA2 carries the value, and the drive takes it as
+the strobe goes up.
+*/
+func (d *iwm) setStrobe(on bool) {
+	rising := on && !d.lstrb
+	d.lstrb = on
+
+	if rising {
+		d.selected().setControl(d.controlSelector(), d.ca2)
+	}
+}
+
+// controlSelector is the control line being written, CA1, CA0 and SEL
+func (d *iwm) controlSelector() uint8 {
+	var selector uint8
+	if d.ca1 {
+		selector |= 1 << 2
+	}
+	if d.ca0 {
+		selector |= 1 << 1
+	}
+	if d.headSelect {
+		selector |= 1
+	}
+	return selector
+}
+
+/*
+applyHeadSelect picks which of the two heads of the drive reads. There is no
+line of its own for it: the drive routes one head or the other to its read
+data line according to which of the two the phase lines are addressing, and
+the driver points them at one just before it starts moving bytes.
+
+It is worked out here, as a byte is read or written, and not when a phase line
+moves. Sony_AdrDisk sets the four lines one at a time, so on the way from one
+register to another it passes through others, and a couple of those are the
+read data pair: latching the head as the lines went by would take the head
+from a state the driver was only passing through.
+*/
+func (d *iwm) applyHeadSelect() {
+	switch d.senseSelector() {
+	case senseReadData0:
+		d.selected().setSide(0)
+	case senseReadData1:
+		d.selected().setSide(1)
+	}
+}
+
 // read returns the register selected by Q6 and Q7
 func (d *iwm) read() uint8 {
 	switch {
 	case !d.q6 && !d.q7:
-		// The data register. With no disk turning there is nothing to
-		// read, and a zero is not a valid encoded byte.
-		return 0
+		d.applyHeadSelect()
+		return d.selected().readByte()
 	case d.q6 && !d.q7:
 		return d.status()
 	case !d.q6 && d.q7:
-		return iwmHandshakeReady
+		return d.handshake()
 	default:
 		return 0xff
 	}
 }
 
-// write reaches the mode register only, and only while the drive is off
+/*
+write reaches the mode register while the drive is off and the disk while it
+is on, both at Q6 and Q7 high. Which of the two is meant is the enable line,
+as it is on the chip: the mode register can only be changed with the drive
+powered down.
+*/
 func (d *iwm) write(value uint8) {
-	if d.q6 && d.q7 && !d.enable {
-		d.mode = value & iwmModeMask
+	if !d.q6 || !d.q7 {
+		return
 	}
+
+	if d.enable {
+		d.applyHeadSelect()
+		d.selected().writeByte(value)
+		return
+	}
+
+	d.mode = value & iwmModeMask
 }
 
 // status is the mode register on the low bits, the state of the enable, and
@@ -137,11 +240,29 @@ func (d *iwm) status() uint8 {
 	if d.enable {
 		status |= iwmStatusEnable
 	}
-	if d.sense() {
+	if d.selected().sense(d.senseSelector()) {
 		status |= iwmStatusSense
 	}
 
 	return status
+}
+
+/*
+handshake says whether the next byte to write can be handed over. The top bit
+is the one the driver polls and it comes from the disk, one byte at a time,
+which is what paces a write to the speed the disk turns at.
+
+With nothing to write to, the answer is that the buffer is free. A write that
+waited for a drive that is not there would never finish.
+*/
+func (d *iwm) handshake() uint8 {
+	drive := d.selected()
+
+	if drive.canWrite() && !drive.writeReady() {
+		return iwmHandshakeUnderrun
+	}
+
+	return iwmHandshakeReady | iwmHandshakeUnderrun
 }
 
 // setHeadSelect drives the SEL line, which on the Macintosh comes from the
@@ -170,61 +291,38 @@ func (d *iwm) senseSelector() uint8 {
 	return selector
 }
 
-/*
-The drive status lines, selected by CA2, CA1, CA0 and SEL in that order from
-the high bit. From the table in Inside Macintosh volume III, page III-35.
-
-	 0  DIRTN     head step direction
-	 1  CSTIN     disk in place
-	 2  STEP      head stepping
-	 3  WRTPRT    disk locked
-	 4  MOTORON   motor running
-	 5  TKO       head at track 0
-	 7  TACH      tachometer
-	 8  RDDATA0   read data, lower head
-	 9  RDDATA1   read data, upper head
-	12  SIDES     single or double sided
-	15  DRVIN     drive installed
-
-They are active low with two exceptions worth remembering: SIDES is 1 on a
-double sided drive, and DRVIN is 0 when a drive is connected and floats to 1
-when none is.
-*/
-const (
-	senseCstin = 1
-	senseSides = 12
-	senseDrvin = 15
-
-	// The Plus ROM polls 14 rather than the 15 the book gives for DRVIN,
-	// and polls it far more often than anything else, which is what a
-	// presence check looks like. The book documents the 400K drive of the
-	// 128K and 512K machines and the Plus ships an 800K one, so the two
-	// are probably the same line on different drives. Both are asserted:
-	// answering only 15 leaves the ROM hanging on an empty drive queue,
-	// and answering only 14 disagrees with the book for no reason.
-	senseDrvinPlus = 14
-)
-
-/*
-sense reports the drive status line selected, active low, so a false means the
-condition the line names is true.
-
-A drive is reported present with no disk in it, which is what an empty floppy
-drive looks like. It matters more than it sounds: the ROM walks the drive
-queue at DrvQHdr, $0308, and hangs on purpose at $4006e8 when it is empty, so
-a Macintosh with no drive at all never finishes booting.
-
-SIDES is left high, which says a double sided drive, the one the Plus has.
-*/
-func (d *iwm) sense() bool {
-	switch d.senseSelector() {
-	case senseDrvin, senseDrvinPlus:
-		return false // A drive is connected
-	default:
-		return true // Everything else negated, including no disk in place
+// tick turns the disks in both drives, whether or not they are the one
+// selected: the machine can leave one spinning while it talks to the other
+func (d *iwm) tick(cycles uint64) {
+	for _, drive := range d.drives {
+		drive.tick(cycles)
 	}
 }
 
+// flush writes back everything the machine has left on the disks
+func (d *iwm) flush() error {
+	var firstErr error
+	for _, drive := range d.drives {
+		if err := drive.flush(); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
+}
+
 func (d *iwm) reset() {
-	*d = iwm{}
+	d.ca0 = false
+	d.ca1 = false
+	d.ca2 = false
+	d.lstrb = false
+	d.enable = false
+	d.sel = false
+	d.headSelect = false
+	d.q6 = false
+	d.q7 = false
+	d.mode = 0
+
+	for _, drive := range d.drives {
+		drive.reset()
+	}
 }

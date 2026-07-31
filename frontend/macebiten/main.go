@@ -40,6 +40,11 @@ func (g *game) Update() error {
 		g.mouse.update()
 	}
 
+	// A diskette image dropped on the window goes in a drive
+	if filename, dropped := droppedFile(); dropped {
+		g.menu.say(insertDropped(g.m, filename))
+	}
+
 	if g.paused != g.m.IsPaused() {
 		g.paused = g.m.IsPaused()
 		ebiten.SetWindowTitle(g.windowTitle())

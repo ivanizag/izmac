@@ -53,7 +53,7 @@ const (
 
 	menuLineHeight = 16
 	menuPadding    = 8
-	menuWidth      = 176
+	menuWidth      = 264
 	menuTextSize   = 11
 
 	// messageLinger is how long a line stays up after an item is chosen
@@ -76,7 +76,7 @@ func newMenu(m *izmac.Mac, mouse *ebitenMouse, keyboard *ebitenKeyboard) (*menu,
 }
 
 func menuItems() []menuItem {
-	return []menuItem{
+	items := []menuItem{
 		{
 			label: func(m *izmac.Mac) string {
 				if m.IsFullSpeed() {
@@ -103,11 +103,15 @@ func menuItems() []menuItem {
 				mn.open = false
 			},
 		},
-		{
-			label:  func(m *izmac.Mac) string { return "Close this menu" },
-			action: func(mn *menu) { mn.open = false },
-		},
 	}
+
+	// The two diskette drives, and then the way out
+	items = append(items, disketteItems()...)
+
+	return append(items, menuItem{
+		label:  func(m *izmac.Mac) string { return "Close this menu" },
+		action: func(mn *menu) { mn.open = false },
+	})
 }
 
 // update takes the keys and the clicks the menu wants. It answers whether it

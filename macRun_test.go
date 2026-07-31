@@ -24,7 +24,7 @@ func newTestMac(t *testing.T) *Mac {
 	config := NewConfiguration()
 	config.RomFile = "<test>"
 
-	return newMac(config, storage.RomFromData(data), nil)
+	return mustNewMac(t, config, storage.RomFromData(data), nil, nil)
 }
 
 func TestTheMachineRunsAtTheRightRate(t *testing.T) {

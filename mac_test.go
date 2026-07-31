@@ -7,10 +7,22 @@ import (
 	"github.com/ivanizag/izmac/storage"
 )
 
-// A diskette is reported rather than quietly dropped, because the drives are
-// not emulated yet and a file that vanishes without a word is worse than one
-// refused
-func TestADisketteIsReported(t *testing.T) {
+// mustNewMac assembles a machine for a test, failing it rather than making
+// every caller deal with a configuration it wrote itself
+func mustNewMac(t *testing.T, config *Configuration, r *storage.Rom,
+	disks []storage.BlockDisk, diskettes []*storage.FloppyDisk) *Mac {
+	t.Helper()
+
+	m, err := newMac(config, r, disks, diskettes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return m
+}
+
+// A file named on the command line that turns out to be a diskette goes in a
+// drive, the internal one first, and not on the SCSI bus
+func TestADisketteGoesInTheInternalDrive(t *testing.T) {
 	floppy := writeImage(t, "floppy.img", 400*1024, false)
 
 	config := NewConfiguration()
@@ -18,18 +30,41 @@ func TestADisketteIsReported(t *testing.T) {
 	if err := config.AddFiles([]string{floppy}); err != nil {
 		t.Fatal(err)
 	}
+	if len(config.Diskettes) != 1 {
+		t.Fatalf("%v was not taken for a diskette", floppy)
+	}
 
-	m := newMac(config, storage.RomFromData(make([]uint8, storage.RomSize)), nil)
+	diskette, err := storage.NewFloppyDisk(floppy, false)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	warnings := 0
+	m := mustNewMac(t, config, storage.RomFromData(make([]uint8, storage.RomSize)),
+		nil, []*storage.FloppyDisk{diskette})
+
+	drives := m.GetDiskettes()
+	if len(drives) != DriveCount {
+		t.Fatalf("the machine reports %v drives, wanted %v", len(drives), DriveCount)
+	}
+	if drives[DriveInternal].Image != floppy {
+		t.Errorf("the internal drive holds %q, wanted %q",
+			drives[DriveInternal].Image, floppy)
+	}
+	if drives[DriveExternal].Image != "" {
+		t.Errorf("the external drive holds %q, wanted nothing",
+			drives[DriveExternal].Image)
+	}
+
+	named := 0
 	for _, line := range m.Summary() {
 		if strings.Contains(line, floppy) {
-			warnings++
+			named++
 		}
 	}
-	if warnings != 1 {
-		t.Fatalf("the diskette was named on %v lines of the summary, wanted one", warnings)
+	if named != 1 {
+		t.Errorf("the diskette was named on %v lines of the summary, wanted one", named)
 	}
+
 	if len(m.GetDisks()) != 0 {
 		t.Error("the diskette was put on the SCSI bus")
 	}
@@ -44,7 +79,7 @@ func TestTheDisksTakeTheIdsInOrder(t *testing.T) {
 		storage.NewBlockDiskMemory(32),
 		storage.NewBlockDiskMemory(64),
 	}
-	m := newMac(config, storage.RomFromData(make([]uint8, storage.RomSize)), disks)
+	m := mustNewMac(t, config, storage.RomFromData(make([]uint8, storage.RomSize)), disks, nil)
 
 	described := m.GetDisks()
 	if len(described) != len(disks) {
