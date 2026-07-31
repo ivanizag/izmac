@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"runtime"
 
 	"github.com/ivanizag/izmac"
 
@@ -112,7 +113,7 @@ func main() {
 		defer profile.Start().Stop()
 	}
 
-	fmt.Print(keyHelp)
+	fmt.Print(keyHelp())
 
 	err = ebitenRun(m)
 	if err != nil {
@@ -121,7 +122,11 @@ func main() {
 	}
 }
 
-const keyHelp = `
+// keyHelp is what the frontend says as it starts. The keys that stand in for
+// the two the Macintosh keyboard has and a modern one does not are named
+// after the host, since they are not called the same thing on all of them.
+func keyHelp() string {
+	return `
      F10: Open the menu
      F11: Force the clipboard of the host into the machine
       F5: Full speed on and off
@@ -131,17 +136,25 @@ const keyHelp = `
    Pause: Stop the machine and let it go again
 
 Click on the window to use the mouse, right click to get the pointer back.
-The command key of the Macintosh is the command key of the host and the option
-key both, since the host keeps some of its own combinations. Control is the
-option key of the Macintosh.
+` + modifierHelp()
+}
 
-The clipboard is shared both ways. A copy on the machine reaches the host on
-its own, and the clipboard of the host is handed to the machine whenever the
-window is given the focus, so returning to it after copying is usually all it
-takes. F11 forces that for when the focus never changed. Either way the text
-arrives as the clipboard of the machine, and it is the command key and V in
-the application that pastes it.
-`
+// modifierHelp names the keys of the host that the command and option keys of
+// the Macintosh are reached with. Two of the host's stand for the command key
+// because the host keeps some of its own combinations.
+func modifierHelp() string {
+	switch runtime.GOOS {
+	case "darwin":
+		return "The command and option keys are the command key of the Macintosh," +
+			" and control is its option key.\n"
+	case "windows":
+		return "The windows and alt keys are the command key of the Macintosh," +
+			" and control is its option key.\n"
+	default:
+		return "The super and alt keys are the command key of the Macintosh," +
+			" and control is its option key.\n"
+	}
+}
 
 func ebitenRun(m *izmac.Mac) error {
 	sound, err := newEbitenAudio(m)
