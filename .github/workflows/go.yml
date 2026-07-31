@@ -18,6 +18,12 @@ jobs:
     # Ebitengine needs these to build on Linux. The windowed frontend is
     # compiled even by `go test ./...`, which builds every package whether it
     # has tests or not, so they are needed for the tests too.
+    #
+    # Compiling it is all that happens, and that is the point: importing
+    # ebiten brings in an initializer that wants a window, so a test file
+    # anywhere under frontend/macebiten would make `go test` link and run a
+    # binary here and panic on a runner with no display. Whatever wants
+    # testing belongs in a package that does not import ebiten.
     - name: Install the Ebitengine dependencies
       run: |
         sudo apt-get update
