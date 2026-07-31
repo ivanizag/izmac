@@ -133,6 +133,17 @@ func (m *Mac) RunFrames(frames uint64) {
 
 // step runs one instruction and everything hanging from it
 func (m *Mac) step() {
+	/*
+		A paste waiting to be delivered, which is the only thing that has to
+		look at the machine between one instruction and the next. It comes
+		before anything else reads the program counter because it can change
+		it, either to start the program that puts the text on the scrap or to
+		put the machine back where it was afterwards.
+	*/
+	if m.pastePending {
+		m.clipboardStep()
+	}
+
 	pc := m.cpu.GetPC()
 
 	if m.toolboxTrace {
@@ -193,6 +204,12 @@ func (m *Mac) lineTick() {
 	if m.line >= linesPerFrame {
 		m.line = 0
 		m.frames++
+
+		// The scrap is looked at once a frame, which is often enough for a
+		// copy to feel immediate and rare enough to cost nothing
+		if m.clipboard != nil {
+			m.clipboardFrame()
+		}
 	}
 
 	// The sound takes one word of its buffer for every scan line, drawn or
@@ -244,6 +261,9 @@ func (m *Mac) reset() {
 	m.scc.Reset()
 	m.mouse.reset()
 	m.keyboard.reset()
+	if m.clipboard != nil {
+		m.resetClipboard()
+	}
 	m.mm.setOverlay(true)
 	m.halt.reset()
 	m.cpu.Reset()

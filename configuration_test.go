@@ -51,6 +51,40 @@ func TestTheDefaults(t *testing.T) {
 		t.Errorf("the parameter RAM defaults to %v, wanted pram.bin on the working directory",
 			c.PramFile)
 	}
+	if !c.Clipboard {
+		t.Error("the clipboard is not shared with the host by default")
+	}
+}
+
+/*
+The clipboard is on unless it is asked for off, which for a boolean flag means
+the long form: a bare -clipboard would turn on what is already on, so the only
+thing left to say is -clipboard=false.
+*/
+func TestTheClipboardCanBeTurnedOff(t *testing.T) {
+	c := NewConfiguration()
+	err := c.ParseFlags("izmac", []string{"-rom", "rom.bin", "-clipboard=false"}, io.Discard)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if c.Clipboard {
+		t.Error("-clipboard=false left the clipboard shared")
+	}
+
+	m := newMac(c, storage.RomFromData(make([]uint8, storage.RomSize)), nil)
+	if m.HasClipboard() {
+		t.Error("the machine shares its clipboard with the clipboard turned off")
+	}
+	if _, copied := m.TakeCopiedText(); copied {
+		t.Error("a machine with no clipboard offered text to the host")
+	}
+
+	// And a paste asked for anyway is dropped rather than queued for ever
+	m.PasteText("Hello")
+	if m.pastePending {
+		t.Error("a machine with no clipboard took a paste")
+	}
 }
 
 func TestTheRamSizeIsChecked(t *testing.T) {

@@ -38,6 +38,10 @@ type Configuration struct {
 	// RamSizeKb is the size of the RAM, 1024 or 4096
 	RamSizeKb int
 
+	// Clipboard shares the clipboard of the machine with the one of the
+	// host, in both directions
+	Clipboard bool
+
 	// Speed is the processor clock in Mhz, or one of the names below
 	Speed string
 
@@ -72,6 +76,7 @@ func NewConfiguration() *Configuration {
 		PramFile:  defaultPramFile,
 		RamSizeKb: defaultRamSizeKb,
 		Speed:     speedPlus,
+		Clipboard: true,
 	}
 	c.cycleDurationNs = cycleDurationOf(CPUClockMhz)
 	return c
@@ -169,6 +174,10 @@ func (c *Configuration) AddFlags(fs *flag.FlagSet) {
 			"no longer be set from the machine")
 	fs.IntVar(&c.RamSizeKb, "ram", c.RamSizeKb,
 		"RAM size in Kb, 1024 or 4096")
+	fs.BoolVar(&c.Clipboard, "clipboard", c.Clipboard,
+		"share the clipboard with the host, so that a copy on the machine "+
+			"can be pasted on the host and the other way round. "+
+			"Use -clipboard=false to keep them apart")
 	fs.StringVar(&c.Speed, "speed", c.Speed,
 		"cpu speed in Mhz, '"+speedPlus+"' for the real "+
 			"7.8336Mhz of the machine, '"+speedFull+"' for as fast as "+
