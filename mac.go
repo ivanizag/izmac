@@ -32,6 +32,9 @@ type Mac struct {
 	scsi     *scsi.Bus
 	iwm      *iwm
 
+	// clipboard is nil when the machine keeps its clipboard to itself
+	clipboard *clipboard
+
 	commandChannel chan command
 
 	cycles uint64
@@ -67,6 +70,10 @@ type Mac struct {
 
 	paused  atomic.Bool
 	started bool
+
+	// pastePending guards the clipboard hook in the instruction loop, which
+	// has nothing to do until there is a paste waiting to be delivered
+	pastePending bool
 
 	cpuTrace     bool
 	toolboxTrace bool
@@ -167,6 +174,10 @@ func newMac(config *Configuration, r *storage.Rom, disks []storage.BlockDisk,
 
 	m.setCycleDuration(config.cycleDurationNs)
 	mm.via = m.via
+
+	if config.Clipboard {
+		m.clipboard = newClipboard()
+	}
 
 	m.cpu = iz68000.NewM68000(mm)
 	m.cpu.SetTrace(m.cpuTrace)

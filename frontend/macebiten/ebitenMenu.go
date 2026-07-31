@@ -26,9 +26,10 @@ not have and so cannot want. Opening it lets go of the mouse, since the
 pointer is otherwise captured by the machine and could not reach it.
 */
 type menu struct {
-	m        *izmac.Mac
-	mouse    *ebitenMouse
-	keyboard *ebitenKeyboard
+	m         *izmac.Mac
+	mouse     *ebitenMouse
+	keyboard  *ebitenKeyboard
+	clipboard *ebitenClipboard
 
 	open     bool
 	selected int
@@ -51,6 +52,11 @@ type menuItem struct {
 const (
 	menuKey = ebiten.KeyF10
 
+	// pasteKey forces the clipboard of the host on the machine, which is
+	// otherwise done when the window is given the focus. The Macintosh
+	// keyboard has no function keys, so it can not want this one either.
+	pasteKey = ebiten.KeyF11
+
 	menuLineHeight = 16
 	menuPadding    = 8
 	menuWidth      = 264
@@ -60,18 +66,20 @@ const (
 	messageLinger = 2 * time.Second
 )
 
-func newMenu(m *izmac.Mac, mouse *ebitenMouse, keyboard *ebitenKeyboard) (*menu, error) {
+func newMenu(m *izmac.Mac, mouse *ebitenMouse, keyboard *ebitenKeyboard,
+	clipboard *ebitenClipboard) (*menu, error) {
 	source, err := text.NewGoTextFaceSource(bytes.NewReader(fonts.MPlus1pRegular_ttf))
 	if err != nil {
 		return nil, err
 	}
 
 	return &menu{
-		m:        m,
-		mouse:    mouse,
-		keyboard: keyboard,
-		face:     &text.GoTextFace{Source: source, Size: menuTextSize},
-		items:    menuItems(),
+		m:         m,
+		mouse:     mouse,
+		keyboard:  keyboard,
+		clipboard: clipboard,
+		face:      &text.GoTextFace{Source: source, Size: menuTextSize},
+		items:     menuItems(),
 	}, nil
 }
 
@@ -86,6 +94,18 @@ func menuItems() []menuItem {
 			},
 			action: func(mn *menu) {
 				mn.m.SendCommand(izmac.CommandToggleSpeed)
+				mn.open = false
+			},
+		},
+		{
+			label: func(m *izmac.Mac) string {
+				if !m.HasClipboard() {
+					return "The clipboard is not shared"
+				}
+				return "Paste from the host"
+			},
+			action: func(mn *menu) {
+				mn.clipboard.paste()
 				mn.open = false
 			},
 		},
@@ -119,6 +139,10 @@ func menuItems() []menuItem {
 func (mn *menu) update() bool {
 	if inpututil.IsKeyJustPressed(menuKey) {
 		mn.toggle()
+		return true
+	}
+	if inpututil.IsKeyJustPressed(pasteKey) {
+		mn.clipboard.paste()
 		return true
 	}
 	if !mn.open {

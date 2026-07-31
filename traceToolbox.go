@@ -75,7 +75,8 @@ func toolboxTrapNames() map[uint16]string {
 	return map[uint16]string{
 		0x013: "TEAutoView", 0x015: "SCSIDispatch", 0x033: "ScrnBitMap",
 		0x051: "SetCursor", 0x052: "HideCursor", 0x053: "ShowCursor",
-		0x056: "ObscureCursor", 0x061: "Random", 0x067: "LongMul",
+		0x056: "ObscureCursor", 0x060: "WaitNextEvent", 0x061: "Random",
+		0x067: "LongMul",
 		0x068: "FixMul", 0x069: "FixRatio", 0x06d: "InitPort",
 		0x06e: "InitGraf", 0x06f: "OpenPort", 0x071: "GlobalToLocal",
 		0x073: "SetPort", 0x074: "GetPort", 0x076: "PortSize",
@@ -141,7 +142,9 @@ func toolboxTrapNames() map[uint16]string {
 		0x1dd: "TEScroll", 0x1e0: "Munger", 0x1e1: "HandToHand",
 		0x1e2: "PtrToXHand", 0x1e3: "PtrToHand", 0x1e6: "InitAllPacks",
 		0x1eb: "FP68K", 0x1ef: "PtrAndHand", 0x1f2: "Launch",
-		0x1fb: "LoadScrap", 0x1fc: "ZeroScrap", 0x1ff: "Debugger",
+		0x1f9: "InfoScrap", 0x1fa: "UnloadScrap", 0x1fb: "LoadScrap",
+		0x1fc: "ZeroScrap", 0x1fd: "GetScrap", 0x1fe: "PutScrap",
+		0x1ff: "Debugger",
 	}
 }
 

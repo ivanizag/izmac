@@ -15,12 +15,13 @@ const windowScale = 2
 // game drives the ebiten main loop. The emulation runs on its own goroutine,
 // this one only reads the frame buffer and pushes the input.
 type game struct {
-	m        *izmac.Mac
-	image    *ebiten.Image
-	keyboard *ebitenKeyboard
-	mouse    *ebitenMouse
-	menu     *menu
-	title    string
+	m         *izmac.Mac
+	image     *ebiten.Image
+	keyboard  *ebitenKeyboard
+	mouse     *ebitenMouse
+	clipboard *ebitenClipboard
+	menu      *menu
+	title     string
 
 	// The size of the screen of the machine, taken from the image it hands
 	// over rather than asked for separately. Layout is called on every
@@ -45,6 +46,8 @@ func (g *game) Update() error {
 		message := insertDropped(g.m, filename)
 		g.menu.say(message)
 	}
+
+	g.clipboard.update()
 
 	if g.paused != g.m.IsPaused() {
 		g.paused = g.m.IsPaused()
@@ -120,6 +123,7 @@ func main() {
 
 const keyHelp = `
      F10: Open the menu
+     F11: Force the clipboard of the host into the machine
       F5: Full speed on and off
  Ctrl-F5: Report the speed reached
       F4: Show or hide the processor trace
@@ -127,7 +131,16 @@ const keyHelp = `
    Pause: Stop the machine and let it go again
 
 Click on the window to use the mouse, right click to get the pointer back.
-The option key is the Macintosh command key, and control is option.
+The command key of the Macintosh is the command key of the host and the option
+key both, since the host keeps some of its own combinations. Control is the
+option key of the Macintosh.
+
+The clipboard is shared both ways. A copy on the machine reaches the host on
+its own, and the clipboard of the host is handed to the machine whenever the
+window is given the focus, so returning to it after copying is usually all it
+takes. F11 forces that for when the focus never changed. Either way the text
+arrives as the clipboard of the machine, and it is the command key and V in
+the application that pastes it.
 `
 
 func ebitenRun(m *izmac.Mac) error {
@@ -138,7 +151,8 @@ func ebitenRun(m *izmac.Mac) error {
 
 	mouse := newEbitenMouse(m)
 	keyboard := newEbitenKeyboard(m)
-	menu, err := newMenu(m, mouse, keyboard)
+	clip := newEbitenClipboard(m)
+	menu, err := newMenu(m, mouse, keyboard, clip)
 	if err != nil {
 		return err
 	}
@@ -146,14 +160,15 @@ func ebitenRun(m *izmac.Mac) error {
 	size := m.GetImage().Bounds().Size()
 
 	g := &game{
-		m:        m,
-		image:    ebiten.NewImage(size.X, size.Y),
-		keyboard: keyboard,
-		mouse:    mouse,
-		menu:     menu,
-		title:    "iz" + m.Name,
-		width:    size.X,
-		height:   size.Y,
+		m:         m,
+		image:     ebiten.NewImage(size.X, size.Y),
+		keyboard:  keyboard,
+		mouse:     mouse,
+		clipboard: clip,
+		menu:      menu,
+		title:     "iz" + m.Name,
+		width:     size.X,
+		height:    size.Y,
 	}
 
 	ebiten.SetWindowSize(size.X*windowScale, size.Y*windowScale)

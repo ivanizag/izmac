@@ -28,6 +28,9 @@ const (
 	// drive is meant.
 	CommandInsertDiskette
 	CommandEjectDiskette
+	// CommandPasteText puts text from the host on the clipboard of the
+	// machine. It is sent by Mac.PasteText(), which carries the text.
+	CommandPasteText
 )
 
 type command interface {
@@ -39,6 +42,16 @@ type commandSimple struct {
 }
 
 func (c *commandSimple) getId() int {
+	return c.id
+}
+
+// commandText is a command carrying text, which the paste is the only one of
+type commandText struct {
+	id   int
+	text string
+}
+
+func (c *commandText) getId() int {
 	return c.id
 }
 
@@ -115,6 +128,10 @@ func (m *Mac) executeCommands() bool {
 				fmt.Printf("Running at %.2f Mhz\n", m.GetCurrentFreqMHz())
 			case CommandInsertDiskette, CommandEjectDiskette:
 				m.executeDisketteCommand(c)
+			case CommandPasteText:
+				if text, carried := c.(*commandText); carried {
+					m.startPaste(text.text)
+				}
 			}
 		default:
 			return false

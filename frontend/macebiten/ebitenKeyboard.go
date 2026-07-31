@@ -35,6 +35,19 @@ func newEbitenKeyboard(m *izmac.Mac) *ebitenKeyboard {
 
 // update reports the keys that went down or came up since the last frame
 func (k *ebitenKeyboard) update() {
+	/*
+		A window that has lost the focus is told nothing more, the release of
+		a key held as it went included. That matters most for the very
+		combinations the host keeps for itself: command-tab takes the focus
+		away with the command key down, and the machine would hold it down
+		for ever afterwards, which turns every keystroke into a menu
+		accelerator.
+	*/
+	if !ebiten.IsFocused() {
+		k.releaseAll()
+		return
+	}
+
 	k.updateEmulatorKeys()
 
 	for key, code := range k.keys {
@@ -103,9 +116,11 @@ buildKeyMap pairs the keys of the host with the names of the table in izmac.
 The Macintosh has one key where a modern keyboard has two in a few places,
 and both of the host's are sent as the one the Macintosh knows.
 
-The command key is mapped from the alt or option key rather than from the
-host's own command key, which the window manager of the host tends to keep
-for itself.
+The command key of the Macintosh is mapped from two keys of the host: its own
+command key, which is what the fingers reach for, and the alt or option key,
+which is what is left when the host keeps a combination for itself. Command-Q
+and command-tab on macOS never arrive, and on most Linux desktops the super
+key belongs to the window manager, so option is there to type those with.
 */
 func buildKeyMap() map[ebiten.Key]uint8 {
 	codes := izmac.KeyCodes()
@@ -149,6 +164,8 @@ func buildKeyMap() map[ebiten.Key]uint8 {
 		ebiten.KeyControlRight: "Option",
 		ebiten.KeyAltLeft:      "Command",
 		ebiten.KeyAltRight:     "Command",
+		ebiten.KeyMetaLeft:     "Command",
+		ebiten.KeyMetaRight:    "Command",
 	}
 
 	keys := make(map[ebiten.Key]uint8, len(named))

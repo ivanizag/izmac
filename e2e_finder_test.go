@@ -138,6 +138,16 @@ func realConfig(t *testing.T) *Configuration {
 	config := NewConfiguration()
 	config.RomFile = romFile
 	config.DiskFiles = []string{diskFile}
+
+	/*
+		The parameter RAM goes somewhere of this test's own. The default is a
+		file on the working directory that outlives the run, and the clock
+		starts from what it holds: a machine booted from a parameter RAM left
+		by a run an hour ago believes it is an hour ago, which is a test that
+		passes on a clean checkout and fails the second time it is run.
+	*/
+	config.PramFile = filepath.Join(t.TempDir(), "pram.bin")
+
 	if err := config.Validate(); err != nil {
 		t.Fatal(err)
 	}
@@ -215,6 +225,75 @@ func TestAKeyPressReachesTheKeyMap(t *testing.T) {
 	up := readKeyMap()
 	if up[wantByte]&(1<<wantBit) != 0 {
 		t.Errorf("releasing A left the key map at %x, still holding it down", up)
+	}
+}
+
+/*
+A menu accelerator, which is the keyboard reaching the Event Manager and not
+only the key map. Command and A together are Select All, and the Finder
+answers by highlighting every icon on the desktop; A on its own moves the
+selection to an icon whose name starts with it, which on a desktop of one
+icon changes nothing.
+
+The two have to arrive as a chord and not as two keystrokes. The modifiers of
+a key down event are read off the key map as the event is posted, so a letter
+that gets there before its modifier is a letter and nothing else, and a
+modifier that is never released turns every letter after it into a command.
+Neither shows up in the key map, which is why this looks at the screen.
+*/
+func TestAMenuAcceleratorReachesTheFinder(t *testing.T) {
+	m := bootedMac(t)
+
+	screen := func() []uint8 {
+		buffer := m.video.frameBuffer()
+		taken := make([]uint8, len(buffer))
+		copy(taken, buffer)
+		return taken
+	}
+
+	changed := func(before []uint8) int {
+		after := screen()
+		count := 0
+		for i := range before {
+			if before[i] != after[i] {
+				count++
+			}
+		}
+		return count
+	}
+
+	// The keys are given a few frames each, the way a hand types them: the
+	// keyboard answers one transition per inquiry and the Finder has to see
+	// the modifier go down before the letter does
+	press := func(letter string, withCommand bool) {
+		codes := KeyCodes()
+
+		if withCommand {
+			m.PutKey(codes["Command"], true)
+			m.RunFrames(6)
+		}
+		m.PutKey(codes[letter], true)
+		m.RunFrames(6)
+		m.PutKey(codes[letter], false)
+		m.RunFrames(6)
+		if withCommand {
+			m.PutKey(codes["Command"], false)
+		}
+		m.RunFrames(60)
+	}
+
+	before := screen()
+	press("A", false)
+	if plain := changed(before); plain > 100 {
+		t.Errorf("the A key on its own changed %v bytes of the screen, "+
+			"so something more than a selection happened", plain)
+	}
+
+	before = screen()
+	press("A", true)
+	if accelerated := changed(before); accelerated < 500 {
+		t.Errorf("command and A changed %v bytes of the screen, "+
+			"so the Finder never saw the accelerator", accelerated)
 	}
 }
 
