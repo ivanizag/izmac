@@ -71,9 +71,18 @@ func (m *Mac) Run() {
 			return
 		}
 
-		if cycleDuration := m.cycleDuration(); cycleDuration != 0 {
-			// Wait until the next step has to run. A zero duration is
-			// the full speed option, nothing is thrown away then.
+		if cycleDuration := m.pacedCycleDuration(); cycleDuration != 0 {
+			/*
+				Wait until the next step has to run. A zero duration is the
+				full speed option, nothing is thrown away then.
+
+				A machine coming out of full speed, which a click does for
+				as long as it takes to catch the second one, arrives here
+				with a reference time from long before and simulated cycles
+				that ran nowhere near the clock. It is the same case as
+				falling behind, and the resynchronization below puts the
+				reference where the cycles say it should be.
+			*/
 			clockDuration := time.Since(referenceTime)
 			simulatedDuration := time.Duration(float64(m.cycles) * cycleDuration)
 			waitDuration := simulatedDuration - clockDuration

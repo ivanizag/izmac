@@ -91,8 +91,12 @@ func clampPending(pending int) int {
 	return pending
 }
 
-func (m *mouse) setButton(pressed bool) {
+// setButton reports the state of the button and says whether that changed it,
+// which is the transition a double click is measured between
+func (m *mouse) setButton(pressed bool) bool {
+	changed := m.button != pressed
 	m.button = pressed
+	return changed
 }
 
 /*
