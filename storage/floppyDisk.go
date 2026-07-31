@@ -123,10 +123,10 @@ func (d *FloppyDisk) load(raw []uint8) error {
 	}
 
 	blocks := len(d.data) / BlockSize
-	if len(d.tags) != blocks*TagSize {
+	if len(d.tags) != blocks*tagSize {
 		// No tags, or not as many as there are sectors. Either way the
 		// image is read for its sectors and given tags of its own.
-		d.tags = make([]uint8, blocks*TagSize)
+		d.tags = make([]uint8, blocks*tagSize)
 	}
 
 	return nil
@@ -152,12 +152,12 @@ func (d *FloppyDisk) IsReadOnly() bool {
 // sectorData gathers the tags and the data of every sector of a track, in the
 // order the sector numbers run
 func (d *FloppyDisk) sectorData(track int, side int) []uint8 {
-	sectors := SectorsInTrack(track)
+	sectors := sectorsInTrack(track)
 
 	out := make([]uint8, 0, sectors*sectorSize)
 	for sector := 0; sector < sectors; sector++ {
-		block := BlockOf(track, side, sector, d.sides)
-		out = append(out, d.tags[block*TagSize:(block+1)*TagSize]...)
+		block := blockOf(track, side, sector, d.sides)
+		out = append(out, d.tags[block*tagSize:(block+1)*tagSize]...)
 		out = append(out, d.data[block*BlockSize:(block+1)*BlockSize]...)
 	}
 
@@ -203,14 +203,14 @@ func (d *FloppyDisk) WriteTrack(track int, side int, nibbles []uint8) (int, erro
 	}
 
 	stored := 0
-	for sector, sectorData := range DecodeTrack(nibbles) {
-		if sector < 0 || sector >= SectorsInTrack(track) {
+	for sector, sectorData := range decodeTrack(nibbles) {
+		if sector < 0 || sector >= sectorsInTrack(track) {
 			continue
 		}
 
-		block := BlockOf(track, side, sector, d.sides)
-		copy(d.tags[block*TagSize:], sectorData[:TagSize])
-		copy(d.data[block*BlockSize:], sectorData[TagSize:])
+		block := blockOf(track, side, sector, d.sides)
+		copy(d.tags[block*tagSize:], sectorData[:tagSize])
+		copy(d.data[block*BlockSize:], sectorData[tagSize:])
 		stored++
 	}
 
@@ -330,7 +330,7 @@ func (d *FloppyDisk) buildDiskCopy() []uint8 {
 		file system keeps the boot blocks there and DiskCopy found that
 		what it put in those twelve bytes was not worth comparing.
 	*/
-	binary.BigEndian.PutUint32(out[76:80], diskCopyChecksum(d.tags[min(TagSize, len(d.tags)):]))
+	binary.BigEndian.PutUint32(out[76:80], diskCopyChecksum(d.tags[min(tagSize, len(d.tags)):]))
 
 	out[80] = diskCopyEncoding400K
 	out[81] = formatSingleSided
@@ -364,12 +364,12 @@ func diskCopyChecksum(data []uint8) uint32 {
 }
 
 /*
-SectorsInTrack is how many sectors a track holds. The disk turns slower the
+sectorsInTrack is how many sectors a track holds. The disk turns slower the
 further out the head is, in five bands of sixteen tracks, so that the bits
 stay the same length along the track and the outer ones hold more of them.
 Twelve down to eight over the eighty tracks is 800 sectors a side.
 */
-func SectorsInTrack(track int) int {
+func sectorsInTrack(track int) int {
 	return 12 - track/16
 }
 
@@ -378,21 +378,21 @@ const (
 	// stepper of the drive
 	TracksPerSide = 80
 
-	// sectorsPerSide is the sum of SectorsInTrack over every track
+	// sectorsPerSide is the sum of sectorsInTrack over every track
 	sectorsPerSide = 16 * (12 + 11 + 10 + 9 + 8)
 )
 
 /*
-BlockOf gives the position in the image of a sector. The blocks run along a
+blockOf gives the position in the image of a sector. The blocks run along a
 track, then over to the other side of the same track, then outwards, which is
 the order a single sided image keeps too once the side is always zero.
 */
-func BlockOf(track int, side int, sector int, sides int) int {
+func blockOf(track int, side int, sector int, sides int) int {
 	block := 0
 	for t := 0; t < track; t++ {
-		block += SectorsInTrack(t) * sides
+		block += sectorsInTrack(t) * sides
 	}
-	return block + side*SectorsInTrack(track) + sector
+	return block + side*sectorsInTrack(track) + sector
 }
 
 // interleave is what the driver formats with, a sector and the next one along

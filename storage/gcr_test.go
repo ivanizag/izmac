@@ -96,7 +96,7 @@ func TestATrackSurvivesTheEncoding(t *testing.T) {
 	// One track of each of the five bands, so that every sector count is
 	// covered
 	for _, track := range []int{0, 16, 32, 48, 79} {
-		sectors := SectorsInTrack(track)
+		sectors := sectorsInTrack(track)
 		data := buildSectorData(sectors, int64(track))
 
 		encoded, err := encodeTrack(track, 0, 2, data)
@@ -109,7 +109,7 @@ func TestATrackSurvivesTheEncoding(t *testing.T) {
 				track, len(encoded), sectors*bytesPerSector)
 		}
 
-		decoded := DecodeTrack(encoded)
+		decoded := decodeTrack(encoded)
 		if len(decoded) != sectors {
 			t.Fatalf("the track %v gave back %v sectors, expected %v",
 				track, len(decoded), sectors)
@@ -138,7 +138,7 @@ Rotating the track is the same disk seen from a different starting point.
 */
 func TestASectorIsFoundAcrossTheEndOfTheTrack(t *testing.T) {
 	const track = 0
-	sectors := SectorsInTrack(track)
+	sectors := sectorsInTrack(track)
 	data := buildSectorData(sectors, 1)
 
 	encoded, err := encodeTrack(track, 0, 2, data)
@@ -151,7 +151,7 @@ func TestASectorIsFoundAcrossTheEndOfTheTrack(t *testing.T) {
 	cut := len(encoded) - bytesPerSector/2
 	rotated := append(append([]uint8{}, encoded[cut:]...), encoded[:cut]...)
 
-	decoded := DecodeTrack(rotated)
+	decoded := decodeTrack(rotated)
 	if len(decoded) != sectors {
 		t.Fatalf("%v sectors were read off the rotated track, expected %v",
 			len(decoded), sectors)
@@ -169,7 +169,7 @@ func TestASectorIsFoundAcrossTheEndOfTheTrack(t *testing.T) {
 
 func TestABadNibbleLosesOnlyItsOwnSector(t *testing.T) {
 	const track = 0
-	sectors := SectorsInTrack(track)
+	sectors := sectorsInTrack(track)
 	data := buildSectorData(sectors, 2)
 
 	encoded, err := encodeTrack(track, 0, 2, data)
@@ -180,7 +180,7 @@ func TestABadNibbleLosesOnlyItsOwnSector(t *testing.T) {
 	// Break a byte in the middle of the data field of the third sector
 	encoded[2*bytesPerSector+syncBeforeAddress+addressFieldSize+syncBeforeData+300] = 0x00
 
-	decoded := DecodeTrack(encoded)
+	decoded := decodeTrack(encoded)
 	if len(decoded) != sectors-1 {
 		t.Fatalf("%v sectors survived, expected %v", len(decoded), sectors-1)
 	}
@@ -221,7 +221,7 @@ func TestTheAddressFieldCarriesTheTrackAndSide(t *testing.T) {
 func TestTheSectorsPerTrackAddUpToTheCapacity(t *testing.T) {
 	total := 0
 	for track := 0; track < TracksPerSide; track++ {
-		total += SectorsInTrack(track)
+		total += sectorsInTrack(track)
 	}
 
 	if total != sectorsPerSide {
@@ -234,7 +234,7 @@ func TestTheSectorsPerTrackAddUpToTheCapacity(t *testing.T) {
 
 func TestTheInterleaveVisitsEverySectorOnce(t *testing.T) {
 	for track := 0; track < TracksPerSide; track++ {
-		sectors := SectorsInTrack(track)
+		sectors := sectorsInTrack(track)
 		order := interleavedOrder(sectors)
 
 		seen := make(map[int]bool)
@@ -256,8 +256,8 @@ func TestTheBlocksRunAcrossTheSidesOfATrack(t *testing.T) {
 	next := 0
 	for track := 0; track < TracksPerSide; track++ {
 		for side := 0; side < 2; side++ {
-			for sector := 0; sector < SectorsInTrack(track); sector++ {
-				if block := BlockOf(track, side, sector, 2); block != next {
+			for sector := 0; sector < sectorsInTrack(track); sector++ {
+				if block := blockOf(track, side, sector, 2); block != next {
 					t.Fatalf("the track %v side %v sector %v is the block %v, expected %v",
 						track, side, sector, block, next)
 				}

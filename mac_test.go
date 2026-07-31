@@ -42,17 +42,11 @@ func TestADisketteGoesInTheInternalDrive(t *testing.T) {
 	m := ensureNewMac(t, config, storage.RomFromData(make([]uint8, storage.RomSize)),
 		nil, []*storage.FloppyDisk{diskette})
 
-	drives := m.GetDiskettes()
-	if len(drives) != DriveCount {
-		t.Fatalf("the machine reports %v drives, wanted %v", len(drives), DriveCount)
+	if got := m.GetDiskette(DriveInternal).Image; got != floppy {
+		t.Errorf("the internal drive holds %q, wanted %q", got, floppy)
 	}
-	if drives[DriveInternal].Image != floppy {
-		t.Errorf("the internal drive holds %q, wanted %q",
-			drives[DriveInternal].Image, floppy)
-	}
-	if drives[DriveExternal].Image != "" {
-		t.Errorf("the external drive holds %q, wanted nothing",
-			drives[DriveExternal].Image)
+	if got := m.GetDiskette(DriveExternal).Image; got != "" {
+		t.Errorf("the external drive holds %q, wanted nothing", got)
 	}
 
 	named := 0

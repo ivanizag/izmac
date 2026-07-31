@@ -77,6 +77,15 @@ func run(name string, args []string) error {
 
 	m.RunFrames(*frames)
 
+	/*
+		This frontend never starts the run loop, so the kill command that
+		would put a changed diskette away is never sent. It is asked for
+		here instead, before anything is reported.
+	*/
+	if err := m.FlushDiskettes(); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
+	}
+
 	fmt.Printf("Ran %v frames, %v cycles, stopped at $%06x\n",
 		m.GetFrames(), m.GetCycles(), m.GetPC())
 

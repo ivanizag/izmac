@@ -67,16 +67,10 @@ Getting the phase backwards still moves the pointer, just the wrong way, and
 nothing short of watching where it goes catches that.
 */
 func TestTheMouseMovesThePointer(t *testing.T) {
-	const (
-		rawMouseV = 0x082c
-		rawMouseH = 0x082e
-	)
-
 	m := bootedMac(t)
 
 	readPoint := func() (int16, int16) {
-		v := int16(uint16(m.mm.Peek(rawMouseV))<<8 | uint16(m.mm.Peek(rawMouseV+1)))
-		h := int16(uint16(m.mm.Peek(rawMouseH))<<8 | uint16(m.mm.Peek(rawMouseH+1)))
+		h, v := pointerAt(m)
 		return v, h
 	}
 
@@ -137,7 +131,7 @@ func realConfig(t *testing.T) *Configuration {
 
 	config := NewConfiguration()
 	config.RomFile = romFile
-	config.DiskFiles = []string{diskFile}
+	config.HardDisks = []string{diskFile}
 	if err := config.Validate(); err != nil {
 		t.Fatal(err)
 	}
@@ -231,9 +225,6 @@ pushed and by a distance of the right order.
 */
 func TestSmallMouseMovementsTrack(t *testing.T) {
 	const (
-		rawMouseV = 0x082c
-		rawMouseH = 0x082e
-
 		pushes = 10
 		pixels = 3
 	)
@@ -241,8 +232,7 @@ func TestSmallMouseMovementsTrack(t *testing.T) {
 	m := bootedMac(t)
 
 	readPoint := func() (int16, int16) {
-		v := int16(uint16(m.mm.Peek(rawMouseV))<<8 | uint16(m.mm.Peek(rawMouseV+1)))
-		h := int16(uint16(m.mm.Peek(rawMouseH))<<8 | uint16(m.mm.Peek(rawMouseH+1)))
+		h, v := pointerAt(m)
 		return v, h
 	}
 
@@ -328,7 +318,7 @@ func TestTwoDisksBothMount(t *testing.T) {
 
 	config := NewConfiguration()
 	config.RomFile = defaultRomFile
-	config.DiskFiles = []string{first, second}
+	config.HardDisks = []string{first, second}
 	if err := config.Validate(); err != nil {
 		t.Fatal(err)
 	}

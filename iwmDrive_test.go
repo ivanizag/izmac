@@ -20,18 +20,6 @@ nothing about how izmac lays a track out. What it gets back is a stream of
 bytes, which is what a real machine gets back.
 */
 
-// The rest of the soft switches this file needs, alongside the ones in
-// iwm_test.go
-const (
-	iwmSwCa0H   = 1
-	iwmSwCa1L   = 2
-	iwmSwCa2L   = 4
-	iwmSwCa2H   = 5
-	iwmSwLstrbL = 6
-	iwmSwLstrbH = 7
-	iwmSwSelH   = 11
-)
-
 /*
 pollCycles is how long the driver's polling loop takes to come round: a read
 of the data register and a branch back, about eighteen cycles. A byte comes
@@ -78,7 +66,7 @@ of it is the VIA port A bit 5 rather than a switch of the controller.
 */
 func (s *sonyDriver) address(register uint8) {
 	if register&8 != 0 {
-		s.touch(iwmSwCa1L + 1)
+		s.touch(iwmSwCa1H)
 	} else {
 		s.touch(iwmSwCa1L)
 	}
@@ -243,10 +231,65 @@ func (s *sonyDriver) waitForWrite() {
 	s.t.Fatal("the write handshake never came ready")
 }
 
+/*
+The geometry of the disk, worked out here rather than asked of the storage
+package. A test that took the answer from the code it is checking would agree
+with it whatever it did: these are the numbers off the datasheet, and a sector
+landing where the encoding thinks it should rather than where it belongs is
+exactly the mistake worth catching.
+*/
+func sectorsInTrack(track int) int {
+	return 12 - track/16
+}
+
+func blockOf(track int, side int, sector int, sides int) int {
+	block := 0
+	for t := 0; t < track; t++ {
+		block += sectorsInTrack(t) * sides
+	}
+	return block + side*sectorsInTrack(track) + sector
+}
+
 // turnBytes is a whole turn of a track and one sector more, so that a sector
 // straddling the point the head started at is met complete
 func turnBytes(track int) int {
-	return (storage.SectorsInTrack(track) + 1) * 800
+	return (sectorsInTrack(track) + 1) * 800
+}
+
+/*
+storeThroughADiskette hands a run of track bytes to a blank diskette and gives
+back the image it made of them.
+
+It is how the bytes coming off the head are checked without reaching into the
+encoding to decode them: what a diskette can make of a track is exactly what
+it stores, and a blank one holds nothing else to confuse it with.
+*/
+func storeThroughADiskette(t *testing.T, track int, side int, stream []uint8) []uint8 {
+	t.Helper()
+
+	filename := filepath.Join(t.TempDir(), "decoded.dsk")
+	if err := os.WriteFile(filename, make([]uint8, 2*400*1024), 0666); err != nil {
+		t.Fatal(err)
+	}
+
+	disk, err := storage.NewFloppyDisk(filename, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	stored, err := disk.WriteTrack(track, side, stream)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored != sectorsInTrack(track) {
+		t.Fatalf("the track %v side %v gave %v sectors, wanted %v",
+			track, side, stored, sectorsInTrack(track))
+	}
+	if err := disk.Flush(); err != nil {
+		t.Fatal(err)
+	}
+
+	return mountedImageOf(t, filename)
 }
 
 // buildDisketteImage writes a diskette image of random bytes, so that a
@@ -307,22 +350,17 @@ func TestTheSectorsComeOffTheDiskTheWayTheDriverReadsThem(t *testing.T) {
 		for side := 0; side < 2; side++ {
 			driver.selectSide(side)
 
-			sectors := storage.DecodeTrack(driver.readBytes(turnBytes(track)))
-			wanted := storage.SectorsInTrack(track)
-			if len(sectors) != wanted {
-				t.Fatalf("the track %v side %v gave %v sectors, wanted %v",
-					track, side, len(sectors), wanted)
-			}
+			stored := storeThroughADiskette(
+				t, track, side, driver.readBytes(turnBytes(track)))
 
-			for sector, got := range sectors {
-				block := storage.BlockOf(track, side, sector, 2)
-				want := image[block*storage.BlockSize : (block+1)*storage.BlockSize]
+			for sector := 0; sector < sectorsInTrack(track); sector++ {
+				from := blockOf(track, side, sector, 2) * storage.BlockSize
 
-				for i := range want {
-					if got[storage.TagSize+i] != want[i] {
+				for i := 0; i < storage.BlockSize; i++ {
+					if stored[from+i] != image[from+i] {
 						t.Fatalf("the track %v side %v sector %v differs at %v, "+
 							"$%02x for $%02x", track, side, sector, i,
-							got[storage.TagSize+i], want[i])
+							stored[from+i], image[from+i])
 					}
 				}
 			}
@@ -414,8 +452,8 @@ func TestATrackWrittenThroughTheControllerReachesTheImage(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for sector := 0; sector < storage.SectorsInTrack(track); sector++ {
-		block := storage.BlockOf(track, side, sector, 2)
+	for sector := 0; sector < sectorsInTrack(track); sector++ {
+		block := blockOf(track, side, sector, 2)
 		from := block * storage.BlockSize
 
 		for i := 0; i < storage.BlockSize; i++ {
@@ -428,7 +466,7 @@ func TestATrackWrittenThroughTheControllerReachesTheImage(t *testing.T) {
 
 	// And no other track moved, which a write that landed in the wrong
 	// place would show up as
-	otherBlock := storage.BlockOf(track+1, side, 0, 2) * storage.BlockSize
+	otherBlock := blockOf(track+1, side, 0, 2) * storage.BlockSize
 	unchanged := mountedImageOf(t, target.Name())
 	for i := 0; i < storage.BlockSize; i++ {
 		if written[otherBlock+i] != unchanged[otherBlock+i] {

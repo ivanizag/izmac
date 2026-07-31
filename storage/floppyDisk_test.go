@@ -37,7 +37,7 @@ func buildDiskCopy(name string, data []uint8, tags []uint8) []uint8 {
 	binary.BigEndian.PutUint32(out[64:68], uint32(len(data)))
 	binary.BigEndian.PutUint32(out[68:72], uint32(len(tags)))
 	binary.BigEndian.PutUint32(out[72:76], diskCopyChecksum(data))
-	binary.BigEndian.PutUint32(out[76:80], diskCopyChecksum(tags[min(TagSize, len(tags)):]))
+	binary.BigEndian.PutUint32(out[76:80], diskCopyChecksum(tags[min(tagSize, len(tags)):]))
 	out[80] = diskCopyEncoding800K
 	out[81] = formatDoubleSided
 	binary.BigEndian.PutUint16(out[82:84], diskCopyPrivate)
@@ -131,7 +131,7 @@ func TestADiskCopyImageIsReadAndWrittenBack(t *testing.T) {
 		data[i] = uint8(random.Intn(256))
 	}
 
-	tags := make([]uint8, len(data)/BlockSize*TagSize)
+	tags := make([]uint8, len(data)/BlockSize*tagSize)
 	for i := range tags {
 		tags[i] = uint8(random.Intn(256))
 	}
@@ -172,9 +172,9 @@ func TestADiskCopyImageIsReadAndWrittenBack(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if stored != SectorsInTrack(track) {
+	if stored != sectorsInTrack(track) {
 		t.Fatalf("%v sectors came back off the track, wanted %v",
-			stored, SectorsInTrack(track))
+			stored, sectorsInTrack(track))
 	}
 	if err := disk.Flush(); err != nil {
 		t.Fatal(err)

@@ -1,6 +1,8 @@
 package izmac
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -117,5 +119,65 @@ func TestASpinIsAScanLine(t *testing.T) {
 	if cyclesPerSpin != cyclesPerLine {
 		t.Errorf("a spin is %v cycles, wanted the %v of a scan line",
 			cyclesPerSpin, cyclesPerLine)
+	}
+}
+
+/*
+Killing the machine has to put a changed diskette back on the host before the
+run loop ends. It is the last chance: a diskette is written back when its
+motor stops, and the driver leaves the motor running for a couple of seconds
+after it has finished, so quitting just after saving a file would lose it.
+
+The image is made to differ from the file it came from by writing over the
+file behind the diskette's back. Nothing else has changed, so the file coming
+back to what it was is the flush having happened.
+*/
+func TestKillingTheMachineWritesADisketteBack(t *testing.T) {
+	wanted := make([]uint8, 800*1024)
+	for i := range wanted {
+		wanted[i] = uint8(i)
+	}
+
+	filename := filepath.Join(t.TempDir(), "work.dsk")
+	if err := os.WriteFile(filename, wanted, 0666); err != nil {
+		t.Fatal(err)
+	}
+
+	m := newTestMac(t)
+	if err := m.InsertDiskette(DriveInternal, filename); err != nil {
+		t.Fatal(err)
+	}
+
+	// The diskette holds the image now, so the file can be emptied under it
+	if err := os.WriteFile(filename, make([]uint8, 800*1024), 0666); err != nil {
+		t.Fatal(err)
+	}
+
+	// A track read and written straight back leaves the diskette changed
+	// as far as it knows, which is what a flush acts on
+	disk := m.iwm.drives[DriveInternal].disk
+	nibbles, err := disk.ReadTrack(0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := disk.WriteTrack(0, 0, nibbles); err != nil {
+		t.Fatal(err)
+	}
+
+	go m.Run()
+	m.SendCommand(CommandKill)
+
+	if !m.WaitUntilStopped(5 * time.Second) {
+		t.Fatal("the machine did not stop when it was killed")
+	}
+
+	got, err := os.ReadFile(filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range wanted {
+		if got[i] != wanted[i] {
+			t.Fatalf("the diskette was not written back, the image differs at %v", i)
+		}
 	}
 }

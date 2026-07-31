@@ -269,8 +269,8 @@ func TestTheFilesOnTheCommandLineAreSorted(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if len(c.DiskFiles) != 1 || c.DiskFiles[0] != hard {
-		t.Errorf("the hard disk did not reach the bus, the disks are %v", c.DiskFiles)
+	if len(c.HardDisks) != 1 || c.HardDisks[0] != hard {
+		t.Errorf("the hard disk did not reach the bus, the disks are %v", c.HardDisks)
 	}
 	if len(c.Diskettes) != 1 || c.Diskettes[0] != floppy {
 		t.Errorf("the diskette was not set aside, the diskettes are %v", c.Diskettes)
@@ -285,8 +285,8 @@ func TestTheDiskFlagCanBeRepeated(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if len(c.DiskFiles) != 2 || c.DiskFiles[0] != "one.img" || c.DiskFiles[1] != "two.img" {
-		t.Errorf("the disks are %v, wanted both in the order given", c.DiskFiles)
+	if len(c.HardDisks) != 2 || c.HardDisks[0] != "one.img" || c.HardDisks[1] != "two.img" {
+		t.Errorf("the disks are %v, wanted both in the order given", c.HardDisks)
 	}
 }
 
@@ -348,8 +348,8 @@ func TestADiskCopyFileIsSortedAsADiskette(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if len(c.Diskettes) != 1 || len(c.DiskFiles) != 0 {
+	if len(c.Diskettes) != 1 || len(c.HardDisks) != 0 {
 		t.Errorf("a DiskCopy image gave %v diskettes and %v disks, wanted one diskette",
-			len(c.Diskettes), len(c.DiskFiles))
+			len(c.Diskettes), len(c.HardDisks))
 	}
 }

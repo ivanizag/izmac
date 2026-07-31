@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/ivanizag/izmac"
 
@@ -163,7 +164,31 @@ func ebitenRun(m *izmac.Mac) error {
 	sound.start()
 
 	go m.Run()
-	defer m.SendCommand(izmac.CommandKill)
+	defer stopMachine(m)
 
 	return ebiten.RunGame(g)
+}
+
+/*
+shutdownWait is how long the window waits for the emulation to stop once it
+has been asked to. The run loop looks at the command channel every scan line
+of instructions and throttles for at most a tenth of a second between, so this
+is far longer than it can honestly take.
+*/
+const shutdownWait = 2 * time.Second
+
+/*
+stopMachine asks the emulation to stop and waits for it to have stopped.
+
+Waiting is the point. Stopping is where a diskette the machine has changed is
+written back to the host, and the emulation runs on its own goroutine: asking
+and walking away would let the process end first and lose the diskette.
+*/
+func stopMachine(m *izmac.Mac) {
+	m.SendCommand(izmac.CommandKill)
+
+	if !m.WaitUntilStopped(shutdownWait) {
+		fmt.Fprintln(os.Stderr, "Warning: the emulation did not stop when asked, "+
+			"anything a diskette had not yet been given back may be lost")
+	}
 }

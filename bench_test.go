@@ -19,7 +19,7 @@ func BenchmarkBoot(b *testing.B) {
 	for b.Loop() {
 		config := NewConfiguration()
 		config.RomFile = romFile
-		config.DiskFiles = []string{diskFile}
+		config.HardDisks = []string{diskFile}
 		if err := config.Validate(); err != nil {
 			b.Fatal(err)
 		}

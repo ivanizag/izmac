@@ -43,13 +43,10 @@ go run ./frontend/headless -frames 120 system.img work.img scratch.img
 | `-speed` | `plus` for the real 7.8336Mhz, `full` for as fast as the host goes, or a number of Mhz |
 | `-trace` | tracers to enable: `cpu`, `toolbox`, `sadmac`, `scsi`, `floppy` |
 
-Files named without an option are disk images. What each one
-is is worked out from the image itself: a Macintosh hard disk starts with a
-driver descriptor map, a DiskCopy image says so in its header, and a diskette
-is exactly 400K or 800K.
-
-Up to seven disks go on the SCSI bus, taking the ids 0 upwards in the order
-given. Note that the options have to come before the file names.
+Files named without an option are disk images, and izmac works out from each
+one whether it is a hard disk or a diskette. Up to seven hard disks go on the
+SCSI bus, taking the ids 0 upwards in the order given. Note that the options
+have to come before the file names.
 
 ## Diskettes
 
