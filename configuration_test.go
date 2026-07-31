@@ -181,7 +181,7 @@ func TestFullSpeedReachesTheMachine(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	m := mustNewMac(t, config, storage.RomFromData(make([]uint8, storage.RomSize)), nil, nil)
+	m := ensureNewMac(t, config, storage.RomFromData(make([]uint8, storage.RomSize)), nil, nil)
 	if !m.IsFullSpeed() {
 		t.Error("the machine is throttled with the full speed option")
 	}
@@ -201,7 +201,7 @@ func TestTheSpeedCanBeToggled(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	m := mustNewMac(t, config, storage.RomFromData(make([]uint8, storage.RomSize)), nil, nil)
+	m := ensureNewMac(t, config, storage.RomFromData(make([]uint8, storage.RomSize)), nil, nil)
 	if m.IsFullSpeed() {
 		t.Fatal("the machine starts unthrottled by default")
 	}
@@ -230,7 +230,7 @@ func TestTogglingFromFullSpeedGivesTheRealOne(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	m := mustNewMac(t, config, storage.RomFromData(make([]uint8, storage.RomSize)), nil, nil)
+	m := ensureNewMac(t, config, storage.RomFromData(make([]uint8, storage.RomSize)), nil, nil)
 	m.toggleSpeed()
 
 	if m.IsFullSpeed() {
@@ -280,7 +280,7 @@ func TestTheFilesOnTheCommandLineAreSorted(t *testing.T) {
 func TestTheDiskFlagCanBeRepeated(t *testing.T) {
 	c := NewConfiguration()
 	err := c.ParseFlags("izmac",
-		[]string{"-rom", "rom.bin", "-disk", "one.img", "-disk", "two.img"}, io.Discard)
+		[]string{"-rom", "rom.bin", "-hd", "one.img", "-hd", "two.img"}, io.Discard)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -293,7 +293,7 @@ func TestTheDiskFlagCanBeRepeated(t *testing.T) {
 func TestMoreDisksThanTheBusTakesIsRefused(t *testing.T) {
 	args := []string{"-rom", "rom.bin"}
 	for i := 0; i <= scsi.TargetCount; i++ {
-		args = append(args, "-disk", "disk.img")
+		args = append(args, "-hd", "disk.img")
 	}
 
 	c := NewConfiguration()

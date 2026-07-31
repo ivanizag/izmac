@@ -93,15 +93,13 @@ func buildSectorData(sectors int, seed int64) []uint8 {
 }
 
 func TestATrackSurvivesTheEncoding(t *testing.T) {
-	g := newGcr()
-
 	// One track of each of the five bands, so that every sector count is
 	// covered
 	for _, track := range []int{0, 16, 32, 48, 79} {
 		sectors := SectorsInTrack(track)
 		data := buildSectorData(sectors, int64(track))
 
-		encoded, err := g.encodeTrack(track, 0, 2, data)
+		encoded, err := encodeTrack(track, 0, 2, data)
 		if err != nil {
 			t.Fatalf("the track %v did not encode: %v", track, err)
 		}
@@ -111,7 +109,7 @@ func TestATrackSurvivesTheEncoding(t *testing.T) {
 				track, len(encoded), sectors*bytesPerSector)
 		}
 
-		decoded := g.decodeTrack(encoded)
+		decoded := DecodeTrack(encoded)
 		if len(decoded) != sectors {
 			t.Fatalf("the track %v gave back %v sectors, expected %v",
 				track, len(decoded), sectors)
@@ -139,13 +137,11 @@ be, so a sector that straddles the end of the buffer has to be readable too.
 Rotating the track is the same disk seen from a different starting point.
 */
 func TestASectorIsFoundAcrossTheEndOfTheTrack(t *testing.T) {
-	g := newGcr()
-
 	const track = 0
 	sectors := SectorsInTrack(track)
 	data := buildSectorData(sectors, 1)
 
-	encoded, err := g.encodeTrack(track, 0, 2, data)
+	encoded, err := encodeTrack(track, 0, 2, data)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -155,7 +151,7 @@ func TestASectorIsFoundAcrossTheEndOfTheTrack(t *testing.T) {
 	cut := len(encoded) - bytesPerSector/2
 	rotated := append(append([]uint8{}, encoded[cut:]...), encoded[:cut]...)
 
-	decoded := g.decodeTrack(rotated)
+	decoded := DecodeTrack(rotated)
 	if len(decoded) != sectors {
 		t.Fatalf("%v sectors were read off the rotated track, expected %v",
 			len(decoded), sectors)
@@ -172,13 +168,11 @@ func TestASectorIsFoundAcrossTheEndOfTheTrack(t *testing.T) {
 }
 
 func TestABadNibbleLosesOnlyItsOwnSector(t *testing.T) {
-	g := newGcr()
-
 	const track = 0
 	sectors := SectorsInTrack(track)
 	data := buildSectorData(sectors, 2)
 
-	encoded, err := g.encodeTrack(track, 0, 2, data)
+	encoded, err := encodeTrack(track, 0, 2, data)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -186,7 +180,7 @@ func TestABadNibbleLosesOnlyItsOwnSector(t *testing.T) {
 	// Break a byte in the middle of the data field of the third sector
 	encoded[2*bytesPerSector+syncBeforeAddress+addressFieldSize+syncBeforeData+300] = 0x00
 
-	decoded := g.decodeTrack(encoded)
+	decoded := DecodeTrack(encoded)
 	if len(decoded) != sectors-1 {
 		t.Fatalf("%v sectors survived, expected %v", len(decoded), sectors-1)
 	}

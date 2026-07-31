@@ -23,8 +23,9 @@ The nibble table is DT_Sony_NiblTbl, copied value for value.
 
 /*
 gcr carries the two tables the encoding needs. They would be the obvious pair
-of package level tables and izmac keeps none, so they hang off something: a
-diskette builds one when it is opened and uses it for every track.
+of package level tables and izmac keeps none, so a track builds them as it is
+encoded or decoded: two hundred and fifty six writes against the nine
+thousand bytes of the track they are for.
 */
 type gcr struct {
 	// nibble turns a six bit value into the byte written to the disk
@@ -128,8 +129,6 @@ sided. Two to one is what the driver formats with and what it expects to find.
 const (
 	formatSingleSided uint8 = 0x02
 	formatDoubleSided uint8 = 0x22
-
-	interleave = 2
 )
 
 /*
@@ -322,65 +321,6 @@ func appendSync(out []uint8, count int) []uint8 {
 }
 
 /*
-SectorsInTrack is how many sectors a track holds. The disk turns slower the
-further out the head is, in five bands of sixteen tracks, so that the bits
-stay the same length along the track and the outer ones hold more of them.
-Twelve down to eight over the eighty tracks is 800 sectors a side.
-*/
-func SectorsInTrack(track int) int {
-	return 12 - track/16
-}
-
-const (
-	// TracksPerSide is how far the head can go, which is what stops the
-	// stepper of the drive
-	TracksPerSide = 80
-
-	// sectorsPerSide is the sum of SectorsInTrack over every track
-	sectorsPerSide = 16 * (12 + 11 + 10 + 9 + 8)
-)
-
-/*
-BlockOf gives the position in the image of a sector. The blocks run along a
-track, then over to the other side of the same track, then outwards, which is
-the order a single sided image keeps too once the side is always zero.
-*/
-func BlockOf(track int, side int, sector int, sides int) int {
-	block := 0
-	for t := 0; t < track; t++ {
-		block += SectorsInTrack(t) * sides
-	}
-	return block + side*SectorsInTrack(track) + sector
-}
-
-/*
-interleavedOrder is the order the sectors are laid out around the track. The
-driver formats two to one, so that a sector and the next one along are half a
-turn apart and the machine has time to deal with the first before the second
-arrives.
-
-Nothing reads this back: a sector is found by its address field wherever it
-is. It is here so that a track izmac writes looks like one the machine wrote.
-*/
-func interleavedOrder(sectors int) []int {
-	order := make([]int, sectors)
-	for i := range order {
-		order[i] = -1
-	}
-
-	position := 0
-	for sector := 0; sector < sectors; sector++ {
-		for order[position] != -1 {
-			position = (position + 1) % sectors
-		}
-		order[position] = sector
-		position = (position + interleave) % sectors
-	}
-
-	return order
-}
-
-/*
 encodeTrack builds the bytes that go round one track. The sectors come in the
 order they sit on the disk and each is a run of sync, an address field, a
 short run of sync and a data field.
@@ -388,7 +328,9 @@ short run of sync and a data field.
 The caller passes the tags and data of every sector of the track, one after
 the other, sectorSize bytes each.
 */
-func (g *gcr) encodeTrack(track int, side int, sides int, sectorData []uint8) ([]uint8, error) {
+func encodeTrack(track int, side int, sides int, sectorData []uint8) ([]uint8, error) {
+	g := newGcr()
+
 	sectors := SectorsInTrack(track)
 	if len(sectorData) != sectors*sectorSize {
 		return nil, fmt.Errorf("the track %v holds %v sectors, %v bytes were given",
@@ -414,7 +356,7 @@ func (g *gcr) encodeTrack(track int, side int, sides int, sectorData []uint8) ([
 }
 
 /*
-decodeTrack reads the sectors back out of the bytes of a track, which is what
+DecodeTrack reads the sectors back out of the bytes of a track, which is what
 turns what the machine wrote into something to store in the image. It returns
 the tags and data of every sector it could make sense of, keyed by the sector
 number in the address field.
@@ -423,7 +365,9 @@ A track is a loop, so a sector can start near the end of the buffer and finish
 at the beginning. Reading is done through an index that wraps for that reason,
 over a window of one and a bit turns so that such a sector is seen whole.
 */
-func (g *gcr) decodeTrack(track []uint8) map[int][]uint8 {
+func DecodeTrack(track []uint8) map[int][]uint8 {
+	g := newGcr()
+
 	sectors := make(map[int][]uint8)
 	if len(track) < dataFieldSize {
 		return sectors
@@ -532,18 +476,4 @@ func (g *gcr) decodeDataField(at func(int) uint8, i int) ([]uint8, bool) {
 	}
 
 	return data, true
-}
-
-/*
-DecodeTrack reads the sectors out of the bytes that go round one track, the
-inverse of what a drive hands to the machine. A diskette uses it to store what
-was written to it, and it is offered on its own because the bytes are what a
-drive deals in and a caller with a track of them has nothing else to do
-with it.
-
-The sectors come back keyed by the number in their address field, tags first
-and then the data. Whatever does not decode is simply not there.
-*/
-func DecodeTrack(nibbles []uint8) map[int][]uint8 {
-	return newGcr().decodeTrack(nibbles)
 }

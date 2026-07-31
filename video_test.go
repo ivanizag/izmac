@@ -13,7 +13,7 @@ func newTestVideo(t *testing.T) (*Mac, *video) {
 	config := NewConfiguration()
 	config.RomFile = "<test>"
 
-	m := mustNewMac(t, config, storage.RomFromData(make([]uint8, storage.RomSize)), nil, nil)
+	m := ensureNewMac(t, config, storage.RomFromData(make([]uint8, storage.RomSize)), nil, nil)
 	return m, m.video
 }
 

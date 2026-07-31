@@ -50,10 +50,6 @@ type FloppyDisk struct {
 	// diskCopy says the image on the host has a DiskCopy header, so that
 	// writing it back puts one there again
 	diskCopy bool
-
-	// gcr carries the tables the encoding needs, built once for the whole
-	// life of the diskette
-	gcr *gcr
 }
 
 // NewFloppyDisk reads a diskette image, plain or DiskCopy 4.2
@@ -73,7 +69,6 @@ func NewFloppyDisk(filename string, readOnly bool) (*FloppyDisk, error) {
 		name:     filename,
 		filename: filename,
 		readOnly: readOnly,
-		gcr:      newGcr(),
 	}
 
 	if err := d.load(raw); err != nil {
@@ -122,7 +117,9 @@ func (d *FloppyDisk) load(raw []uint8) error {
 	case floppySize800K:
 		d.sides = 2
 	default:
-		return d.unreadableSize()
+		return fmt.Errorf("%v is %v bytes: the only diskettes a Macintosh "+
+			"Plus can read are the 400Kb and 800Kb ones it writes itself",
+			d.filename, len(d.data))
 	}
 
 	blocks := len(d.data) / BlockSize
@@ -133,29 +130,6 @@ func (d *FloppyDisk) load(raw []uint8) error {
 	}
 
 	return nil
-}
-
-/*
-unreadableSize explains a diskette this machine can not read, which is nearly
-always a 1.44Mb one: they are everywhere, and a Macintosh Plus predates them.
-
-Saying so is the point. The size alone would be true and useless, and the
-image is usually the right System on the wrong kind of disk.
-*/
-func (d *FloppyDisk) unreadableSize() error {
-	size := len(d.data) / 1024
-
-	switch len(d.data) {
-	case floppySize720K, floppySize1440K:
-		return fmt.Errorf("%v is a %vKb diskette, which is recorded the way a "+
-			"PC does it. The drive of a Macintosh Plus reads the 400Kb and "+
-			"800Kb ones it writes itself, and nothing else: %vKb arrived with "+
-			"the SuperDrive of later machines and needs one",
-			d.filename, size, size)
-	}
-
-	return fmt.Errorf("%v is %v bytes, and a diskette is %v or %v",
-		d.filename, len(d.data), floppySize400K, floppySize800K)
 }
 
 // Name describes the diskette, for a frontend to show and for the traces. A
@@ -173,11 +147,6 @@ func (d *FloppyDisk) Sides() int {
 // through the write protect line
 func (d *FloppyDisk) IsReadOnly() bool {
 	return d.readOnly
-}
-
-// IsModified tells whether there is anything to write back
-func (d *FloppyDisk) IsModified() bool {
-	return d.modified
 }
 
 // sectorData gathers the tags and the data of every sector of a track, in the
@@ -209,7 +178,7 @@ func (d *FloppyDisk) ReadTrack(track int, side int) ([]uint8, error) {
 		return nil, fmt.Errorf("%v has no side %v", d.name, side)
 	}
 
-	return d.gcr.encodeTrack(track, side, d.sides, d.sectorData(track, side))
+	return encodeTrack(track, side, d.sides, d.sectorData(track, side))
 }
 
 /*
@@ -234,7 +203,7 @@ func (d *FloppyDisk) WriteTrack(track int, side int, nibbles []uint8) (int, erro
 	}
 
 	stored := 0
-	for sector, sectorData := range d.gcr.decodeTrack(nibbles) {
+	for sector, sectorData := range DecodeTrack(nibbles) {
 		if sector < 0 || sector >= SectorsInTrack(track) {
 			continue
 		}
@@ -392,4 +361,67 @@ func diskCopyChecksum(data []uint8) uint32 {
 	}
 
 	return sum
+}
+
+/*
+SectorsInTrack is how many sectors a track holds. The disk turns slower the
+further out the head is, in five bands of sixteen tracks, so that the bits
+stay the same length along the track and the outer ones hold more of them.
+Twelve down to eight over the eighty tracks is 800 sectors a side.
+*/
+func SectorsInTrack(track int) int {
+	return 12 - track/16
+}
+
+const (
+	// TracksPerSide is how far the head can go, which is what stops the
+	// stepper of the drive
+	TracksPerSide = 80
+
+	// sectorsPerSide is the sum of SectorsInTrack over every track
+	sectorsPerSide = 16 * (12 + 11 + 10 + 9 + 8)
+)
+
+/*
+BlockOf gives the position in the image of a sector. The blocks run along a
+track, then over to the other side of the same track, then outwards, which is
+the order a single sided image keeps too once the side is always zero.
+*/
+func BlockOf(track int, side int, sector int, sides int) int {
+	block := 0
+	for t := 0; t < track; t++ {
+		block += SectorsInTrack(t) * sides
+	}
+	return block + side*SectorsInTrack(track) + sector
+}
+
+// interleave is what the driver formats with, a sector and the next one along
+// half a turn apart
+const interleave = 2
+
+/*
+interleavedOrder is the order the sectors are laid out around the track. The
+driver formats two to one, so that a sector and the next one along are half a
+turn apart and the machine has time to deal with the first before the second
+arrives.
+
+Nothing reads this back: a sector is found by its address field wherever it
+is. It is here so that a track izmac writes looks like one the machine wrote.
+*/
+func interleavedOrder(sectors int) []int {
+	order := make([]int, sectors)
+	for i := range order {
+		order[i] = -1
+	}
+
+	position := 0
+	for sector := 0; sector < sectors; sector++ {
+		for order[position] != -1 {
+			position = (position + 1) % sectors
+		}
+		order[position] = sector
+		position = (position + interleave) % sectors
+	}
+
+	return order
 }

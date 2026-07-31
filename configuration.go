@@ -137,7 +137,7 @@ func (c *Configuration) AddFiles(filenames []string) error {
 }
 
 /*
-stringList collects a flag given more than once, so that -disk can name
+stringList collects a flag given more than once, so that -hd can name
 several images.
 */
 type stringList []string
@@ -156,8 +156,8 @@ func (c *Configuration) AddFlags(fs *flag.FlagSet) {
 	fs.StringVar(&c.RomFile, "rom", c.RomFile,
 		"path to the Macintosh Plus ROM image, 128Kb. Downloaded to "+
 			defaultRomFile+" if not given and not already there")
-	fs.Var((*stringList)(&c.DiskFiles), "disk",
-		"disk image to attach to the SCSI bus, repeat for more than one")
+	fs.Var((*stringList)(&c.DiskFiles), "hd",
+		"hard disk image to attach to the SCSI bus, repeat for more than one")
 	fs.Var((*stringList)(&c.Diskettes), "floppy",
 		"400K or 800K diskette image, plain or DiskCopy 4.2, to put in a "+
 			"drive. Repeat for the external drive as well")
