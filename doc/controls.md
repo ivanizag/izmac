@@ -30,22 +30,25 @@ The layout you get is the United States one the Macintosh keyboard had,
 whatever your host keyboard is set to. On a non-US layout, the letters and
 digits are where you expect and the punctuation may not be.
 
-Two keys are not where their names suggest:
+The modifiers are not where their names suggest:
 
 | Your keyboard | The Macintosh |
 |---|---|
-| **Alt** or **Option**, either side | **Command**, the clover key |
+| **Command**, **Windows** or **Super**, either side | **Command**, the clover key |
+| **Alt** or **Option**, either side | **Command** as well |
 | **Control**, either side | **Option** |
 | Shift, either side | Shift |
 | Backspace | Backspace |
 | Enter on the numeric keypad | Enter, the key beside the space bar |
 
-The command key is taken from Alt rather than from your own command or
-Windows key because window managers tend to keep that one for themselves.
+Two keys of yours give the Macintosh command key because your own system
+keeps some combinations for itself: Command-Q and Command-Tab on macOS never
+reach the machine, and on most Linux desktops the super key belongs to the
+window manager. Whatever your system swallows, the same thing with **Alt**
+gets through. So Command-C is Command-C, and Alt-C when it is not.
 
-So Command-Q is Alt-Q, Command-S is Alt-S, and the interrupt and reset that
-the programmer's switch gave you are not on the keyboard at all — reset is on
-the menu.
+The interrupt and reset that the programmer's switch gave you are not on the
+keyboard at all — reset is on the menu.
 
 **What is missing.** The arrow keys and the numeric keypad are not mapped, and
 neither is Escape, which is used to release the mouse. The Macintosh Plus
@@ -61,6 +64,7 @@ the Macintosh keyboard has none of them and so cannot want them.
 | Key | What it does |
 |---|---|
 | **F10** | open and close the menu |
+| **F11** | force your clipboard into the machine, see below |
 | **F5** | run as fast as your machine can, and back |
 | **Ctrl-F5** | print on the terminal the speed being reached |
 | **F4** | show or hide the trace of the processor on the terminal |
@@ -84,6 +88,7 @@ lines are:
 | Line | What it does |
 |---|---|
 | **Full speed** / **Normal speed** | the same as F5 |
+| **Paste from the host** | hands your clipboard to the machine, the same as F11 |
 | **Save a screenshot** | writes the screen as it is now to `izmac-<date>-<time>.png` in the working directory, at the real 512 by 342 |
 | **Reset** | restarts the machine, as the programmer's switch did. Anything unsaved is lost |
 | **internal drive** | what is in the internal diskette drive, and eject it |
@@ -98,6 +103,52 @@ Macintosh do it.
 While the menu is up the machine sees neither the keys nor the pointer, and
 anything you were holding down is released, so it does not stay held while you
 are looking at the menu.
+
+## Copy and paste
+
+The clipboard of the machine and the clipboard of your own system are shared,
+both ways. Text only: a picture copied inside the machine is a PICT, a format
+nothing on your system reads, so it is left alone rather than replacing what
+you had on your clipboard.
+
+**Copying out of the machine.** Copy as you normally would in the application
+— Command-C, or Copy on its Edit menu — and the text is on your clipboard a
+moment later, ready to paste anywhere. There is nothing to press on the izmac
+side.
+
+**Pasting into the machine.** Copy on your system, then click on the izmac
+window. Your clipboard is handed to the machine as the window takes the focus,
+so by the time you are back in the Macintosh it is already there, and
+Command-V in the application pastes it.
+
+It arrives as the clipboard of the Macintosh and not as a burst of typing, so
+it pastes into anything that has a Paste on its Edit menu, keeps its line
+breaks, and does not depend on the application having a text field ready.
+
+**F11 forces it**, and so does *Paste from the host* on the F10 menu. That is
+for when the window never lost the focus: a clipboard manager, a hotkey, a
+script, or a copy inside the machine that has replaced what you sent earlier.
+
+Accented characters and the ones the Macintosh does not have are dealt with on
+the way. The machine used Mac OS Roman, one byte a character, so the é of a
+modern system arrives as the é of a Macintosh; anything with no Macintosh
+equivalent — an em dash, a curly quote from a modern editor, an emoji —
+arrives as a question mark rather than stopping the paste.
+
+Two things worth knowing when a copy does not turn up, neither of them izmac
+being careful:
+
+- **Some applications keep a clipboard of their own** and only publish it when
+  they are switched away from, which under MultiFinder and System 7 means
+  clicking on another window inside the machine. Until they do there is
+  nothing for izmac to see. Switching to the Finder inside the machine and
+  back is enough.
+- **The clipboard is sometimes written to a file** instead of being kept in
+  memory. The System does that when it needs the space, and a clipboard that
+  has gone to disk is not picked up.
+
+To keep the two clipboards apart entirely, start izmac with
+`-clipboard=false`.
 
 ## Sound
 

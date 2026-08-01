@@ -82,12 +82,35 @@ it is.
 If you have the pointer and want it back, **right click** or press
 **Escape**.
 
-**Command-something does nothing.** The Macintosh command key is your **Alt**
-or **Option** key, not your own command or Windows key. See
+**Command-something does nothing.** Your own system took it before the
+machine saw it — Command-Q and Command-Tab on macOS, and whatever your window
+manager claims elsewhere. The same combination with **Alt** or **Option**
+gets through, since both keys are the Macintosh command key. See
 [Keyboard, mouse and the menu](controls.md).
 
 **The arrow keys do nothing.** They are not mapped, and neither is the numeric
 keypad.
+
+## Copy and paste
+
+**A copy inside the machine did not reach my clipboard.** Some applications
+keep a clipboard of their own and only publish it when they are switched away
+from. Click on another window inside the machine, the Finder will do, and it
+turns up. The other cause is a clipboard the System has written to a file to
+free the memory, which izmac does not read.
+
+**A paste did not arrive.** Your clipboard is handed over as the window takes
+the focus, so a copy made without the window ever losing it — from a clipboard
+manager, a hotkey or a script — has not been sent. Press **F11**, or use
+*Paste from the host* on the F10 menu.
+
+Nothing at all crosses if izmac was started with `-clipboard=false`.
+
+**A paste arrived with question marks in it.** The Macintosh has one byte a
+character and no room for the em dashes, curly quotes and emoji of a modern
+system. What it has no equivalent for arrives as a question mark.
+
+**Pictures do not cross.** Text only, in both directions.
 
 ## Disks
 
