@@ -66,6 +66,69 @@ func TestAnythingElseIsAHardDisk(t *testing.T) {
 	}
 }
 
+/*
+An image too big for a drive with an HFS volume where the driver descriptor
+map should be is one of the images made for the emulators that patch the ROM,
+and the ROM izmac runs can do nothing with it.
+*/
+func TestAVolumeWithNoMapInFrontOfItIsRecognized(t *testing.T) {
+	kind, err := Classify(writeVolume(t, 40))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if kind != KindBareVolume {
+		t.Errorf("a volume with no map in front of it was taken for a %v", kind)
+	}
+}
+
+/*
+A diskette is a volume with no map in front of it as well, and the only thing
+telling the two apart is that a drive can hold one. Were the sizes not looked
+at first, every 800K image would come out a bare volume and be turned away.
+*/
+func TestADisketteSizedVolumeIsStillADiskette(t *testing.T) {
+	for _, size := range []int{floppySize400K, floppySize800K} {
+		kind, err := Classify(writeVolume(t, size/BlockSize))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if kind != KindFloppy {
+			t.Errorf("an HFS volume of %v bytes was taken for a %v", size, kind)
+		}
+	}
+}
+
+/*
+A blank image has no map and no volume either. It is what gets attached to be
+formatted from the machine, so it stays a hard disk.
+*/
+func TestABlankImageIsAHardDisk(t *testing.T) {
+	kind, err := Classify(writeImage(t, 20*1024*1024, false))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if kind != KindHardDisk {
+		t.Errorf("a blank image was taken for a %v", kind)
+	}
+}
+
+// An image too short to hold the block a volume is known by is not one, and
+// the read past the end of it is not an error
+func TestAnImageTooShortToHoldAVolumeIsAHardDisk(t *testing.T) {
+	short := filepath.Join(t.TempDir(), "short.img")
+	if err := os.WriteFile(short, []uint8{'L', 'K'}, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	kind, err := Classify(short)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if kind != KindHardDisk {
+		t.Errorf("a two byte file was taken for a %v", kind)
+	}
+}
+
 func TestAnImageThatIsNotThereIsAnError(t *testing.T) {
 	if _, err := Classify(filepath.Join(t.TempDir(), "missing.img")); err == nil {
 		t.Error("an image that is not there was classified anyway")

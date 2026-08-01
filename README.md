@@ -42,6 +42,7 @@ go run ./frontend/headless -frames 120 system.img work.img scratch.img
 | `-rom` | the ROM image, required |
 | `-hd` | a hard disk image for the SCSI bus, repeat for more than one |
 | `-floppy` | a diskette image for a drive, repeat for the external one |
+| `-driver` | a disk image to borrow a SCSI driver from, downloaded to `hddriver.rom` if not given |
 | `-pram` | where the parameter RAM is kept, `pram.bin` by default |
 | `-ram` | RAM size in Kb, 1024 or 4096 |
 | `-speed` | `plus` for the real 7.8336Mhz, `full` for as fast as the host goes, or a number of Mhz |
@@ -55,6 +56,22 @@ is exactly 400K or 800K.
 
 Up to seven disks go on the SCSI bus, taking the ids 0 upwards in the order
 given. Note that the options have to come before the file names.
+
+## Hard disks
+
+Most of the hard disk images that circulate are the HFS volume and nothing
+else, made for the emulators that patch the ROM to add a disk driver of their
+own. izmac runs an unpatched ROM, which boots by loading a driver off the
+disk, so it makes up what is missing as the disk is attached instead. Nothing
+special is needed to use one and nothing is written to the file:
+
+```bash
+go run ./frontend/macebiten volume.dsk
+```
+
+The driver is the one part that can not be made up. It is Apple's, so izmac
+carries none and fetches one the way it fetches the ROM, the first time a
+disk turns out to want it. The [manual](doc/disks.md) has the details.
 
 ## Diskettes
 

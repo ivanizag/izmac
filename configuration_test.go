@@ -293,6 +293,100 @@ func writeImage(t *testing.T, name string, size int, partitioned bool) string {
 	return filename
 }
 
+// writeVolumeImage makes a bare HFS volume, too big for any drive so that
+// only the missing map tells it from a diskette
+func writeVolumeImage(t *testing.T, name string) string {
+	t.Helper()
+
+	data := make([]uint8, 4*1024*1024)
+	data[0], data[1] = 'L', 'K'                                         // the boot blocks
+	data[2*storage.BlockSize], data[2*storage.BlockSize+1] = 0x42, 0x44 // 'BD'
+
+	filename := filepath.Join(t.TempDir(), name)
+	if err := os.WriteFile(filename, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return filename
+}
+
+/*
+A bare volume is attached behind a borrowed driver, so it is accepted however
+it was named. Naming it with -hd and naming it on its own have to behave
+alike, which is why the disks are looked at rather than the way they got
+there.
+*/
+func TestABareVolumeAsksForADriver(t *testing.T) {
+	volume := writeVolumeImage(t, "volume.dsk")
+
+	for _, args := range [][]string{
+		{"-rom", "rom.bin", volume},
+		{"-rom", "rom.bin", "-hd", volume},
+	} {
+		c := NewConfiguration()
+		err := c.ParseFlags("izmac", args, io.Discard)
+		if err != nil {
+			t.Fatalf("a bare volume was refused with %v: %v", args, err)
+		}
+
+		wanted, err := c.needsDriver()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !wanted {
+			t.Errorf("%v left the bare volume without asking for a driver", args)
+		}
+	}
+}
+
+// A driver is only wanted for a bare volume. A disk that carries its own is
+// not a reason to go looking, still less to download one.
+func TestAPartitionedDiskAsksForNoDriver(t *testing.T) {
+	c := NewConfiguration()
+	err := c.ParseFlags("izmac",
+		[]string{"-rom", "rom.bin", writeImage(t, "hard.img", 4*1024*1024, true)}, io.Discard)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	wanted, err := c.needsDriver()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if wanted {
+		t.Error("a partitioned disk asked for a driver")
+	}
+}
+
+func TestTheDefaultDriverIsUsedWhenNoneIsNamed(t *testing.T) {
+	c := NewConfiguration()
+	err := c.ParseFlags("izmac", []string{"-rom", "rom.bin"}, io.Discard)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if c.DriverFile != defaultDriverFile {
+		t.Errorf("the driver defaults to %v, wanted %v", c.DriverFile, defaultDriverFile)
+	}
+	if !c.driverIsDefault {
+		t.Error("the default driver was not marked as downloadable")
+	}
+}
+
+// One named on the command line is the caller's to provide, so it is never
+// fetched behind their back
+func TestANamedDriverIsNeverDownloaded(t *testing.T) {
+	c := NewConfiguration()
+	err := c.ParseFlags("izmac",
+		[]string{"-rom", "rom.bin", "-driver", "mine.img"}, io.Discard)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if c.driverIsDefault {
+		t.Error("a driver named on the command line was marked as downloadable")
+	}
+}
+
 func TestTheFilesOnTheCommandLineAreSorted(t *testing.T) {
 	hard := writeImage(t, "hard.img", 4*1024*1024, true)
 	floppy := writeImage(t, "floppy.img", 800*1024, false)

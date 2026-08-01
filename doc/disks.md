@@ -59,9 +59,48 @@ complaining. The machine still boots from it and simply cannot save anything,
 which looks from inside like a disk that refuses every write.
 
 izmac does not make blank hard disks and cannot format one — a raw file of
-zeros has no driver on it and the ROM will not boot it. Start from an image
-that somebody already prepared, or make one under the Macintosh with a
-formatter of the period, such as Apple's HD SC Setup, running from a diskette.
+zeros has nothing on it for the machine to find. Start from an image that
+somebody already prepared, or make one under the Macintosh with a formatter of
+the period, such as Apple's HD SC Setup, running from a diskette.
+
+### Images with no driver on them
+
+A real Macintosh boots from a hard disk in two steps. The ROM reads block 0,
+finds a *driver descriptor map* there, loads the disk driver it names and jumps
+into it; the driver is what then finds the volume and reads it. A disk that has
+been through Apple's formatter has all of that in front of the volume, in the
+first 96 blocks.
+
+Many of the images you can download do not. They are the HFS volume on its own,
+made for Mini vMac and Basilisk II, which patch the ROM so that a driver of
+their own stands in. Under an unpatched ROM such an image gives you the
+blinking diskette and no explanation.
+
+izmac takes one anyway. What is missing is made up as the disk is attached and
+kept in memory in front of the file, so the machine sees a disk 96 blocks
+longer than the image, laid out the way a formatter would have written it:
+
+```bash
+izmac volume.dsk
+```
+
+Nothing is written to the image. Reads and writes past those 96 blocks are the
+file, and the volume is the same volume afterwards as it was before — still
+good for the emulator it was made for.
+
+The driver is the one part that cannot be made up, because it is real code that
+the ROM jumps into. It is Apple's, so izmac carries none and fetches one the
+first time a disk turns out to want it, exactly as it fetches the ROM. What it
+keeps is the front of a blank disk that has a driver on it, saved as
+`hddriver.rom` on the working directory. A machine with nothing but properly
+formatted disks on it never goes looking.
+
+To use a driver you already have rather than the one izmac would fetch, name a
+disk image that has one. It is only ever read:
+
+```bash
+izmac -driver bootable.img volume.dsk
+```
 
 ## Diskettes
 

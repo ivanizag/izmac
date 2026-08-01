@@ -32,10 +32,40 @@ type blockDiskFile struct {
 	readOnly bool
 }
 
-// NewBlockDiskFile opens a disk image. The image is a plain sequence of
+/*
+NewBlockDisk opens a disk image for the SCSI bus, ready for the ROM to boot
+from. A disk that has been through Apple's formatter goes on as it is. A bare
+volume, having none of the map and driver the ROM boots through, is dressed
+in them on the way past, in memory and without the file being touched.
+
+The driver is real code that has to come from somewhere, so a bare volume can
+only be attached when one has been found to give it.
+*/
+func NewBlockDisk(filename string, driver *Driver, readOnly bool) (BlockDisk, error) {
+	kind, err := Classify(filename)
+	if err != nil {
+		return nil, err
+	}
+
+	disk, err := newBlockDiskFile(filename, readOnly)
+	if err != nil {
+		return nil, err
+	}
+
+	if kind != KindBareVolume {
+		return disk, nil
+	}
+
+	if driver == nil {
+		return nil, bareVolumeError(filename)
+	}
+	return newBareVolumeDisk(disk, driver)
+}
+
+// newBlockDiskFile opens a disk image. The image is a plain sequence of
 // blocks, which is what a disk copied with dd or made by a Macintosh
 // formatter looks like.
-func NewBlockDiskFile(filename string, readOnly bool) (BlockDisk, error) {
+func newBlockDiskFile(filename string, readOnly bool) (BlockDisk, error) {
 	flags := os.O_RDWR
 	if readOnly {
 		flags = os.O_RDONLY
@@ -45,7 +75,7 @@ func NewBlockDiskFile(filename string, readOnly bool) (BlockDisk, error) {
 	if err != nil {
 		if !readOnly {
 			// A read only image is still usable, the ROM can boot from it
-			return NewBlockDiskFile(filename, true)
+			return newBlockDiskFile(filename, true)
 		}
 		return nil, fmt.Errorf("can not open the disk image: %w", err)
 	}

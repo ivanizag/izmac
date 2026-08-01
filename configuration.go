@@ -27,6 +27,16 @@ type Configuration struct {
 	// order they go in the drives: the internal one and then the external
 	Diskettes []string
 
+	/*
+		DriverFile is a disk image to take a SCSI driver from, for the sake
+		of the bare volumes among DiskFiles. Those carry no driver and the
+		ROM boots by loading one off the disk, so it has to be found
+		somewhere before they can be attached. Nothing is written to it and
+		nothing is written to them: the driver and the maps around it are
+		held in memory in front of the volume.
+	*/
+	DriverFile string
+
 	// PramFile is where the parameter RAM is persisted between runs
 	PramFile string
 
@@ -54,6 +64,9 @@ type Configuration struct {
 	// romIsDefault tells that no ROM was named, so the default one can be
 	// downloaded if it is not on the working directory
 	romIsDefault bool
+
+	// driverIsDefault tells the same of the driver image
+	driverIsDefault bool
 
 	// cycleDurationNs is Speed as the nanoseconds a cycle lasts, or zero
 	// for no throttling at all
@@ -131,6 +144,9 @@ func (c *Configuration) AddFiles(filenames []string) error {
 			return err
 		}
 
+		// A bare volume goes on the bus with the rest of the hard disks.
+		// What it lacks is made up when it is attached, so there is
+		// nothing to sort it out from them here.
 		if kind == storage.KindFloppy {
 			c.Diskettes = append(c.Diskettes, filename)
 		} else {
@@ -139,6 +155,24 @@ func (c *Configuration) AddFiles(filenames []string) error {
 	}
 
 	return nil
+}
+
+/*
+needsDriver tells whether any of the disks is a bare volume, which is the
+only reason a driver has to be found. An image that can not be looked at is
+left alone: opening it later says so, and says it better than this could.
+*/
+func (c *Configuration) needsDriver() (bool, error) {
+	for _, filename := range c.DiskFiles {
+		kind, err := storage.Classify(filename)
+		if err != nil {
+			continue
+		}
+		if kind == storage.KindBareVolume {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 /*
@@ -166,6 +200,10 @@ func (c *Configuration) AddFlags(fs *flag.FlagSet) {
 	fs.Var((*stringList)(&c.Diskettes), "floppy",
 		"400K or 800K diskette image, plain or DiskCopy 4.2, to put in a "+
 			"drive. Repeat for the external drive as well")
+	fs.StringVar(&c.DriverFile, "driver", c.DriverFile,
+		"a disk image to borrow a SCSI driver from, needed only to attach a "+
+			"bare volume, an image with no partition map on it. Nothing is "+
+			"written to either")
 	fs.StringVar(&c.PramFile, "pram", c.PramFile,
 		"path to the file where the parameter RAM is persisted")
 	fs.BoolVar(&c.WallClock, "wallclock", c.WallClock,
@@ -202,6 +240,13 @@ func (c *Configuration) Validate() error {
 	if len(c.DiskFiles) > scsi.TargetCount {
 		return fmt.Errorf("the bus takes %v disks, %v were given",
 			scsi.TargetCount, len(c.DiskFiles))
+	}
+
+	if c.DriverFile == "" {
+		// No driver was named, take the default one and allow downloading
+		// it, which only happens if a disk turns out to want it
+		c.DriverFile = defaultDriverFile
+		c.driverIsDefault = true
 	}
 
 	if len(c.Diskettes) > DriveCount {
