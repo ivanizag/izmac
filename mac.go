@@ -114,7 +114,7 @@ func NewMac(config *Configuration) (*Mac, error) {
 
 	// The driver is found once and given to every bare volume on the bus.
 	// A machine with nothing but proper disks on it gets none and wants none.
-	driver, err := ensureDriver(config, os.Stdout)
+	driver, err := config.ensureDriver(os.Stdout)
 	if err != nil {
 		return nil, err
 	}
