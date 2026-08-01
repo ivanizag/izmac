@@ -80,9 +80,11 @@ Then:
   **Escape**, to get it back.
 - **F10** opens the emulator's menu, for the things the Macintosh knows
   nothing about: full speed, a screenshot, reset, and the diskette drives.
-- The **Alt** or **Option** key of your keyboard is the Macintosh **Command**
-  key, the one with the clover on it. Your **Control** key is the Macintosh
-  **Option**.
+- Your **Command** key is the Macintosh **Command** key, the one with the
+  clover on it, and so is **Alt** or **Option** for the combinations your own
+  system keeps. Your **Control** key is the Macintosh **Option**.
+- **The clipboard is shared**, both ways and text only, so you can copy in the
+  machine and paste outside it, and the other way round.
 
 That is enough to use the machine. The title bar tells you the speed it is
 running at and how to give the mouse over or take it back.

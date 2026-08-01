@@ -33,6 +33,7 @@ Both frontends take all of these.
 | `-ram <kb>` | `1024` | the memory size in Kb, `1024` or `4096`. Those are the two the real machine could be built with |
 | `-speed <mhz>` | `plus` | `plus` for the real 7.8336 MHz, `full` for as fast as your machine goes, or a number of Mhz |
 | `-pram <file>` | `pram.bin` | where the parameter RAM is kept between runs |
+| `-clipboard` | on | share the clipboard with your system, both ways. `-clipboard=false` keeps them apart. See [Keyboard, mouse and the menu](controls.md) |
 | `-wallclock` | off | read the clock from the host every time, instead of starting from it and counting the machine's own seconds |
 | `-trace <list>` | | tracers to turn on, comma separated: `cpu`, `toolbox`, `sadmac`, `scsi`, `floppy` |
 | `-profile` | off | write a CPU profile of the emulator itself |
