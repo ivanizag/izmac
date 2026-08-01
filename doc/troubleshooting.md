@@ -63,7 +63,7 @@ error; it is the machine waiting for a disk, and it will pick one up the
 moment you drop a bootable diskette on the window.
 
 Either no disk was given, or none of them has a System on it, or the hard disk
-image has no driver — a raw file of zeros is not a startup disk. See
+image has no SCSI driver — a raw file of zeros is not a startup disk. See
 [Disks and diskettes](disks.md).
 
 ## It stops on the *Welcome to Macintosh* or *Starting up* screen

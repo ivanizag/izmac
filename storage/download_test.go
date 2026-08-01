@@ -77,9 +77,9 @@ func TestAServerErrorIsReported(t *testing.T) {
 }
 
 /*
-zipOf packs one file, the way the disks that carry a driver are published.
-The image is padded out because a real one is far bigger than the part taken
-off the front of it.
+zipOf packs one file, the way the disks that carry a SCSI driver are
+published. The image is padded out because a real one is far bigger than the
+part taken off the front of it.
 */
 func zipOf(t *testing.T, name string, image []uint8, blocks int) []uint8 {
 	t.Helper()
@@ -130,7 +130,7 @@ func donorBytes(t *testing.T) []uint8 {
 
 /*
 The front of the image is what is kept, and it has to be enough of one for
-the driver to be read straight out of it afterwards.
+the SCSI driver to be read straight out of it afterwards.
 */
 func TestTheFrontOfAZippedImageIsTaken(t *testing.T) {
 	archive := zipOf(t, "20mb.img", donorBytes(t), 4096)
@@ -140,29 +140,29 @@ func TestTheFrontOfAZippedImageIsTaken(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if len(data) != driverFileBlocks*BlockSize {
+	if len(data) != scsiDriverFileBlocks*BlockSize {
 		t.Errorf("%v bytes were kept, wanted the %v blocks the layout asks for",
-			len(data), driverFileBlocks)
+			len(data), scsiDriverFileBlocks)
 	}
 
-	// And the point of it: the driver comes out of what was kept
-	driver, err := readDriverAt(bytes.NewReader(data), "downloaded")
+	// And the point of it: the SCSI driver comes out of what was kept
+	scsiDriver, err := readScsiDriverAt(bytes.NewReader(data), "downloaded")
 	if err != nil {
-		t.Fatalf("the driver could not be read back out of the front of the image: %v", err)
+		t.Fatalf("the SCSI driver could not be read back out of the front of the image: %v", err)
 	}
-	if driver.Blocks() != donorDriverBlocks {
-		t.Errorf("the driver came out %v blocks, wanted %v",
-			driver.Blocks(), donorDriverBlocks)
+	if scsiDriver.Blocks() != donorScsiDriverBlocks {
+		t.Errorf("the SCSI driver came out %v blocks, wanted %v",
+			scsiDriver.Blocks(), donorScsiDriverBlocks)
 	}
-	if driver.Processor != "68000" {
-		t.Errorf("the driver is for %q", driver.Processor)
+	if scsiDriver.Processor != "68000" {
+		t.Errorf("the SCSI driver is for %q", scsiDriver.Processor)
 	}
 }
 
 // An image shorter than the part wanted is not quietly padded out into
 // something that looks like a disk
 func TestAZippedImageTooShortIsAnError(t *testing.T) {
-	archive := zipOf(t, "tiny.img", donorBytes(t), driverFileBlocks-1)
+	archive := zipOf(t, "tiny.img", donorBytes(t), scsiDriverFileBlocks-1)
 
 	if _, err := frontOfZippedImage(archive); err == nil {
 		t.Error("an image shorter than the blocks kept was accepted")
@@ -176,10 +176,10 @@ func TestSomethingThatIsNotAZipIsAnError(t *testing.T) {
 }
 
 /*
-A zip holding a file with no driver in it is refused before anything is
+A zip holding a file with no SCSI driver in it is refused before anything is
 written, so a bad download leaves nothing behind to be picked up next time.
 */
-func TestAZippedImageWithNoDriverIsRefused(t *testing.T) {
+func TestAZippedImageWithNoScsiDriverIsRefused(t *testing.T) {
 	archive := zipOf(t, "blank.img", nil, 4096)
 
 	data, err := frontOfZippedImage(archive)
@@ -187,48 +187,48 @@ func TestAZippedImageWithNoDriverIsRefused(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = readDriverAt(bytes.NewReader(data), "downloaded")
+	_, err = readScsiDriverAt(bytes.NewReader(data), "downloaded")
 	if err == nil {
-		t.Fatal("an image with no driver descriptor map gave up a driver")
+		t.Fatal("an image with no driver descriptor map gave up a SCSI driver")
 	}
 	if !strings.Contains(err.Error(), "driver descriptor map") {
 		t.Errorf("the error was %q, which does not say what is missing", err)
 	}
 }
 
-func TestTheDriverIsDownloadedAndSaved(t *testing.T) {
+func TestTheScsiDriverIsDownloadedAndSaved(t *testing.T) {
 	server := newServer(zipOf(t, "20mb.img", donorBytes(t), 4096), http.StatusOK)
 	defer server.Close()
 
 	filename := filepath.Join(t.TempDir(), "hddriver.rom")
-	driver, err := DownloadDriver(filename, server.URL)
+	scsiDriver, err := DownloadScsiDriver(filename, server.URL)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if driver.Blocks() != donorDriverBlocks {
-		t.Errorf("the driver came out %v blocks, wanted %v",
-			driver.Blocks(), donorDriverBlocks)
+	if scsiDriver.Blocks() != donorScsiDriverBlocks {
+		t.Errorf("the SCSI driver came out %v blocks, wanted %v",
+			scsiDriver.Blocks(), donorScsiDriverBlocks)
 	}
 	// It says where it ended up rather than where it came from, which is
 	// what the summary reports
-	if driver.source != filename {
-		t.Errorf("the driver says it came from %v, wanted %v", driver.source, filename)
+	if scsiDriver.source != filename {
+		t.Errorf("the SCSI driver says it came from %v, wanted %v", scsiDriver.source, filename)
 	}
 
 	saved, err := os.ReadFile(filename)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(saved) != driverFileBlocks*BlockSize {
+	if len(saved) != scsiDriverFileBlocks*BlockSize {
 		t.Errorf("the file saved is %v bytes, wanted the %v blocks kept",
-			len(saved), driverFileBlocks)
+			len(saved), scsiDriverFileBlocks)
 	}
 
 	// And what was saved is a disk image in its own right, so it is read
 	// back on the next run the same way any donor is
-	if _, err := ReadDriver(filename); err != nil {
-		t.Errorf("the file saved does not parse as a disk with a driver: %v", err)
+	if _, err := ReadScsiDriver(filename); err != nil {
+		t.Errorf("the file saved does not parse as a disk with a SCSI driver: %v", err)
 	}
 }
 
@@ -322,13 +322,13 @@ func TestABadDisketteDownloadLeavesNoFile(t *testing.T) {
 	}
 }
 
-func TestABadDriverDownloadLeavesNoFile(t *testing.T) {
+func TestABadScsiDriverDownloadLeavesNoFile(t *testing.T) {
 	server := newServer([]uint8("<html>not a disk</html>"), http.StatusOK)
 	defer server.Close()
 
 	filename := filepath.Join(t.TempDir(), "hddriver.rom")
 
-	if _, err := DownloadDriver(filename, server.URL); err == nil {
+	if _, err := DownloadScsiDriver(filename, server.URL); err == nil {
 		t.Fatal("a download that is not a disk image was accepted")
 	}
 	if _, err := os.Stat(filename); err == nil {

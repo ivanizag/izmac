@@ -29,14 +29,14 @@ type Configuration struct {
 	Diskettes []string
 
 	/*
-		DriverFile is a disk image to take a SCSI driver from, for the sake
-		of the bare volumes among DiskFiles. Those carry no driver and the
-		ROM boots by loading one off the disk, so it has to be found
+		ScsiDriverFile is a disk image to take a SCSI driver from, for the
+		sake of the bare volumes among DiskFiles. Those carry no SCSI driver
+		and the ROM boots by loading one off the disk, so it has to be found
 		somewhere before they can be attached. Nothing is written to it and
-		nothing is written to them: the driver and the maps around it are
-		held in memory in front of the volume.
+		nothing is written to them: the SCSI driver and the maps around it
+		are held in memory in front of the volume.
 	*/
-	DriverFile string
+	ScsiDriverFile string
 
 	// PramFile is where the parameter RAM is persisted between runs
 	PramFile string
@@ -66,8 +66,8 @@ type Configuration struct {
 	// downloaded if it is not on the working directory
 	romIsDefault bool
 
-	// driverIsDefault tells the same of the driver image
-	driverIsDefault bool
+	// scsiDriverIsDefault tells the same of the SCSI driver image
+	scsiDriverIsDefault bool
 
 	// disketteFile is where the diskette booted when nothing was named on
 	// the command line is kept. There is no option for it: it is a field
@@ -88,19 +88,20 @@ const (
 	speedPlus = "plus"
 	speedFull = "full"
 
-	// defaultDriverFile is where a borrowed SCSI driver is kept, and is not
-	// a ROM at all: it is the front of a disk image, the maps and the
-	// driver in the layout they were found in. The name says what it is for.
-	defaultDriverFile = "hddriver.rom"
+	// defaultScsiDriverFile is where a borrowed SCSI driver is kept, and is
+	// not a ROM at all: it is the front of a disk image, the maps and the
+	// SCSI driver in the layout they were found in. The name says what it
+	// is for.
+	defaultScsiDriverFile = "hddriver.rom"
 
 	/*
-		defaultDriverURL is a blank disk formatted by Apple's HD SC Setup,
+		defaultScsiDriverURL is a blank disk formatted by Apple's HD SC Setup,
 		out of a collection of them kept for the SCSI adapters people put in
 		real machines. It is pinned to the commit rather than the branch, so
 		that what is fetched is the file that was tested and not whatever
 		the branch has moved on to.
 	*/
-	defaultDriverURL = "https://raw.githubusercontent.com/MrGasS/" +
+	defaultScsiDriverURL = "https://raw.githubusercontent.com/MrGasS/" +
 		"Blank-SCSI-hard-disk-images-for-Macintosh/" +
 		"1e4b92eed88b3d0b8d535e6387f6813bd40b512b/" +
 		"Blank%20Apple%20HD%20SC%20formatted%20images/" +
@@ -200,11 +201,11 @@ func (c *Configuration) AddFiles(filenames []string) error {
 }
 
 /*
-needsDriver tells whether any of the disks is a bare volume, which is the
-only reason a driver has to be found. An image that can not be looked at is
-left alone: opening it later says so, and says it better than this could.
+needsScsiDriver tells whether any of the disks is a bare volume, which is the
+only reason a SCSI driver has to be found. An image that can not be looked at
+is left alone: opening it later says so, and says it better than this could.
 */
-func (c *Configuration) needsDriver() (bool, error) {
+func (c *Configuration) needsScsiDriver() (bool, error) {
 	for _, filename := range c.DiskFiles {
 		kind, err := storage.Classify(filename)
 		if err != nil {
@@ -218,18 +219,18 @@ func (c *Configuration) needsDriver() (bool, error) {
 }
 
 /*
-ensureDriver finds a SCSI driver for the bare volumes on the bus, if there
+ensureScsiDriver finds a SCSI driver for the bare volumes on the bus, if there
 are any. Those carry none of their own and the ROM boots by loading one off
 the disk, so one has to be borrowed before they can be attached; what is
 missing around it is made up when they are.
 
-A driver named on the command line is used as it is and never downloaded. The
-default one is fetched if it is not on the working directory already, the way
+A SCSI driver named on the command line is used as it is and never
+downloaded. The default one is fetched if it is not there already, the way
 the ROM is. A machine with nothing but properly formatted disks on it needs
 none of this and never goes looking.
 */
-func (c *Configuration) ensureDriver(out io.Writer) (*storage.Driver, error) {
-	wanted, err := c.needsDriver()
+func (c *Configuration) ensureScsiDriver(out io.Writer) (*storage.ScsiDriver, error) {
+	wanted, err := c.needsScsiDriver()
 	if err != nil {
 		return nil, err
 	}
@@ -237,26 +238,26 @@ func (c *Configuration) ensureDriver(out io.Writer) (*storage.Driver, error) {
 		return nil, nil
 	}
 
-	if _, err := os.Stat(c.DriverFile); err != nil {
-		if !c.driverIsDefault {
-			return nil, fmt.Errorf("can not open the driver image: %w", err)
+	if _, err := os.Stat(c.ScsiDriverFile); err != nil {
+		if !c.scsiDriverIsDefault {
+			return nil, fmt.Errorf("can not open the SCSI driver image: %w", err)
 		}
 
-		fmt.Fprintf(out, "A disk with no driver on it is attached, and %v is not here.\n",
-			c.DriverFile)
-		fmt.Fprintf(out, "Downloading one from %v\n", defaultDriverURL)
+		fmt.Fprintf(out, "A disk with no SCSI driver on it is attached, and %v is not here.\n",
+			c.ScsiDriverFile)
+		fmt.Fprintf(out, "Downloading one from %v\n", defaultScsiDriverURL)
 
-		driver, err := storage.DownloadDriver(c.DriverFile, defaultDriverURL)
+		scsiDriver, err := storage.DownloadScsiDriver(c.ScsiDriverFile, defaultScsiDriverURL)
 		if err != nil {
 			return nil, err
 		}
 
 		fmt.Fprintf(out, "Saved as %v: %v blocks of %v code\n",
-			c.DriverFile, driver.Blocks(), driver.Processor)
-		return driver, nil
+			c.ScsiDriverFile, scsiDriver.Blocks(), scsiDriver.Processor)
+		return scsiDriver, nil
 	}
 
-	return storage.ReadDriver(c.DriverFile)
+	return storage.ReadScsiDriver(c.ScsiDriverFile)
 }
 
 /*
@@ -317,7 +318,7 @@ func (c *Configuration) AddFlags(fs *flag.FlagSet) {
 	fs.Var((*stringList)(&c.Diskettes), "floppy",
 		"400K or 800K diskette image, plain or DiskCopy 4.2, to put in a "+
 			"drive. Repeat for the external drive as well")
-	fs.StringVar(&c.DriverFile, "driver", c.DriverFile,
+	fs.StringVar(&c.ScsiDriverFile, "scsidriver", c.ScsiDriverFile,
 		"a disk image to borrow a SCSI driver from, needed only to attach a "+
 			"bare volume, an image with no partition map on it. Nothing is "+
 			"written to either")
@@ -359,11 +360,11 @@ func (c *Configuration) Validate() error {
 			scsi.TargetCount, len(c.DiskFiles))
 	}
 
-	if c.DriverFile == "" {
-		// No driver was named, take the default one and allow downloading
-		// it, which only happens if a disk turns out to want it
-		c.DriverFile = defaultDriverFile
-		c.driverIsDefault = true
+	if c.ScsiDriverFile == "" {
+		// No SCSI driver was named, take the default one and allow
+		// downloading it, which only happens if a disk turns out to want it
+		c.ScsiDriverFile = defaultScsiDriverFile
+		c.scsiDriverIsDefault = true
 	}
 
 	if len(c.Diskettes) > DriveCount {

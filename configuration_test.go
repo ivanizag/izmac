@@ -311,12 +311,12 @@ func writeVolumeImage(t *testing.T, name string) string {
 }
 
 /*
-A bare volume is attached behind a borrowed driver, so it is accepted however
-it was named. Naming it with -hd and naming it on its own have to behave
-alike, which is why the disks are looked at rather than the way they got
-there.
+A bare volume is attached behind a borrowed SCSI driver, so it is accepted
+however it was named. Naming it with -hd and naming it on its own have to
+behave alike, which is why the disks are looked at rather than the way they
+got there.
 */
-func TestABareVolumeAsksForADriver(t *testing.T) {
+func TestABareVolumeAsksForAScsiDriver(t *testing.T) {
 	volume := writeVolumeImage(t, "volume.dsk")
 
 	for _, args := range [][]string{
@@ -329,19 +329,19 @@ func TestABareVolumeAsksForADriver(t *testing.T) {
 			t.Fatalf("a bare volume was refused with %v: %v", args, err)
 		}
 
-		wanted, err := c.needsDriver()
+		wanted, err := c.needsScsiDriver()
 		if err != nil {
 			t.Fatal(err)
 		}
 		if !wanted {
-			t.Errorf("%v left the bare volume without asking for a driver", args)
+			t.Errorf("%v left the bare volume without asking for a SCSI driver", args)
 		}
 	}
 }
 
-// A driver is only wanted for a bare volume. A disk that carries its own is
-// not a reason to go looking, still less to download one.
-func TestAPartitionedDiskAsksForNoDriver(t *testing.T) {
+// A SCSI driver is only wanted for a bare volume. A disk that carries its own
+// is not a reason to go looking, still less to download one.
+func TestAPartitionedDiskAsksForNoScsiDriver(t *testing.T) {
 	c := NewConfiguration()
 	err := c.ParseFlags("izmac",
 		[]string{"-rom", "rom.bin", writeImage(t, "hard.img", 4*1024*1024, true)}, io.Discard)
@@ -349,42 +349,43 @@ func TestAPartitionedDiskAsksForNoDriver(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	wanted, err := c.needsDriver()
+	wanted, err := c.needsScsiDriver()
 	if err != nil {
 		t.Fatal(err)
 	}
 	if wanted {
-		t.Error("a partitioned disk asked for a driver")
+		t.Error("a partitioned disk asked for a SCSI driver")
 	}
 }
 
-func TestTheDefaultDriverIsUsedWhenNoneIsNamed(t *testing.T) {
+func TestTheDefaultScsiDriverIsUsedWhenNoneIsNamed(t *testing.T) {
 	c := NewConfiguration()
 	err := c.ParseFlags("izmac", []string{"-rom", "rom.bin"}, io.Discard)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if c.DriverFile != defaultDriverFile {
-		t.Errorf("the driver defaults to %v, wanted %v", c.DriverFile, defaultDriverFile)
+	if c.ScsiDriverFile != defaultScsiDriverFile {
+		t.Errorf("the SCSI driver defaults to %v, wanted %v",
+			c.ScsiDriverFile, defaultScsiDriverFile)
 	}
-	if !c.driverIsDefault {
-		t.Error("the default driver was not marked as downloadable")
+	if !c.scsiDriverIsDefault {
+		t.Error("the default SCSI driver was not marked as downloadable")
 	}
 }
 
 // One named on the command line is the caller's to provide, so it is never
 // fetched behind their back
-func TestANamedDriverIsNeverDownloaded(t *testing.T) {
+func TestANamedScsiDriverIsNeverDownloaded(t *testing.T) {
 	c := NewConfiguration()
 	err := c.ParseFlags("izmac",
-		[]string{"-rom", "rom.bin", "-driver", "mine.img"}, io.Discard)
+		[]string{"-rom", "rom.bin", "-scsidriver", "mine.img"}, io.Discard)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if c.driverIsDefault {
-		t.Error("a driver named on the command line was marked as downloadable")
+	if c.scsiDriverIsDefault {
+		t.Error("a SCSI driver named on the command line was marked as downloadable")
 	}
 }
 

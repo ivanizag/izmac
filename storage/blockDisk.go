@@ -35,13 +35,13 @@ type blockDiskFile struct {
 /*
 NewBlockDisk opens a disk image for the SCSI bus, ready for the ROM to boot
 from. A disk that has been through Apple's formatter goes on as it is. A bare
-volume, having none of the map and driver the ROM boots through, is dressed
-in them on the way past, in memory and without the file being touched.
+volume, having none of the map and SCSI driver the ROM boots through, is
+dressed in them on the way past, in memory and without the file being touched.
 
-The driver is real code that has to come from somewhere, so a bare volume can
-only be attached when one has been found to give it.
+The SCSI driver is real code that has to come from somewhere, so a bare volume
+can only be attached when one has been found to give it.
 */
-func NewBlockDisk(filename string, driver *Driver, readOnly bool) (BlockDisk, error) {
+func NewBlockDisk(filename string, scsiDriver *ScsiDriver, readOnly bool) (BlockDisk, error) {
 	kind, err := Classify(filename)
 	if err != nil {
 		return nil, err
@@ -56,10 +56,10 @@ func NewBlockDisk(filename string, driver *Driver, readOnly bool) (BlockDisk, er
 		return disk, nil
 	}
 
-	if driver == nil {
+	if scsiDriver == nil {
 		return nil, bareVolumeError(filename)
 	}
-	return newBareVolumeDisk(disk, driver)
+	return newBareVolumeDisk(disk, scsiDriver)
 }
 
 // newBlockDiskFile opens a disk image. The image is a plain sequence of

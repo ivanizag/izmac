@@ -117,16 +117,17 @@ func NewMac(config *Configuration) (*Mac, error) {
 		return nil, err
 	}
 
-	// The driver is found once and given to every bare volume on the bus.
-	// A machine with nothing but proper disks on it gets none and wants none.
-	driver, err := config.ensureDriver(os.Stdout)
+	// The SCSI driver is found once and given to every bare volume on the
+	// bus. A machine with nothing but proper disks on it gets none and
+	// wants none.
+	scsiDriver, err := config.ensureScsiDriver(os.Stdout)
 	if err != nil {
 		return nil, err
 	}
 
 	disks := make([]storage.BlockDisk, 0, len(config.DiskFiles))
 	for _, filename := range config.DiskFiles {
-		disk, err := storage.NewBlockDisk(filename, driver, false)
+		disk, err := storage.NewBlockDisk(filename, scsiDriver, false)
 		if err != nil {
 			return nil, err
 		}

@@ -13,13 +13,13 @@ import (
 func attachVolume(t *testing.T, blocks int) (BlockDisk, string) {
 	t.Helper()
 
-	driver, err := ReadDriver(writeDonor(t))
+	scsiDriver, err := ReadScsiDriver(writeDonor(t))
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	filename := writeVolume(t, blocks)
-	disk, err := NewBlockDisk(filename, driver, false)
+	disk, err := NewBlockDisk(filename, scsiDriver, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -28,7 +28,7 @@ func attachVolume(t *testing.T, blocks int) (BlockDisk, string) {
 
 /*
 The machine has to see a disk the ROM can boot: a driver descriptor map where
-it looks for one, sending it to a driver that is really there.
+it looks for one, sending it to a SCSI driver that is really there.
 */
 func TestABareVolumeComesUpLookingPartitioned(t *testing.T) {
 	disk, _ := attachVolume(t, 40)
@@ -42,25 +42,25 @@ func TestABareVolumeComesUpLookingPartitioned(t *testing.T) {
 			binary.BigEndian.Uint16(block0))
 	}
 
-	// The descriptor has to name a driver of the type the Plus ROM loads
+	// The descriptor has to name a SCSI driver of the type the Plus ROM loads
 	if got := binary.BigEndian.Uint16(block0[24:]); got != macintoshDriverType {
 		t.Errorf("the descriptor is of type %v, which no Macintosh loads", got)
 	}
 
-	// And what it points at has to be the driver
+	// And what it points at has to be the SCSI driver
 	at := binary.BigEndian.Uint32(block0[18:])
-	driverBlock, err := disk.Read(at)
+	scsiDriverBlock, err := disk.Read(at)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if driverBlock[1] != 1 {
-		t.Errorf("block %v is not the driver, it starts %v", at, driverBlock[:4])
+	if scsiDriverBlock[1] != 1 {
+		t.Errorf("block %v is not the SCSI driver, it starts %v", at, scsiDriverBlock[:4])
 	}
 }
 
 /*
 The map the machine reads has to describe the volume that is really behind
-it, or the driver goes looking in the wrong place.
+it, or the SCSI driver goes looking in the wrong place.
 */
 func TestTheMadeUpMapDescribesTheVolume(t *testing.T) {
 	const blocks = 40
@@ -87,30 +87,31 @@ func TestTheMadeUpMapDescribesTheVolume(t *testing.T) {
 }
 
 /*
-The driver's entry says more about it than this package knows how to write,
-so it is carried over whole from wherever the driver came from. Building it
-from the documented fields alone leaves the driver loading and then going
-quiet, which is a long way to find a missing word.
+The SCSI driver's entry says more about it than this package knows how to
+write, so it is carried over whole from wherever the SCSI driver came from.
+Building it from the documented fields alone leaves the SCSI driver loading
+and then going quiet, which is a long way to find a missing word.
 */
-func TestTheDriverEntryIsCarriedOverWhole(t *testing.T) {
+func TestTheScsiDriverEntryIsCarriedOverWhole(t *testing.T) {
 	disk, _ := attachVolume(t, 40)
 
-	// The driver entry is the second of the three
+	// The SCSI driver entry is the second of the three
 	entry, err := disk.Read(partitionMapStart + 1)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if !bytes.Equal(entry[136:136+len(driverMagic)], driverMagic) {
-		t.Errorf("the driver entry lost what was past the fields built here: %v",
-			entry[136:136+len(driverMagic)])
+	if !bytes.Equal(entry[136:136+len(scsiDriverMagic)], scsiDriverMagic) {
+		t.Errorf("the SCSI driver entry lost what was past the fields built here: %v",
+			entry[136:136+len(scsiDriverMagic)])
 	}
 	if got := strings.TrimRight(string(entry[120:136]), "\x00"); got != "68000" {
-		t.Errorf("the driver entry names the processor %q", got)
+		t.Errorf("the SCSI driver entry names the processor %q", got)
 	}
 	// Where it sits is still this package's to say
-	if got := binary.BigEndian.Uint32(entry[8:]); got != driverStart {
-		t.Errorf("the driver entry covers block %v, the driver is at %v", got, driverStart)
+	if got := binary.BigEndian.Uint32(entry[8:]); got != scsiDriverStart {
+		t.Errorf("the SCSI driver entry covers block %v, the driver is at %v",
+			got, scsiDriverStart)
 	}
 }
 
@@ -229,17 +230,17 @@ func TestAPartitionedDiskIsNotDressed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if disk.Blocks() != driverStart+donorDriverBlocks {
+	if disk.Blocks() != scsiDriverStart+donorScsiDriverBlocks {
 		t.Errorf("a partitioned disk came up %v blocks, it was not left alone",
 			disk.Blocks())
 	}
 }
 
-// Without a driver there is nothing to send the ROM to, so the volume is
+// Without a SCSI driver there is nothing to send the ROM to, so the volume is
 // turned away rather than attached to fail later
-func TestABareVolumeWithoutADriverIsRefused(t *testing.T) {
+func TestABareVolumeWithoutAScsiDriverIsRefused(t *testing.T) {
 	_, err := NewBlockDisk(writeVolume(t, 40), nil, false)
 	if err == nil {
-		t.Fatal("a bare volume was attached with no driver to boot through")
+		t.Fatal("a bare volume was attached with no SCSI driver to boot through")
 	}
 }

@@ -31,7 +31,7 @@ Both frontends take all of these.
 | `-rom <file>` | `default.rom` | the Macintosh Plus ROM image, 128Kb. If the option is not given and the file is not there, it is downloaded once |
 | `-hd <file>` | | a hard disk image for the SCSI bus. Repeat it for more than one, up to seven |
 | `-floppy <file>` | | a 400K or 800K diskette image, plain or DiskCopy 4.2, to put in a drive. Repeat it for the external drive as well |
-| `-driver <file>` | `hddriver.rom` | a disk image to borrow a SCSI driver from, for hard disk images that carry none of their own. If the option is not given and the file is not there, one is downloaded the first time a disk needs it. See [Disks and diskettes](disks.md) |
+| `-scsidriver <file>` | `hddriver.rom` | a disk image to borrow a SCSI driver from, for hard disk images that carry none of their own. If the option is not given and the file is not there, one is downloaded the first time a disk needs it. See [Disks and diskettes](disks.md) |
 | `-ram <kb>` | `1024` | the memory size in Kb, `1024` or `4096`. Those are the two the real machine could be built with |
 | `-speed <mhz>` | `plus` | `plus` for the real 7.8336 MHz, `full` for as fast as your machine goes, or a number of Mhz |
 | `-pram <file>` | `pram.bin` | where the parameter RAM is kept between runs |
