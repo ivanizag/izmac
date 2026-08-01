@@ -72,7 +72,7 @@ func TestTheClipboardCanBeTurnedOff(t *testing.T) {
 		t.Error("-clipboard=false left the clipboard shared")
 	}
 
-	m := newMac(c, storage.RomFromData(make([]uint8, storage.RomSize)), nil)
+	m := ensureNewMac(t, c, storage.RomFromData(make([]uint8, storage.RomSize)), nil, nil)
 	if m.HasClipboard() {
 		t.Error("the machine shares its clipboard with the clipboard turned off")
 	}
