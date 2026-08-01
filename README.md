@@ -10,6 +10,10 @@ go run ./frontend/macebiten system.img work.img scratch.img
 ```
 
 
+The [manual](doc/manual.md) covers all of this in full: the disks, the
+keyboard and the mouse, every option, and what to do when something does not
+work.
+
 ## Installing
 
 No installation required. [Download](https://github.com/ivanizag/izmac/releases)
