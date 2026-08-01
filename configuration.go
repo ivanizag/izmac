@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"os"
 	"strconv"
 	"strings"
 
@@ -81,6 +82,24 @@ const (
 	// as the host can go
 	speedPlus = "plus"
 	speedFull = "full"
+
+	// defaultDriverFile is where a borrowed SCSI driver is kept, and is not
+	// a ROM at all: it is the front of a disk image, the maps and the
+	// driver in the layout they were found in. The name says what it is for.
+	defaultDriverFile = "hddriver.rom"
+
+	/*
+		defaultDriverURL is a blank disk formatted by Apple's HD SC Setup,
+		out of a collection of them kept for the SCSI adapters people put in
+		real machines. It is pinned to the commit rather than the branch, so
+		that what is fetched is the file that was tested and not whatever
+		the branch has moved on to.
+	*/
+	defaultDriverURL = "https://raw.githubusercontent.com/MrGasS/" +
+		"Blank-SCSI-hard-disk-images-for-Macintosh/" +
+		"1e4b92eed88b3d0b8d535e6387f6813bd40b512b/" +
+		"Blank%20Apple%20HD%20SC%20formatted%20images/" +
+		"20mb%20%5Bpce-macplus%20-%20AppleHDSC%5D.zip"
 )
 
 // NewConfiguration returns the default configuration
@@ -173,6 +192,48 @@ func (c *Configuration) needsDriver() (bool, error) {
 		}
 	}
 	return false, nil
+}
+
+/*
+ensureDriver finds a SCSI driver for the bare volumes on the bus, if there
+are any. Those carry none of their own and the ROM boots by loading one off
+the disk, so one has to be borrowed before they can be attached; what is
+missing around it is made up when they are.
+
+A driver named on the command line is used as it is and never downloaded. The
+default one is fetched if it is not on the working directory already, the way
+the ROM is. A machine with nothing but properly formatted disks on it needs
+none of this and never goes looking.
+*/
+func (c *Configuration) ensureDriver(out io.Writer) (*storage.Driver, error) {
+	wanted, err := c.needsDriver()
+	if err != nil {
+		return nil, err
+	}
+	if !wanted {
+		return nil, nil
+	}
+
+	if _, err := os.Stat(c.DriverFile); err != nil {
+		if !c.driverIsDefault {
+			return nil, fmt.Errorf("can not open the driver image: %w", err)
+		}
+
+		fmt.Fprintf(out, "A disk with no driver on it is attached, and %v is not here.\n",
+			c.DriverFile)
+		fmt.Fprintf(out, "Downloading one from %v\n", defaultDriverURL)
+
+		driver, err := storage.DownloadDriver(c.DriverFile, defaultDriverURL)
+		if err != nil {
+			return nil, err
+		}
+
+		fmt.Fprintf(out, "Saved as %v: %v blocks of %v code\n",
+			c.DriverFile, driver.Blocks(), driver.Processor)
+		return driver, nil
+	}
+
+	return storage.ReadDriver(c.DriverFile)
 }
 
 /*
