@@ -61,9 +61,23 @@ finds one of them and you may find a hard disk does not come up.
 
 ## The first run
 
-izmac has no software of its own to boot. You need a disk image with a System
-on it — see [Disks and diskettes](disks.md) for what those are and where they
-go. Given one, this is the whole of it:
+Run izmac with nothing at all and it comes up on MacPaint:
+
+```bash
+izmac
+```
+
+There is no software inside izmac either, so what happens the first time is
+the same as with the ROM. With no image named there is nothing to boot, so
+izmac fetches a MacPaint 1.5 diskette — 400K, with a System and a Finder of
+its own on it — saves it as `macpaint.dsk` in the directory you ran it from,
+and puts it in the internal drive. After that it uses that file and downloads
+nothing.
+
+What is on it is a Macintosh of 1985 and not much more: a System, a Finder,
+and the program that sold the machine. To run anything else you need a disk
+image of your own, and naming one is all it takes — see
+[Disks and diskettes](disks.md) for what those are and where they go.
 
 ```bash
 izmac mydisk.img
@@ -110,6 +124,7 @@ Everything goes in the directory you ran it from:
 | File | What it is |
 |---|---|
 | `default.rom` | the ROM, if izmac had to download one |
+| `macpaint.dsk` | the MacPaint diskette, if izmac had to download one because you named no image |
 | `pram.bin` | the parameter RAM, which is where the machine keeps the date, the volume and the desktop settings between runs. Change it with `-pram` |
 | `izmac-<date>-<time>.png` | a screenshot, when you ask for one from the menu |
 

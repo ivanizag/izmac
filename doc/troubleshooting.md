@@ -12,6 +12,11 @@ copy izmac fetches lives at the Internet Archive, so this needs a network and
 a site that is up. If either is missing, find a Macintosh Plus ROM image
 yourself and name it with `-rom`.
 
+**"No disk image was given" and then a download that fails.** With nothing
+named there is nothing to boot, so izmac fetches the MacPaint diskette it
+starts on, and that lives at the Internet Archive too. Name a disk image of
+your own and it is not needed at all.
+
 **"the ROM file is N bytes, a Macintosh Plus ROM is 131072".** The file is not
 a Plus ROM: 128Kb exactly is the size, and a 64Kb one is from a 128K or 512K
 Macintosh, which izmac does not emulate.

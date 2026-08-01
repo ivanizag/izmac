@@ -69,6 +69,11 @@ type Configuration struct {
 	// driverIsDefault tells the same of the driver image
 	driverIsDefault bool
 
+	// disketteFile is where the diskette booted when nothing was named on
+	// the command line is kept. There is no option for it: it is a field
+	// rather than a constant so that the tests can put it out of the way.
+	disketteFile string
+
 	// cycleDurationNs is Speed as the nanoseconds a cycle lasts, or zero
 	// for no throttling at all
 	cycleDurationNs float64
@@ -100,15 +105,33 @@ const (
 		"1e4b92eed88b3d0b8d535e6387f6813bd40b512b/" +
 		"Blank%20Apple%20HD%20SC%20formatted%20images/" +
 		"20mb%20%5Bpce-macplus%20-%20AppleHDSC%5D.zip"
+
+	// defaultDisketteFile is where the diskette booted when nothing was
+	// named is kept
+	defaultDisketteFile = "macpaint.dsk"
+
+	/*
+		defaultDisketteURL is MacPaint 1.5, a 400Kb startup diskette with
+		System 2.0 and Finder 2.2 on it, kept at the Internet Archive.
+
+		The version matters. The MacPaint 1.0 diskette of the same
+		collection carries the System .97 of January 1984, which is the
+		software of the 128K Macintosh and does not run on this machine: it
+		reads its boot blocks, puts up the smiling Macintosh and then
+		crashes into a screen of noise. 1.5 is the earliest one that comes
+		up on a Plus.
+	*/
+	defaultDisketteURL = "https://archive.org/download/mac_Paint_2/Paint_2.dsk"
 )
 
 // NewConfiguration returns the default configuration
 func NewConfiguration() *Configuration {
 	c := &Configuration{
-		PramFile:  defaultPramFile,
-		RamSizeKb: defaultRamSizeKb,
-		Speed:     speedPlus,
-		Clipboard: true,
+		PramFile:     defaultPramFile,
+		RamSizeKb:    defaultRamSizeKb,
+		Speed:        speedPlus,
+		Clipboard:    true,
+		disketteFile: defaultDisketteFile,
 	}
 	c.cycleDurationNs = cycleDurationOf(CPUClockMhz)
 	return c
@@ -234,6 +257,39 @@ func (c *Configuration) ensureDriver(out io.Writer) (*storage.Driver, error) {
 	}
 
 	return storage.ReadDriver(c.DriverFile)
+}
+
+/*
+ensureStartupDiskette gives the machine something to boot when the command
+line named no image at all, which would otherwise leave it sitting on the
+blinking diskette forever. What is fetched is MacPaint 1.5, a startup
+diskette carrying a System, a Finder and the program the machine was sold on,
+and it goes in the internal drive.
+
+It is kept on the working directory the way the ROM and the driver are, so
+the download happens once. Naming any image, a hard disk or a diskette, is
+enough to say what to boot instead, and then nothing is fetched at all.
+*/
+func (c *Configuration) ensureStartupDiskette(out io.Writer) error {
+	if len(c.DiskFiles) != 0 || len(c.Diskettes) != 0 {
+		return nil
+	}
+
+	if _, err := os.Stat(c.disketteFile); err != nil {
+		fmt.Fprintf(out, "No disk image was given, and %v is not here.\n",
+			c.disketteFile)
+		fmt.Fprintf(out, "Downloading MacPaint from %v\n", defaultDisketteURL)
+
+		diskette, err := storage.DownloadDiskette(c.disketteFile, defaultDisketteURL)
+		if err != nil {
+			return err
+		}
+
+		fmt.Fprintf(out, "Saved as %v\n", diskette)
+	}
+
+	c.Diskettes = append(c.Diskettes, c.disketteFile)
+	return nil
 }
 
 /*

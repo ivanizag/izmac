@@ -29,7 +29,14 @@ brew install ivanizag/tap/izmac
 
 izmac needs a 128Kb Macintosh Plus ROM image, if none is provided it is downloaded from archive.org
 
+With no disk image either, a MacPaint diskette is downloaded to boot from and
+kept as `macpaint.dsk`, so that izmac on its own comes up with something to
+use.
+
 ```bash
+# Nothing named, boots MacPaint
+go run ./frontend/macebiten
+
 # Windowed
 go run ./frontend/macebiten mydisk.img
 

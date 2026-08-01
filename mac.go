@@ -100,9 +100,14 @@ const (
 
 // NewMac builds an emulated Macintosh Plus from a configuration. The default
 // ROM is downloaded if it is the one wanted and it is not on the working
-// directory.
+// directory, and so is a diskette to boot if nothing was named to boot from.
 func NewMac(config *Configuration) (*Mac, error) {
 	err := ensureRom(config, os.Stdout)
+	if err != nil {
+		return nil, err
+	}
+
+	err = config.ensureStartupDiskette(os.Stdout)
 	if err != nil {
 		return nil, err
 	}

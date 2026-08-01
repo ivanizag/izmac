@@ -7,14 +7,17 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path"
+	"strings"
 	"time"
 )
 
 /*
-The two things izmac needs and can not carry: the ROM, and a SCSI driver for
-the disks that have none of their own. Both are Apple's code, so neither is
-distributed and both are fetched on demand. Whether to fetch is the caller's
-decision; this only does it.
+The three things izmac needs and can not carry: the ROM, a SCSI driver for the
+disks that have none of their own, and a diskette to boot when nothing at all
+was named. All of it is somebody else's software, so none of it is distributed
+and all of it is fetched on demand. Whether to fetch is the caller's decision;
+this only does it.
 
 They are fetched the same way and saved on the same terms. What is downloaded
 is checked before anything is written, so a download that turns out to be
@@ -114,11 +117,61 @@ func DownloadDriver(filename string, url string) (*Driver, error) {
 }
 
 /*
-frontOfZippedImage takes the first blocks of the one disk image in a zip. The
-image inside is far bigger than the part wanted, so it is read up to the
-length needed and no further rather than unpacked whole.
+disketteDownloadLimit bounds what is read for a diskette, packed and unpacked
+alike. The biggest one the machine can read is 800Kb of sectors with 19Kb of
+tags behind them, so anything that goes past this is not a diskette however it
+got here.
 */
-func frontOfZippedImage(archive []uint8) ([]uint8, error) {
+const disketteDownloadLimit = 2 << 20
+
+/*
+DownloadDiskette fetches a diskette image and saves it as it comes. It is
+parsed before it is written, the way the others are, so that what is left on
+the working directory is a diskette that goes in a drive on the next run
+without being downloaded again.
+
+The image is taken as it is or out of a zip, since the places these are
+published do it both ways, and a diskette that arrives zipped is unpacked
+rather than turned away.
+*/
+func DownloadDiskette(filename string, url string) (*FloppyDisk, error) {
+	data, err := download(url, disketteDownloadLimit, "diskette")
+	if err != nil {
+		return nil, err
+	}
+
+	if isZip(data) {
+		data, err = zippedImage(data)
+		if err != nil {
+			return nil, fmt.Errorf("what was downloaded from %v is no use: %w", url, err)
+		}
+	}
+
+	d := &FloppyDisk{name: filename, filename: filename}
+	if err := d.load(data); err != nil {
+		return nil, fmt.Errorf("what was downloaded is not a diskette: %w", err)
+	}
+
+	if err := os.WriteFile(filename, data, 0o600); err != nil {
+		return nil, fmt.Errorf("can not save the diskette: %w", err)
+	}
+
+	return d, nil
+}
+
+// isZip tells an archive from an image by the four bytes a zip starts with,
+// which no diskette does
+func isZip(data []uint8) bool {
+	return len(data) >= 4 && string(data[:4]) == "PK\x03\x04"
+}
+
+/*
+theOneFileIn finds the disk image in a zip. A zip packed on a Macintosh
+carries a second entry for every file, under __MACOSX and with the name
+prefixed, holding the resource fork and the Finder information split off it.
+Those are not images and are stepped over.
+*/
+func theOneFileIn(archive []uint8) (*zip.File, error) {
 	reader, err := zip.NewReader(bytes.NewReader(archive), int64(len(archive)))
 	if err != nil {
 		return nil, fmt.Errorf("not a zip: %w", err)
@@ -128,21 +181,63 @@ func frontOfZippedImage(archive []uint8) ([]uint8, error) {
 		if entry.FileInfo().IsDir() {
 			continue
 		}
-
-		file, err := entry.Open()
-		if err != nil {
-			return nil, err
+		if strings.HasPrefix(entry.Name, "__MACOSX/") ||
+			strings.HasPrefix(path.Base(entry.Name), "._") {
+			continue
 		}
-		defer file.Close()
-
-		data := make([]uint8, driverFileBlocks*BlockSize)
-		_, err = io.ReadFull(file, data)
-		if err != nil {
-			return nil, fmt.Errorf("the zip holds %v, which is too short to be a disk: %w",
-				entry.Name, err)
-		}
-		return data, nil
+		return entry, nil
 	}
 
 	return nil, fmt.Errorf("the zip holds no file")
+}
+
+/*
+frontOfZippedImage takes the first blocks of the one disk image in a zip. The
+image inside is far bigger than the part wanted, so it is read up to the
+length needed and no further rather than unpacked whole.
+*/
+func frontOfZippedImage(archive []uint8) ([]uint8, error) {
+	entry, err := theOneFileIn(archive)
+	if err != nil {
+		return nil, err
+	}
+
+	file, err := entry.Open()
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	data := make([]uint8, driverFileBlocks*BlockSize)
+	_, err = io.ReadFull(file, data)
+	if err != nil {
+		return nil, fmt.Errorf("the zip holds %v, which is too short to be a disk: %w",
+			entry.Name, err)
+	}
+	return data, nil
+}
+
+/*
+zippedImage unpacks the one disk image in a zip whole, which is what a
+diskette is taken as: it is small enough to keep and every byte of it is
+wanted, tags and all.
+*/
+func zippedImage(archive []uint8) ([]uint8, error) {
+	entry, err := theOneFileIn(archive)
+	if err != nil {
+		return nil, err
+	}
+
+	file, err := entry.Open()
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	data, err := io.ReadAll(io.LimitReader(file, disketteDownloadLimit))
+	if err != nil {
+		return nil, fmt.Errorf("the zip holds %v, which can not be read: %w",
+			entry.Name, err)
+	}
+	return data, nil
 }
