@@ -130,7 +130,7 @@ func newPastingMac(t *testing.T, userMode bool) *Mac {
 	config := NewConfiguration()
 	config.RomFile = "<test>"
 
-	m := newMac(config, storage.RomFromData(data), nil)
+	m := ensureNewMac(t, config, storage.RomFromData(data), nil, nil)
 
 	// The machine is started here rather than by the first run, so that the
 	// overlay can be taken off: the program writes to the low memory the
