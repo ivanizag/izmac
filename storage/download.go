@@ -72,27 +72,28 @@ func DownloadRom(filename string, url string) (*Rom, error) {
 
 const (
 	/*
-		driverFileBlocks is how much of the donor is kept. It only has to
-		reach past the driver, and every disk Apple's formatter writes puts
-		that inside the first hundred or so blocks. Keeping too much costs
-		nothing and keeping too little is caught: the image is parsed before
-		it is written and a driver past the end is a read that fails.
+		scsiDriverFileBlocks is how much of the donor is kept. It only has to
+		reach past the SCSI driver, and every disk Apple's formatter writes
+		puts that inside the first hundred or so blocks. Keeping too much
+		costs nothing and keeping too little is caught: the image is parsed
+		before it is written and a driver past the end is a read that fails.
 	*/
-	driverFileBlocks = 128
+	scsiDriverFileBlocks = 128
 
-	// driverDownloadLimit bounds what is read for a driver. The disks that
-	// carry one come zipped and the smallest of them are tens of kilobytes.
-	driverDownloadLimit = 4 << 20
+	// scsiDriverDownloadLimit bounds what is read for a SCSI driver. The
+	// disks that carry one come zipped and the smallest of them are tens of
+	// kilobytes.
+	scsiDriverDownloadLimit = 4 << 20
 )
 
 /*
-DownloadDriver fetches a disk image with a driver on it and keeps the front
-of it in filename. What is saved is not a driver on its own but the first
-blocks of a disk, the driver descriptor map and the partition map along with
-it, so that it parses as the disk image it is.
+DownloadScsiDriver fetches a disk image with a SCSI driver on it and keeps the
+front of it in filename. What is saved is not a driver on its own but the
+first blocks of a disk, the driver descriptor map and the partition map along
+with it, so that it parses as the disk image it is.
 */
-func DownloadDriver(filename string, url string) (*Driver, error) {
-	archive, err := download(url, driverDownloadLimit, "driver")
+func DownloadScsiDriver(filename string, url string) (*ScsiDriver, error) {
+	archive, err := download(url, scsiDriverDownloadLimit, "SCSI driver")
 	if err != nil {
 		return nil, err
 	}
@@ -102,18 +103,18 @@ func DownloadDriver(filename string, url string) (*Driver, error) {
 		return nil, fmt.Errorf("what was downloaded from %v is no use: %w", url, err)
 	}
 
-	driver, err := readDriverAt(bytes.NewReader(data), url)
+	scsiDriver, err := readScsiDriverAt(bytes.NewReader(data), url)
 	if err != nil {
-		return nil, fmt.Errorf("what was downloaded is not a disk with a driver: %w", err)
+		return nil, fmt.Errorf("what was downloaded is not a disk with a SCSI driver: %w", err)
 	}
 
 	err = os.WriteFile(filename, data, 0o600)
 	if err != nil {
-		return nil, fmt.Errorf("can not save the driver: %w", err)
+		return nil, fmt.Errorf("can not save the SCSI driver: %w", err)
 	}
 
-	driver.source = filename
-	return driver, nil
+	scsiDriver.source = filename
+	return scsiDriver, nil
 }
 
 /*
@@ -208,7 +209,7 @@ func frontOfZippedImage(archive []uint8) ([]uint8, error) {
 	}
 	defer file.Close()
 
-	data := make([]uint8, driverFileBlocks*BlockSize)
+	data := make([]uint8, scsiDriverFileBlocks*BlockSize)
 	_, err = io.ReadFull(file, data)
 	if err != nil {
 		return nil, fmt.Errorf("the zip holds %v, which is too short to be a disk: %w",

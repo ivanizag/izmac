@@ -6,9 +6,9 @@ import "fmt"
 Putting a bare HFS volume on the bus without touching the file it lives in.
 
 The volume is all there is in one of these images: no driver descriptor map,
-no partition map and no driver, none of which the emulators that patch the
-ROM have any use for. A real ROM boots through all three, so what is missing
-is made up here and held in memory in front of the file.
+no partition map and no SCSI driver, none of which the emulators that patch
+the ROM have any use for. A real ROM boots through all three, so what is
+missing is made up here and held in memory in front of the file.
 
 The machine sees a disk 96 blocks longer than the file, laid out the way
 Apple's formatter writes one. A read of those first blocks is answered from
@@ -18,9 +18,9 @@ the file is the same bare volume afterwards as it was before, still good for
 the emulator it was made for.
 
 Writes to the header stay in memory. The machine has no reason to write
-there, having never been told the disk has room to spare, but a driver that
-does gets a disk that remembers rather than one that refuses, and the file
-keeps out of it either way.
+there, having never been told the disk has room to spare, but a SCSI driver
+that does gets a disk that remembers rather than one that refuses, and the
+file keeps out of it either way.
 */
 
 // blockDiskBareVolume is a bare volume dressed as a partitioned disk
@@ -32,24 +32,24 @@ type blockDiskBareVolume struct {
 
 /*
 newBareVolumeDisk puts a bare volume on the bus behind a made up driver
-descriptor map, partition map and driver. The driver is real code and has to
-come from somewhere, so it is passed in rather than invented.
+descriptor map, partition map and SCSI driver. The SCSI driver is real code
+and has to come from somewhere, so it is passed in rather than invented.
 */
-func newBareVolumeDisk(volume BlockDisk, driver *Driver) (BlockDisk, error) {
-	if driver.Blocks() > driverBlocks {
-		return nil, fmt.Errorf("the driver takes %v blocks, more than the %v the "+
-			"layout leaves for it", driver.Blocks(), driverBlocks)
+func newBareVolumeDisk(volume BlockDisk, scsiDriver *ScsiDriver) (BlockDisk, error) {
+	if scsiDriver.Blocks() > scsiDriverBlocks {
+		return nil, fmt.Errorf("the SCSI driver takes %v blocks, more than the %v the "+
+			"layout leaves for it", scsiDriver.Blocks(), scsiDriverBlocks)
 	}
 
 	return &blockDiskBareVolume{
 		volume: volume,
-		header: buildHeader(driver, volume.Blocks()),
+		header: buildHeader(scsiDriver, volume.Blocks()),
 
 		// The name reaches the summary and the errors, and a disk that is
-		// 96 blocks longer than the file behind it and boots through a
+		// 96 blocks longer than the file behind it and boots through a SCSI
 		// driver from somewhere else should say as much somewhere
-		name: fmt.Sprintf("%v (bare volume, driver from %v)",
-			volume.Name(), driver.source),
+		name: fmt.Sprintf("%v (bare volume, SCSI driver from %v)",
+			volume.Name(), scsiDriver.source),
 	}, nil
 }
 
