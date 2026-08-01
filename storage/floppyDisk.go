@@ -143,6 +143,17 @@ func (d *FloppyDisk) Sides() int {
 	return d.sides
 }
 
+// String says what the diskette turned out to be, which is what the summary
+// of a download reports
+func (d *FloppyDisk) String() string {
+	sides := "single sided"
+	if d.sides == 2 {
+		sides = "double sided"
+	}
+	return fmt.Sprintf("%v, a %vKb %v diskette",
+		d.name, d.sides*floppySize400K/1024, sides)
+}
+
 // IsReadOnly tells if the diskette is locked, which is what the machine sees
 // through the write protect line
 func (d *FloppyDisk) IsReadOnly() bool {

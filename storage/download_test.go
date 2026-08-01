@@ -87,14 +87,29 @@ func zipOf(t *testing.T, name string, image []uint8, blocks int) []uint8 {
 	padded := make([]uint8, blocks*BlockSize)
 	copy(padded, image)
 
+	return zipOfAll(t, zipEntry{name, padded})
+}
+
+// zipEntry is one file to pack, as it goes in the archive
+type zipEntry struct {
+	name string
+	data []uint8
+}
+
+// zipOfAll packs several files, in the order they are given
+func zipOfAll(t *testing.T, entries ...zipEntry) []uint8 {
+	t.Helper()
+
 	buffer := &bytes.Buffer{}
 	writer := zip.NewWriter(buffer)
-	file, err := writer.Create(name)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := file.Write(padded); err != nil {
-		t.Fatal(err)
+	for _, entry := range entries {
+		file, err := writer.Create(entry.name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := file.Write(entry.data); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if err := writer.Close(); err != nil {
 		t.Fatal(err)
@@ -214,6 +229,96 @@ func TestTheDriverIsDownloadedAndSaved(t *testing.T) {
 	// back on the next run the same way any donor is
 	if _, err := ReadDriver(filename); err != nil {
 		t.Errorf("the file saved does not parse as a disk with a driver: %v", err)
+	}
+}
+
+// diskette400K is a plain image of the size the smaller drives write, which
+// is what the startup diskette comes as
+func diskette400K() []uint8 {
+	image := make([]uint8, floppySize400K)
+	image[0], image[1] = 'L', 'K' // the boot blocks
+	return image
+}
+
+func TestADisketteIsDownloadedAndSaved(t *testing.T) {
+	// A plain image, which is how the one izmac fetches is published
+	server := newServer(diskette400K(), http.StatusOK)
+	defer server.Close()
+
+	filename := filepath.Join(t.TempDir(), "macpaint.dsk")
+	diskette, err := DownloadDiskette(filename, server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if diskette.Sides() != 1 {
+		t.Errorf("the diskette came out with %v sides, wanted the one a 400Kb image has",
+			diskette.Sides())
+	}
+
+	saved, err := os.ReadFile(filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(saved) != floppySize400K {
+		t.Errorf("the file saved is %v bytes, wanted the %v of the image",
+			len(saved), floppySize400K)
+	}
+
+	// And the point of saving it: it goes in a drive on the next run
+	// without being downloaded again
+	if _, err := NewFloppyDisk(filename, false); err != nil {
+		t.Errorf("the file saved does not read back as a diskette: %v", err)
+	}
+}
+
+/*
+A diskette also comes zipped, which is how the other collections publish
+them. A zip packed on a Macintosh carries a second entry for every file,
+under __MACOSX and holding what was in the resource fork; it comes first in
+the archive and taking it for the image would leave the download refused.
+*/
+func TestAZippedDisketteIsUnpacked(t *testing.T) {
+	archive := zipOfAll(t,
+		zipEntry{"__MACOSX/._MacPaint 1.0.img", []uint8("the resource fork")},
+		zipEntry{"MacPaint 1.0.img", diskette400K()})
+
+	server := newServer(archive, http.StatusOK)
+	defer server.Close()
+
+	filename := filepath.Join(t.TempDir(), "macpaint.dsk")
+	if _, err := DownloadDiskette(filename, server.URL); err != nil {
+		t.Fatalf("the image next to the fork it was packed with was not found: %v", err)
+	}
+
+	saved, err := os.ReadFile(filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(saved) != floppySize400K {
+		t.Errorf("what was saved is %v bytes, so it is not the image", len(saved))
+	}
+}
+
+// An image of a size no drive of this machine writes is refused before
+// anything is written, the way the others are
+func TestABadDisketteDownloadLeavesNoFile(t *testing.T) {
+	for _, download := range [][]uint8{
+		make([]uint8, floppySize400K/2),
+		zipOfAll(t, zipEntry{"half.img", make([]uint8, floppySize400K/2)}),
+		[]uint8("<html>not a diskette at all</html>"),
+	} {
+		server := newServer(download, http.StatusOK)
+
+		filename := filepath.Join(t.TempDir(), "macpaint.dsk")
+		if _, err := DownloadDiskette(filename, server.URL); err == nil {
+			t.Error("a download that is not a diskette was accepted")
+		}
+		if _, err := os.Stat(filename); err == nil {
+			t.Error("a broken download was left on the disk")
+		}
+
+		server.Close()
 	}
 }
 

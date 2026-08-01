@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/ivanizag/izmac/scsi"
@@ -384,6 +385,54 @@ func TestANamedDriverIsNeverDownloaded(t *testing.T) {
 
 	if c.driverIsDefault {
 		t.Error("a driver named on the command line was marked as downloadable")
+	}
+}
+
+/*
+The startup diskette is what a machine given nothing at all boots from, so
+that izmac started with no arguments comes up with something on the screen
+instead of the blinking diskette. It is fetched once and kept, and the tests
+below use one already on a temporary directory: what is tested here is when
+it is wanted and where it goes, not the download itself.
+*/
+func TestTheStartupDisketteAlreadyThereGoesInTheInternalDrive(t *testing.T) {
+	c := NewConfiguration()
+	c.disketteFile = writeImage(t, "macpaint.dsk", 400*1024, false)
+
+	out := &strings.Builder{}
+	if err := c.ensureStartupDiskette(out); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(c.Diskettes) != 1 || c.Diskettes[0] != c.disketteFile {
+		t.Errorf("the diskettes are %v, wanted the startup one in the first drive",
+			c.Diskettes)
+	}
+	if out.String() != "" {
+		t.Errorf("a diskette already there was reported as missing: %q", out.String())
+	}
+}
+
+// Naming any image at all says what to boot, and then nothing is fetched and
+// nothing is put in a drive
+func TestNoStartupDisketteIsWantedWhenAnImageIsGiven(t *testing.T) {
+	for _, c := range []*Configuration{
+		{DiskFiles: []string{"mine.img"}},
+		{Diskettes: []string{"mine.dsk"}},
+	} {
+		c.disketteFile = filepath.Join(t.TempDir(), "macpaint.dsk")
+
+		out := &strings.Builder{}
+		if err := c.ensureStartupDiskette(out); err != nil {
+			t.Fatal(err)
+		}
+
+		if len(c.Diskettes) > 1 {
+			t.Errorf("the diskettes are %v, wanted only what was given", c.Diskettes)
+		}
+		if out.String() != "" {
+			t.Errorf("an image was given and a diskette was fetched anyway: %q", out.String())
+		}
 	}
 }
 

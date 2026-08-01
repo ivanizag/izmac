@@ -122,6 +122,26 @@ DiskCopy image is written back as a DiskCopy image, checksums and all.
 image is recognised as a diskette and turned away with a reason rather than
 quietly attached to the SCSI bus as a hard disk.
 
+### When you name nothing at all
+
+A machine with no disk in it sits on the blinking diskette forever, so izmac
+does not leave you there. If the command line names no image, neither a hard
+disk nor a diskette, it fetches one the first time and puts it in the internal
+drive:
+
+```bash
+izmac
+```
+
+What it fetches is MacPaint 1.5, a 400K startup diskette with System 2.0 and
+Finder 2.2 on it, and it is saved as `macpaint.dsk` on the working directory,
+the way the ROM is. It is downloaded once and used from the file after that,
+and naming any image of your own is enough to stop it happening at all.
+
+The diskette is written back like any other, so what you draw and save on it
+stays on it. Delete the file and the next run with nothing named fetches a
+fresh copy.
+
 ### Putting one in
 
 While the machine runs, **drop the image on the window**. It goes into the

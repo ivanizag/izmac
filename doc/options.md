@@ -19,7 +19,8 @@ after it is taken as a disk image.
 
 Any file named without an option is a disk image, and izmac works out from the
 image itself whether it is a hard disk or a diskette. See
-[Disks and diskettes](disks.md).
+[Disks and diskettes](disks.md). Name none at all and izmac fetches a MacPaint
+diskette to boot from, once, and keeps it as `macpaint.dsk`.
 
 ## The machine
 
