@@ -179,7 +179,7 @@ func ebitenRun(m *izmac.Mac) error {
 		mouse:     mouse,
 		clipboard: clip,
 		menu:      menu,
-		title:     "iz" + m.Name,
+		title:     "izmac - A " + m.Name + " emulator",
 		width:     size.X,
 		height:    size.Y,
 	}
