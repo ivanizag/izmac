@@ -78,7 +78,7 @@ decisions behind the emulator.
 - The `mac128` driver of MAME
 
 
-The files izmac optionlly fetches:
+While runnng izmac optionally fetches:
 - The ROM from The Internet Archive: [Macintosh ROM archive](https://archive.org/details/mac_rom_archive_-_as_of_8-19-2011)
 - MacPaoint 1.5 from The Internet Archive: [MacPaint 1.5 diskette](https://archive.org/details/mac_Paint_2) 
 - The scsi driver from MrGaaS's github: [blank formatted disks](https://github.com/MrGasS/Blank-SCSI-hard-disk-images-for-Macintosh)
