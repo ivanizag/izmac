@@ -80,7 +80,9 @@ type Configuration struct {
 }
 
 const (
-	defaultPramFile  = "pram.bin"
+	// defaultPramFile, and the two below, carry the izmac_ prefix that
+	// everything izmac writes for itself carries. See defaultRomFile.
+	defaultPramFile  = "izmac_pram.bin"
 	defaultRamSizeKb = 1024
 
 	// speedPlus runs at the clock of the real machine, speedFull as fast
@@ -92,7 +94,7 @@ const (
 	// not a ROM at all: it is the front of a disk image, the maps and the
 	// SCSI driver in the layout they were found in. The name says what it
 	// is for.
-	defaultScsiDriverFile = "hddriver.rom"
+	defaultScsiDriverFile = "izmac_hddriver.rom"
 
 	/*
 		defaultScsiDriverURL is a blank disk formatted by Apple's HD SC Setup,
@@ -109,7 +111,7 @@ const (
 
 	// defaultDisketteFile is where the diskette booted when nothing was
 	// named is kept
-	defaultDisketteFile = "macpaint.dsk"
+	defaultDisketteFile = "izmac_macpaint.dsk"
 
 	/*
 		defaultDisketteURL is MacPaint 1.5, a 400Kb startup diskette with
@@ -279,14 +281,14 @@ func (c *Configuration) ensureStartupDiskette(out io.Writer) error {
 	if _, err := os.Stat(c.disketteFile); err != nil {
 		fmt.Fprintf(out, "No disk image was given, and %v is not here.\n",
 			c.disketteFile)
-		fmt.Fprintf(out, "Downloading MacPaint from %v\n", defaultDisketteURL)
+		fmt.Fprintf(out, "  Downloading MacPaint from %v\n", defaultDisketteURL)
 
 		diskette, err := storage.DownloadDiskette(c.disketteFile, defaultDisketteURL)
 		if err != nil {
 			return err
 		}
 
-		fmt.Fprintf(out, "Saved as %v\n", diskette)
+		fmt.Fprintf(out, "  Saved as %v\n", diskette)
 	}
 
 	c.Diskettes = append(c.Diskettes, c.disketteFile)

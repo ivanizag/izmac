@@ -30,7 +30,7 @@ is a debugging tool and is not shipped.
 Each archive holds the binary, `README.md` and `LICENSE`, flat.
 
 The ROM is copyrighted and is never packaged. A machine without one downloads
-it on the first run, which is what `-rom` and `default.rom` are about.
+it on the first run, which is what `-rom` and `izmac_default.rom` are about.
 
 ## Requirements
 

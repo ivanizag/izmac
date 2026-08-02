@@ -5,12 +5,20 @@
 *.img
 pram.bin
 *.png
+
+# The screenshots the emulator writes are ignored above, the ones the
+# documentation is written around are not
+!doc/*.png
+
 frontend/*/*.vhd
 AGENTS.md
 todo.txt
+.claude/
 
 # The binaries the release builds, in case one is built by hand
 frontend/*/izmac
 frontend/*/izmac.exe
+/izmac
+/izmac.exe
 izmac-*.tar.gz
 izmac-*.zip

@@ -92,8 +92,8 @@ The SCSI driver is the one part that cannot be made up, because it is real code
 that the ROM jumps into. It is Apple's, so izmac carries none and fetches one
 the first time a disk turns out to want it, exactly as it fetches the ROM. What
 it keeps is the front of a blank disk that has a SCSI driver on it, saved as
-`hddriver.rom` on the working directory. A machine with nothing but properly
-formatted disks on it never goes looking.
+`izmac_hddriver.rom` on the working directory. A machine with nothing but
+properly formatted disks on it never goes looking.
 
 To use a SCSI driver you already have rather than the one izmac would fetch,
 name a disk image that has one. It is only ever read:
@@ -134,9 +134,10 @@ izmac
 ```
 
 What it fetches is MacPaint 1.5, a 400K startup diskette with System 2.0 and
-Finder 2.2 on it, and it is saved as `macpaint.dsk` on the working directory,
-the way the ROM is. It is downloaded once and used from the file after that,
-and naming any image of your own is enough to stop it happening at all.
+Finder 2.2 on it, and it is saved as `izmac_macpaint.dsk` on the working
+directory, the way the ROM is. It is downloaded once and used from the file
+after that, and naming any image of your own is enough to stop it happening at
+all.
 
 The diskette is written back like any other, so what you draw and save on it
 stays on it. Delete the file and the next run with nothing named fetches a

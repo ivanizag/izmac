@@ -57,6 +57,14 @@ const (
 	// keyboard has no function keys, so it can not want this one either.
 	pasteKey = ebiten.KeyF11
 
+	/*
+		The screen is written to a file on either of two keys. F12 is next to
+		the other two and is free for the same reason they are, and print
+		screen is what the fingers reach for, on a keyboard that has one.
+	*/
+	screenshotKey    = ebiten.KeyF12
+	screenshotAltKey = ebiten.KeyPrintScreen
+
 	menuLineHeight = 16
 	menuPadding    = 8
 	menuWidth      = 264
@@ -112,7 +120,7 @@ func menuItems() []menuItem {
 		{
 			label: func(m *izmac.Mac) string { return "Save a screenshot" },
 			action: func(mn *menu) {
-				mn.say(mn.saveScreenshot())
+				mn.screenshot()
 				mn.open = false
 			},
 		},
@@ -143,6 +151,11 @@ func (mn *menu) update() bool {
 	}
 	if inpututil.IsKeyJustPressed(pasteKey) {
 		mn.clipboard.paste()
+		return true
+	}
+	if inpututil.IsKeyJustPressed(screenshotKey) ||
+		inpututil.IsKeyJustPressed(screenshotAltKey) {
+		mn.screenshot()
 		return true
 	}
 	if !mn.open {
@@ -225,11 +238,23 @@ func (mn *menu) drawLine(dst *ebiten.Image, line string, x int, y int, selected 
 }
 
 /*
+screenshot writes the screen out and reports it twice over. The line over the
+screen is gone in a moment and says that it happened, and the one on the
+terminal stays and says where the file went, which is the part worth keeping:
+the name is the time it was taken and is not something to copy off a screen.
+*/
+func (mn *menu) screenshot() {
+	message := mn.saveScreenshot()
+	fmt.Println(message)
+	mn.say(message)
+}
+
+/*
 saveScreenshot writes the screen as it is now, named for the moment it was
 taken so that one does not overwrite the last.
 */
 func (mn *menu) saveScreenshot() string {
-	name := fmt.Sprintf("izmac-%v.png", time.Now().Format("20060102-150405"))
+	name := fmt.Sprintf("izmac_%v.png", time.Now().Format("20060102-150405"))
 
 	file, err := os.Create(name)
 	if err != nil {

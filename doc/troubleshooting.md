@@ -7,10 +7,10 @@ had few ways of telling you what was wrong, and izmac does not invent more.
 
 ## It will not start at all
 
-**"The ROM file default.rom is not here" and then a download that fails.** The
-copy izmac fetches lives at the Internet Archive, so this needs a network and
-a site that is up. If either is missing, find a Macintosh Plus ROM image
-yourself and name it with `-rom`.
+**"The ROM file izmac_default.rom is not here" and then a download that
+fails.** The copy izmac fetches lives at the Internet Archive, so this needs a
+network and a site that is up. If either is missing, find a Macintosh Plus ROM
+image yourself and name it with `-rom`.
 
 **"No disk image was given" and then a download that fails.** With nothing
 named there is nothing to boot, so izmac fetches the MacPaint diskette it
@@ -72,10 +72,10 @@ If the machine gets that far and stops, the usual cause is AppleTalk. The
 serial ports are not emulated, so the LocalTalk driver programs the chip,
 waits for an interrupt that can never arrive, and never gives up. izmac starts
 the machine with both ports marked as in use so this does not happen, but a
-`pram.bin` saved by something else, or a System where AppleTalk was switched
+`izmac_pram.bin` saved by something else, or a System where AppleTalk was switched
 on, can get past that.
 
-Delete `pram.bin` and start again, or switch AppleTalk off in the Chooser
+Delete `izmac_pram.bin` and start again, or switch AppleTalk off in the Chooser
 before it is saved.
 
 ## The mouse or the keyboard does nothing
@@ -157,7 +157,7 @@ reached. A tracer left on, `cpu` above all, costs more than the emulation
 does.
 
 **No sound.** The Macintosh has its own volume, in the Control Panel, and it
-can be turned all the way down. That setting is kept in `pram.bin`.
+can be turned all the way down. That setting is kept in `izmac_pram.bin`.
 
 ## Nothing here fits
 

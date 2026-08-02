@@ -18,24 +18,100 @@ read the first two and stop; the rest is there when you want it.
 | [Speed, the clock and the tracers](advanced.md) | the emulator's own knobs, and the debugging tools |
 | [When something goes wrong](troubleshooting.md) | the failures worth recognising |
 
-## Installing
+## Installing and running it
 
-There is nothing to install. [Download](https://github.com/ivanizag/izmac/releases)
-the archive for Linux, Windows or macOS and run the single executable inside.
-On macOS it is also on homebrew:
+There is nothing to install in the usual sense. izmac is one executable with
+nothing beside it: no runtime to fetch first, no libraries, no data files. The
+things it does need — the ROM and a disk to boot from — it fetches itself the
+first time it wants them.
+
+[Download](https://github.com/ivanizag/izmac/releases) the archive for Linux,
+Windows or macOS and unpack it. Inside are the executable, a README and the
+licence, flat. On macOS it is also on homebrew, which is the easier way of the
+two since it puts izmac on your path and updates it with everything else:
 
 ```bash
 brew install ivanizag/tap/izmac
 ```
 
-To run it from the source instead you need Go, and then:
+Then run it. From homebrew it is on your path already, so its name is enough;
+from the archive it is a file in whatever directory you unpacked it into, and
+on Linux and macOS a program in the directory you are in has to be named as
+one:
 
 ```bash
+izmac                  # homebrew, or anywhere on your path
+./izmac                # the unpacked archive, from that directory
+izmac.exe              # Windows, from that directory
+```
+
+**Run it from a directory you can write to**, and preferably one of its own.
+izmac writes what it downloads and what it remembers beside itself in the
+directory you ran it from, not in a hidden folder somewhere: the ROM, the
+MacPaint diskette, the parameter RAM, any screenshot. [Where izmac
+writes](#where-izmac-writes) at the end of this page has the list. A directory
+of its own keeps that together and keeps the second run from downloading
+anything again.
+
+Two things the operating system may do the first time, neither of them izmac
+going wrong. On macOS an executable out of an archive is unsigned and
+Gatekeeper stops it; open *System Settings > Privacy & Security*, where it
+will have offered to let it run anyway, and it is not asked again. The
+homebrew install does not have this. On Windows, SmartScreen does much the
+same and takes *More info > Run anyway*.
+
+Everywhere below, `izmac` means that executable, and the options and the disk
+images go after it:
+
+```bash
+izmac mydisk.img
+izmac -rom macplus.rom -ram 4096 system.img
+```
+
+## Running from the source
+
+The other way is to run the source directly, which is what you want if you
+are changing izmac, or if you are on a platform there is no archive for. You
+need [Go](https://go.dev/dl/) 1.26 or newer and nothing else; on Linux you
+also need the X11 and OpenGL development headers, which is what
+[Ebitengine](https://ebitengine.org/en/documents/install.html) needs to build
+its window.
+
+```bash
+git clone https://github.com/ivanizag/izmac
+cd izmac
 go run ./frontend/macebiten
 ```
 
-Everywhere below, `izmac` means the executable from the archive. If you are
-running from the source, put `go run ./frontend/macebiten` in its place.
+The first build takes a minute while Go fetches the dependencies and compiles
+them; after that it is a second or two. What izmac downloads and remembers
+still lands in the directory you ran it from, which here is the checkout
+itself; the repository ignores all of it, so it does not show up as something
+you have changed.
+
+Everything this manual says about `izmac` applies, with the command in its
+place:
+
+```bash
+go run ./frontend/macebiten mydisk.img
+```
+
+There is a second frontend in the source that the releases do not ship,
+`headless`, which runs the machine without a window and reports on the
+terminal. It is a debugging tool rather than a way to use the machine — see
+[Command line options](options.md) and [Speed, the clock and the
+tracers](advanced.md).
+
+```bash
+go run ./frontend/headless -frames 120 mydisk.img
+```
+
+If you would rather have an executable than a `go run`, build one, and it
+behaves exactly like the one out of the archive:
+
+```bash
+go build -o izmac ./frontend/macebiten
+```
 
 ## The ROM
 
@@ -44,8 +120,9 @@ firmware, and on this one it holds most of the operating system as well. It is
 still copyrighted, so it is not part of izmac and never will be.
 
 The first time you run izmac without naming a ROM, it fetches a copy of the
-one it targets from the Internet Archive and saves it as `default.rom` in the
-directory you ran it from. After that it uses that file and downloads nothing.
+one it targets from the Internet Archive and saves it as `izmac_default.rom`
+in the directory you ran it from. After that it uses that file and downloads
+nothing.
 If you already have an image, name it with `-rom` and nothing is downloaded at
 all.
 
@@ -70,9 +147,9 @@ izmac
 There is no software inside izmac either, so what happens the first time is
 the same as with the ROM. With no image named there is nothing to boot, so
 izmac fetches a MacPaint 1.5 diskette — 400K, with a System and a Finder of
-its own on it — saves it as `macpaint.dsk` in the directory you ran it from,
-and puts it in the internal drive. After that it uses that file and downloads
-nothing.
+its own on it — saves it as `izmac_macpaint.dsk` in the directory you ran it
+from, and puts it in the internal drive. After that it uses that file and
+downloads nothing.
 
 What is on it is a Macintosh of 1985 and not much more: a System, a Finder,
 and the program that sold the machine. To run anything else you need a disk
@@ -123,10 +200,10 @@ Everything goes in the directory you ran it from:
 
 | File | What it is |
 |---|---|
-| `default.rom` | the ROM, if izmac had to download one |
-| `macpaint.dsk` | the MacPaint diskette, if izmac had to download one because you named no image |
-| `pram.bin` | the parameter RAM, which is where the machine keeps the date, the volume and the desktop settings between runs. Change it with `-pram` |
-| `izmac-<date>-<time>.png` | a screenshot, when you ask for one from the menu |
+| `izmac_default.rom` | the ROM, if izmac had to download one |
+| `izmac_macpaint.dsk` | the MacPaint diskette, if izmac had to download one because you named no image |
+| `izmac_pram.bin` | the parameter RAM, which is where the machine keeps the date, the volume and the desktop settings between runs. Change it with `-pram` |
+| `izmac_<date>-<time>.png` | a screenshot, when you ask for one with F12 or from the menu |
 
 Your disk images are written in place, so what the Macintosh saves stays
 saved.

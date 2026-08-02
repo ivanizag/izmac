@@ -65,6 +65,7 @@ the Macintosh keyboard has none of them and so cannot want them.
 |---|---|
 | **F10** | open and close the menu |
 | **F11** | force your clipboard into the machine, see below |
+| **F12**, **Print Screen** | write the screen to a file, see below |
 | **F5** | run as fast as your machine can, and back |
 | **Ctrl-F5** | print on the terminal the speed being reached |
 | **F4** | show or hide the trace of the processor on the terminal |
@@ -89,7 +90,7 @@ lines are:
 |---|---|
 | **Full speed** / **Normal speed** | the same as F5 |
 | **Paste from the host** | hands your clipboard to the machine, the same as F11 |
-| **Save a screenshot** | writes the screen as it is now to `izmac-<date>-<time>.png` in the working directory, at the real 512 by 342 |
+| **Save a screenshot** | writes the screen as it is now, the same as F12 |
 | **Reset** | restarts the machine, as the programmer's switch did. Anything unsaved is lost |
 | **internal drive** | what is in the internal diskette drive, and eject it |
 | **external drive** | the same for the external drive |
@@ -103,6 +104,21 @@ Macintosh do it.
 While the menu is up the machine sees neither the keys nor the pointer, and
 anything you were holding down is released, so it does not stay held while you
 are looking at the menu.
+
+## Screenshots
+
+**F12**, or **Print Screen** on a keyboard that has one, writes the screen as
+it is now to `izmac_<date>-<time>.png` in the working directory, at the real
+512 by 342. *Save a screenshot* on the F10 menu does the same thing.
+
+The name is the moment it was taken, so one never overwrites the last. It is
+printed on the terminal as well as over the screen for a moment, since the
+line over the screen is gone before there is time to copy a name off it.
+
+What is written is the screen of the Macintosh alone. Neither the menu nor the
+line it leaves behind is in the file: the picture comes from the frame buffer
+rather than from the window, so you can take a shot from the menu without the
+menu being in it.
 
 ## Copy and paste
 

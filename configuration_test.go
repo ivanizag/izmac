@@ -48,9 +48,9 @@ func TestTheDefaults(t *testing.T) {
 	if c.RamSizeKb != 1024 {
 		t.Errorf("the default RAM size is %vKb, wanted 1024Kb", c.RamSizeKb)
 	}
-	if c.PramFile != "pram.bin" {
-		t.Errorf("the parameter RAM defaults to %v, wanted pram.bin on the working directory",
-			c.PramFile)
+	if c.PramFile != defaultPramFile {
+		t.Errorf("the parameter RAM defaults to %v, wanted %v on the working directory",
+			c.PramFile, defaultPramFile)
 	}
 	if !c.Clipboard {
 		t.Error("the clipboard is not shared with the host by default")

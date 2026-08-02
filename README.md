@@ -1,18 +1,17 @@
 # izmac
 
-A Macintosh Plus emulator written in Go, built on
+A Macintosh Plus emulator written in Go for macOS, Windows and Linux. Built on
 [iz68000](https://github.com/ivanizag/iz68000).
 
+![MacPaint 1.5](doc/Macpaint15.png)
 
-```bash
-go run ./frontend/macebiten mydisk.img
-go run ./frontend/macebiten system.img work.img scratch.img
-```
+It runs the real ROM and the real software: the processor, the memory, the
+video and the sound, the clock with its parameter RAM, the keyboard and the
+mouse, the SCSI bus with up to seven disks on it, and both diskette drives,
+reading, writing and formatting. The clipboard is shared with the host. The
+serial ports are not there, so nothing that needs one works.
 
-
-The [manual](doc/manual.md) covers all of this in full: the disks, the
-keyboard and the mouse, every option, and what to do when something does not
-work.
+The development was assisted by Claude Code based on the architecture of my previous similar pre-AI projects [izapple2](https://github.com/ivanizag/izapple2), [iz6502](https://github.com/ivanizag/iz6502) and [bbz](https://github.com/ivanizag/bbz)
 
 ## Installing
 
@@ -27,81 +26,61 @@ brew install ivanizag/tap/izmac
 
 ## Running it
 
-izmac needs a 128Kb Macintosh Plus ROM image, if none is provided it is downloaded from archive.org
+izmac with no arguments comes up on MacPaint 1.5, downloading the ROM and a
+disk image the first time and keeping both:
 
-With no disk image either, a MacPaint diskette is downloaded to boot from and
-kept as `macpaint.dsk`, so that izmac on its own comes up with something to
-use.
-
-```bash
-# Nothing named, boots MacPaint
-go run ./frontend/macebiten
-
-# Windowed
-go run ./frontend/macebiten mydisk.img
-
-# Headless, dumps the screen on the terminal
-go run ./frontend/headless -frames 120 system.img work.img scratch.img
+```
+izmac
 ```
 
-| Option | Meaning |
+Or just put the fisk images you want to run, the emulator will automatically what they are, floopies, hard disk images or disk partitions and mount them:
+
+```bash
+izmac system.img games.dsk
+```
+
+Click on the window to give the machine the mouse, right click to take it
+back. **F10** opens the emulator's menu.
+
+## The manual
+
+More info in the [manual](doc/manual.md) .
+
+| | |
 |---|---|
-| `-rom` | the ROM image, required |
-| `-hd` | a hard disk image for the SCSI bus, repeat for more than one |
-| `-floppy` | a diskette image for a drive, repeat for the external one |
-| `-scsidriver` | a disk image to borrow a SCSI driver from, downloaded to `hddriver.rom` if not given |
-| `-pram` | where the parameter RAM is kept, `pram.bin` by default |
-| `-ram` | RAM size in Kb, 1024 or 4096 |
-| `-speed` | `plus` for the real 7.8336Mhz, `full` for as fast as the host goes, or a number of Mhz |
-| `-clipboard` | share the clipboard with the host, on by default. `-clipboard=false` keeps them apart |
-| `-trace` | tracers to enable: `cpu`, `toolbox`, `sadmac`, `scsi`, `floppy` |
+| [The manual](doc/manual.md) | installing izmac, the first run, and what the machine is |
+| [Disks and diskettes](doc/disks.md) | where the software comes from, and how to put it in |
+| [Keyboard, mouse and the menu](doc/controls.md) | driving the machine and driving the emulator |
+| [Command line options](doc/options.md) | every option of both frontends |
+| [Speed, the clock and the tracers](doc/advanced.md) | the emulator's own knobs, and the debugging tools |
+| [When something goes wrong](doc/troubleshooting.md) | the failures worth recognising |
 
-Files named without an option are disk images. What each one
-is is worked out from the image itself: a Macintosh hard disk starts with a
-driver descriptor map, a DiskCopy image says so in its header, and a diskette
-is exactly 400K or 800K.
+## Building it
 
-Up to seven disks go on the SCSI bus, taking the ids 0 upwards in the order
-given. Note that the options have to come before the file names.
-
-## Hard disks
-
-Most of the hard disk images that circulate are the HFS volume and nothing
-else, made for the emulators that patch the ROM to add a disk driver of their
-own. izmac runs an unpatched ROM, which boots by loading a SCSI driver off the
-disk, so it makes up what is missing as the disk is attached instead. Nothing
-special is needed to use one and nothing is written to the file:
+You need [Go](https://go.dev/dl/) 1.26 or newer:
 
 ```bash
-go run ./frontend/macebiten volume.dsk
+go run ./frontend/macebiten mydisk.img
 ```
 
-The SCSI driver is the one part that can not be made up. It is Apple's, so izmac
-carries none and fetches one the way it fetches the ROM, the first time a
-disk turns out to want it. The [manual](doc/disks.md) has the details.
+[Running from the source](doc/manual.md#running-from-the-source) in the manual
+has the rest of it, and `doc/plan.md` has the hardware notes and the design
+decisions behind the emulator.
 
-## Diskettes
+## References
 
-Both drives are emulated, the internal one and the external, and diskettes go
-in them in the order they are named. A plain 400K or 800K image works, as does
-a DiskCopy 4.2 one. Those are the only sizes a Macintosh Plus can read.
+- Inside Macintosh*, volume III, chapter 2, "The Macintosh Hardware",
+  pages III-17 to III-46, refered as *the book* on the comments.
+- Guide to the Macintosh Family Hardware*, 2nd edition
+- [mac_rom](https://github.com/jonathanschilling/mac_rom), Jonathan
+  Schilling's commented and buildable disassembly
+- [Mini vMac](https://www.gryphel.com/c/minivmac/) 
+- The `mac128` driver of MAME
 
-```bash
-# A diskette in the internal drive and a hard disk on the bus
-go run ./frontend/macebiten -floppy system.dsk mydisk.img
 
-# Or just name them, izmac works out which is which
-go run ./frontend/macebiten mydisk.img games.dc42
-```
+The files izmac optionlly fetches:
+- The ROM from The Internet Archive: [Macintosh ROM archive](https://archive.org/details/mac_rom_archive_-_as_of_8-19-2011)
+- MacPaoint 1.5 from The Internet Archive: [MacPaint 1.5 diskette](https://archive.org/details/mac_Paint_2) 
+- The scsi driver from MrGaaS's github: [blank formatted disks](https://github.com/MrGasS/Blank-SCSI-hard-disk-images-for-Macintosh)
 
-Writing and formatting work, and a diskette is written back to the file it came
-from when the drive stops. In the window, dropping an image on it puts the
-diskette in a free drive and the menu on F10 takes one out.
 
-## Copy and paste
-
-The clipboard is shared with the host both ways, text only. A copy on the
-machine reaches the host on its own, and the clipboard of the host is handed to
-the machine when the window is given the focus, or on F11 to force it. It
-arrives as the clipboard of the machine, so it is the application that pastes
-it.

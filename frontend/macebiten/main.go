@@ -129,6 +129,7 @@ func keyHelp() string {
 	return `
      F10: Open the menu
      F11: Force the clipboard of the host into the machine
+     F12: Save the screen to a file, as print screen does
       F5: Full speed on and off
  Ctrl-F5: Report the speed reached
       F4: Show or hide the processor trace

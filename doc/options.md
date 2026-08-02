@@ -20,7 +20,7 @@ after it is taken as a disk image.
 Any file named without an option is a disk image, and izmac works out from the
 image itself whether it is a hard disk or a diskette. See
 [Disks and diskettes](disks.md). Name none at all and izmac fetches a MacPaint
-diskette to boot from, once, and keeps it as `macpaint.dsk`.
+diskette to boot from, once, and keeps it as `izmac_macpaint.dsk`.
 
 ## The machine
 
@@ -28,13 +28,13 @@ Both frontends take all of these.
 
 | Option | Default | Meaning |
 |---|---|---|
-| `-rom <file>` | `default.rom` | the Macintosh Plus ROM image, 128Kb. If the option is not given and the file is not there, it is downloaded once |
+| `-rom <file>` | `izmac_default.rom` | the Macintosh Plus ROM image, 128Kb. If the option is not given and the file is not there, it is downloaded once |
 | `-hd <file>` | | a hard disk image for the SCSI bus. Repeat it for more than one, up to seven |
 | `-floppy <file>` | | a 400K or 800K diskette image, plain or DiskCopy 4.2, to put in a drive. Repeat it for the external drive as well |
-| `-scsidriver <file>` | `hddriver.rom` | a disk image to borrow a SCSI driver from, for hard disk images that carry none of their own. If the option is not given and the file is not there, one is downloaded the first time a disk needs it. See [Disks and diskettes](disks.md) |
+| `-scsidriver <file>` | `izmac_hddriver.rom` | a disk image to borrow a SCSI driver from, for hard disk images that carry none of their own. If the option is not given and the file is not there, one is downloaded the first time a disk needs it. See [Disks and diskettes](disks.md) |
 | `-ram <kb>` | `1024` | the memory size in Kb, `1024` or `4096`. Those are the two the real machine could be built with |
 | `-speed <mhz>` | `plus` | `plus` for the real 7.8336 MHz, `full` for as fast as your machine goes, or a number of Mhz |
-| `-pram <file>` | `pram.bin` | where the parameter RAM is kept between runs |
+| `-pram <file>` | `izmac_pram.bin` | where the parameter RAM is kept between runs |
 | `-clipboard` | on | share the clipboard with your system, both ways. `-clipboard=false` keeps them apart. See [Keyboard, mouse and the menu](controls.md) |
 | `-wallclock` | off | read the clock from the host every time, instead of starting from it and counting the machine's own seconds |
 | `-trace <list>` | | tracers to turn on, comma separated: `cpu`, `toolbox`, `sadmac`, `scsi`, `floppy` |

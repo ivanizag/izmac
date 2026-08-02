@@ -25,8 +25,14 @@ const (
 	// preferredRomChecksum is the revision izmac targets, 'Loud Harmonicas'
 	preferredRomChecksum = 0x4d1f8172
 
-	// defaultRomFile is the ROM used when none is named
-	defaultRomFile = "default.rom"
+	/*
+		defaultRomFile is the ROM used when none is named. It carries the
+		izmac_ prefix that everything izmac writes for itself carries: the
+		files land in the directory it was run from, beside whatever else is
+		there, and the prefix is what says which of them are izmac's and
+		which are the user's own.
+	*/
+	defaultRomFile = "izmac_default.rom"
 
 	// defaultRomURL is the revision izmac targets, inside the Macintosh ROM
 	// archive kept at the Internet Archive
@@ -48,14 +54,14 @@ func ensureRom(config *Configuration, out io.Writer) error {
 	}
 
 	fmt.Fprintf(out, "The ROM file %v is not here.\n", config.RomFile)
-	fmt.Fprintf(out, "Downloading it from %v\n", defaultRomURL)
+	fmt.Fprintf(out, "  Downloading it from %v\n", defaultRomURL)
 
 	r, err := storage.DownloadRom(config.RomFile, defaultRomURL)
 	if err != nil {
 		return err
 	}
 
-	fmt.Fprintf(out, "Saved as %v: %v\n", config.RomFile, r)
+	fmt.Fprintf(out, "  Saved as %v: %v\n", config.RomFile, r)
 	return nil
 }
 
