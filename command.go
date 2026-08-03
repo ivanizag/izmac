@@ -22,6 +22,10 @@ const (
 	CommandToggleSpeed
 	// CommandShowSpeed prints the speed the emulation is reaching
 	CommandShowSpeed
+	// CommandToggleAbsoluteMouse switches between putting the pointer of the
+	// machine where the host has its own and pushing it by the movement of
+	// the host's
+	CommandToggleAbsoluteMouse
 	// CommandInsertDiskette puts an image in one of the drives, and
 	// CommandEjectDiskette takes one out. Both are sent with
 	// SendDisketteCommand rather than SendCommand, since they carry which
@@ -102,6 +106,23 @@ func (m *Mac) toggleSpeed() {
 	m.setCycleDuration(back)
 }
 
+/*
+toggleAbsoluteMouse switches between putting the pointer of the machine where
+the host has its own and pushing it by the movement of the host's.
+
+The movement not yet paid out is dropped on the way in. It was measured
+against a pointer that is about to be placed somewhere else, and a mouse being
+placed has no use for steps left over from being pushed: they would arrive
+after the placing and walk the pointer off it.
+*/
+func (m *Mac) toggleAbsoluteMouse() {
+	absolute := !m.pointer.isAbsolute()
+	m.pointer.setAbsolute(absolute)
+	if absolute {
+		m.mouse.forgetMovement()
+	}
+}
+
 // executeCommands runs the pending commands, returning true when the
 // emulation has to stop
 func (m *Mac) executeCommands() bool {
@@ -126,6 +147,8 @@ func (m *Mac) executeCommands() bool {
 				m.toggleSpeed()
 			case CommandShowSpeed:
 				fmt.Printf("Running at %.2f Mhz\n", m.GetCurrentFreqMHz())
+			case CommandToggleAbsoluteMouse:
+				m.toggleAbsoluteMouse()
 			case CommandInsertDiskette, CommandEjectDiskette:
 				m.executeDisketteCommand(c)
 			case CommandPasteText:

@@ -85,7 +85,15 @@ func (g *game) windowTitle() string {
 	if g.m.IsFullSpeed() {
 		speed += ", full speed"
 	}
-	return fmt.Sprintf("%v - %v - %v", g.title, speed, g.mouse.hint())
+
+	title := fmt.Sprintf("%v - %v", g.title, speed)
+
+	// The mouse only has something to say while there is a pointer to give
+	// over or to get back, which a placed one never is
+	if hint := g.mouse.hint(); hint != "" {
+		title += " - " + hint
+	}
+	return title
 }
 
 func main() {
@@ -113,7 +121,7 @@ func main() {
 		defer profile.Start().Stop()
 	}
 
-	fmt.Print(keyHelp())
+	fmt.Print(keyHelp(m))
 
 	err = ebitenRun(m)
 	if err != nil {
@@ -125,7 +133,7 @@ func main() {
 // keyHelp is what the frontend says as it starts. The keys that stand in for
 // the two the Macintosh keyboard has and a modern one does not are named
 // after the host, since they are not called the same thing on all of them.
-func keyHelp() string {
+func keyHelp(m *izmac.Mac) string {
 	return `
      F10: Open the menu
      F11: Force the clipboard of the host into the machine
@@ -136,8 +144,17 @@ func keyHelp() string {
  Ctrl-F2: Reset
    Pause: Stop the machine and let it go again
 
-Click on the window to use the mouse, right click to get the pointer back.
-` + modifierHelp()
+` + mouseHelp(m) + modifierHelp()
+}
+
+// mouseHelp says how the mouse of the host reaches the machine, which is one
+// of two things and not the same thing to do
+func mouseHelp(m *izmac.Mac) string {
+	if m.IsAbsoluteMouse() {
+		return "The pointer of the machine goes where you point, " +
+			"with nothing to click on first.\n"
+	}
+	return "Click on the window to use the mouse, right click to get the pointer back.\n"
 }
 
 // modifierHelp names the keys of the host that the command and option keys of

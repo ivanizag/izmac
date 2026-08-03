@@ -276,6 +276,86 @@ func TestTogglingFromFullSpeedGivesTheRealOne(t *testing.T) {
 	}
 }
 
+func TestTheMouseOption(t *testing.T) {
+	for _, c := range []struct {
+		mouse    string
+		absolute bool
+		accepted bool
+	}{
+		{"", true, true},          // The pointer is placed unless asked otherwise
+		{"absolute", true, true},  // And so is naming it
+		{"relative", false, true}, // The mouse of the hardware, pushed and captured
+		{"captured", false, false},
+		{"yes", false, false},
+	} {
+		config := NewConfiguration()
+		args := []string{"-rom", "rom.bin"}
+		if c.mouse != "" {
+			args = append(args, "-mouse", c.mouse)
+		}
+
+		err := config.ParseFlags("izmac", args, io.Discard)
+
+		if !c.accepted {
+			if err == nil {
+				t.Errorf("the mouse %q was accepted", c.mouse)
+			}
+			continue
+		}
+
+		if err != nil {
+			t.Errorf("the mouse %q was rejected: %v", c.mouse, err)
+			continue
+		}
+		if config.absoluteMouse != c.absolute {
+			t.Errorf("the mouse %q places the pointer: %v, wanted %v",
+				c.mouse, config.absoluteMouse, c.absolute)
+		}
+
+		m := ensureNewMac(t, config, storage.RomFromData(make([]uint8, storage.RomSize)), nil, nil)
+		if m.IsAbsoluteMouse() != c.absolute {
+			t.Errorf("the machine built with the mouse %q places the pointer: %v, wanted %v",
+				c.mouse, m.IsAbsoluteMouse(), c.absolute)
+		}
+	}
+}
+
+/*
+The mouse switched over while the machine runs, which is what the menu line
+does. The movement not yet paid out goes with it: it was measured against a
+pointer that is about to be placed somewhere else, and it would arrive after
+the placing and walk the pointer off it.
+*/
+func TestTheMouseCanBeToggled(t *testing.T) {
+	config := NewConfiguration()
+	err := config.ParseFlags("izmac",
+		[]string{"-rom", "rom.bin", "-mouse", "relative"}, io.Discard)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	m := ensureNewMac(t, config, storage.RomFromData(make([]uint8, storage.RomSize)), nil, nil)
+	if m.IsAbsoluteMouse() {
+		t.Fatal("the machine places the pointer with the relative mouse option")
+	}
+
+	m.MoveMouse(20, 20)
+	m.toggleAbsoluteMouse()
+
+	if !m.IsAbsoluteMouse() {
+		t.Error("the toggle did not go over to placing the pointer")
+	}
+	if m.mouse.pendingX != 0 || m.mouse.pendingY != 0 {
+		t.Errorf("%v,%v of movement survived the switch to a placed pointer",
+			m.mouse.pendingX, m.mouse.pendingY)
+	}
+
+	m.toggleAbsoluteMouse()
+	if m.IsAbsoluteMouse() {
+		t.Error("the toggle did not come back to pushing the mouse")
+	}
+}
+
 // writeImage makes a file of the given size, optionally starting with the
 // driver descriptor map a partitioned Macintosh disk carries
 func writeImage(t *testing.T, name string, size int, partitioned bool) string {

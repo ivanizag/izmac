@@ -27,6 +27,7 @@ type Mac struct {
 	rtc      *component.AppleRTC
 	keyboard *keyboard
 	mouse    *mouse
+	pointer  *pointer
 	scc      *component.SCC8530
 	sound    *sound
 	scsi     *scsi.Bus
@@ -173,6 +174,7 @@ func newMac(config *Configuration, r *storage.Rom, disks []storage.BlockDisk,
 		rtc:            c,
 		keyboard:       k,
 		mouse:          mo,
+		pointer:        newPointer(config.absoluteMouse),
 		sound:          so,
 		scsi:           mm.scsi,
 		scc:            mm.scc,
@@ -341,6 +343,30 @@ func KeyCodes() map[string]uint8 {
 // to the right and down
 func (m *Mac) MoveMouse(dx int, dy int) {
 	m.mouse.move(dx, dy)
+}
+
+/*
+SetMousePosition puts the pointer of the machine where the host has its own,
+in the pixels of the 512 by 342 screen. A position off the screen is brought
+back to its edge.
+
+The mouse of the Macintosh reports movement and never a position, so this
+goes around it and writes the low memory the ROM keeps the pointer in, which
+pointer.go explains. A machine whose mouse is being pushed rather than placed
+ignores what is put here, so a frontend can keep telling it where the host
+points and leave the choice between the two to IsAbsoluteMouse.
+*/
+func (m *Mac) SetMousePosition(x int, y int) {
+	m.pointer.put(x, y)
+}
+
+/*
+IsAbsoluteMouse tells whether the pointer of the machine is put where the
+host's is, rather than pushed by the movement of it. It is what a frontend
+asks before deciding whether it has a pointer to capture.
+*/
+func (m *Mac) IsAbsoluteMouse() bool {
+	return m.pointer.isAbsolute()
 }
 
 /*

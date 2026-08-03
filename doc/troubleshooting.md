@@ -80,12 +80,15 @@ before it is saved.
 
 ## The mouse or the keyboard does nothing
 
-**Click on the window first.** Until you do, the machine has neither, and
-neither does it while the F10 menu is up. The title bar says which way round
-it is.
+**Click on the window first.** The keyboard reaches the machine only while the
+window has the focus, and neither the keys nor the pointer reach it while the
+F10 menu is up.
 
-If you have the pointer and want it back, **right click** or press
-**Escape**.
+**The pointer of the machine does not follow yours.** It follows it by
+default, but not when izmac was started with `-mouse relative` or switched
+over on the F10 menu: then the machine has to be given the pointer with a
+click on the window, and **right click** or **Escape** gives it back. The
+title bar says which way round it is.
 
 **Command-something does nothing.** Your own system took it before the
 machine saw it — Command-Q and Command-Tab on macOS, and whatever your window

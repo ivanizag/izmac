@@ -4,23 +4,39 @@
 
 ## The mouse
 
-The Macintosh mouse is a relative device: it tells the machine how far it has
-moved and never where it is, and the ROM keeps the pointer itself. There is no
-way to put the pointer somewhere, only to push it.
+**Point at the window and the machine points where you point.** There is
+nothing to click on first and nothing to press to get your pointer back: your
+own pointer is hidden while it is over the screen, because the machine is
+drawing one under it, and comes back as you leave. Your pointer and the
+machine's are always in the same place.
 
-That is why izmac captures the pointer. **Click on the window** and your own
-pointer disappears; movement goes to the machine, and it keeps coming when you
-reach the edge of your screen. **Right click**, or press **Escape**, to get it
-back — the Macintosh mouse has one button and its keyboard has no escape key,
-so neither is anything the machine wants. Opening the F10 menu also releases
-it, since the menu needs a pointer to click with.
+That is not how the hardware works, and it is worth knowing why. The Macintosh
+mouse is a relative device: it tells the machine how far it has moved and never
+where it is, and the ROM keeps the pointer itself. There is no wire to send a
+position on. So izmac goes around the mouse and writes the position into the
+low memory the ROM keeps the pointer in, sixty times a second, which is what
+every emulator of these machines does and what the ROM is happy to be told.
+The button is not part of the trick: that is a real line on a real chip.
 
-The title bar always says which way round you are: *click to use the mouse* or
-*right click releases the mouse*.
+**The other way is still there.** Start with `-mouse relative` to have the
+machine driven as the hardware drives it, by the movement of your pointer
+rather than by where it is, or choose *Capture the mouse instead* on the F10
+menu to switch over while it runs. Then izmac captures your pointer: **click
+on the window** and your own pointer disappears; movement goes to the machine,
+and it keeps coming when you reach the edge of your screen. **Right click**,
+or press **Escape**, to get it back — the Macintosh mouse has one button and
+its keyboard has no escape key, so neither is anything the machine wants. The
+title bar says which way round you are, *click to use the mouse* or *right
+click releases the mouse*, and says nothing at all when the pointer is simply
+following yours.
 
-The one pointer of the machine may not land where yours is. It is the
-machine's pointer, moved by the same amount as yours, so the two drift apart —
-that is how the hardware works and not something izmac hides.
+The captured mouse is the honest one, and the price of it is that the two
+pointers drift apart: the machine's is moved by the same amount as yours and
+not to the same place. Reach for it if something you are running wants to be
+pushed rather than pointed at; otherwise leave the mouse as it is.
+
+Opening the F10 menu gives your pointer back either way, since the menu needs
+a pointer to click with.
 
 ## The keyboard
 
@@ -89,6 +105,7 @@ lines are:
 | Line | What it does |
 |---|---|
 | **Full speed** / **Normal speed** | the same as F5 |
+| **Capture the mouse instead** / **Let the pointer follow yours** | switches between the two mice above |
 | **Paste from the host** | hands your clipboard to the machine, the same as F11 |
 | **Save a screenshot** | writes the screen as it is now, the same as F12 |
 | **Reset** | restarts the machine, as the programmer's switch did. Anything unsaved is lost |

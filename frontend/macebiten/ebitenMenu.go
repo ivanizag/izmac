@@ -22,8 +22,9 @@ emulator rather than about the Macintosh.
 
 It is drawn rather than being a menu of the host because ebiten has no menus
 of its own, and it is on F10 because that is a key the Macintosh keyboard does
-not have and so cannot want. Opening it lets go of the mouse, since the
-pointer is otherwise captured by the machine and could not reach it.
+not have and so cannot want. Opening it lets go of the mouse: the pointer of
+the host is otherwise captured by the machine, or hidden under the one the
+machine draws, and either way there is nothing to point at a line with.
 */
 type menu struct {
 	m         *izmac.Mac
@@ -102,6 +103,24 @@ func menuItems() []menuItem {
 			},
 			action: func(mn *menu) {
 				mn.m.SendCommand(izmac.CommandToggleSpeed)
+				mn.open = false
+			},
+		},
+		{
+			/*
+				The mouse, named by what choosing the line will do. A placed
+				pointer is where the machine starts unless the command line
+				said otherwise, and capturing is what is left for anything it
+				does not suit.
+			*/
+			label: func(m *izmac.Mac) string {
+				if m.IsAbsoluteMouse() {
+					return "Capture the mouse instead"
+				}
+				return "Let the pointer follow yours"
+			},
+			action: func(mn *menu) {
+				mn.m.SendCommand(izmac.CommandToggleAbsoluteMouse)
 				mn.open = false
 			},
 		},
