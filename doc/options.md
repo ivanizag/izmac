@@ -33,6 +33,7 @@ Both frontends take all of these.
 | `-floppy <file>` | | a 400K or 800K diskette image, plain or DiskCopy 4.2, to put in a drive. Repeat it for the external drive as well |
 | `-scsidriver <file>` | `izmac_hddriver.rom` | a disk image to borrow a SCSI driver from, for hard disk images that carry none of their own. If the option is not given and the file is not there, one is downloaded the first time a disk needs it. See [Disks and diskettes](disks.md) |
 | `-ram <kb>` | `1024` | the memory size in Kb, `1024` or `4096`. Those are the two the real machine could be built with |
+| `-mouse <how>` | `absolute` | `absolute` puts the pointer of the machine where yours is, `relative` pushes it by the movement of yours the way the hardware does, with your pointer captured by the window. See [Keyboard, mouse and the menu](controls.md) |
 | `-speed <mhz>` | `plus` | `plus` for the real 7.8336 MHz, `full` for as fast as your machine goes, or a number of Mhz |
 | `-pram <file>` | `izmac_pram.bin` | where the parameter RAM is kept between runs |
 | `-clipboard` | on | share the clipboard with your system, both ways. `-clipboard=false` keeps them apart. See [Keyboard, mouse and the menu](controls.md) |

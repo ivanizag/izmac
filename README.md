@@ -39,8 +39,8 @@ Or just put the fisk images you want to run, the emulator will automatically wha
 izmac system.img games.dsk
 ```
 
-Click on the window to give the machine the mouse, right click to take it
-back. **F10** opens the emulator's menu.
+Point at the window and the machine points where you point. **F10** opens the
+emulator's menu.
 
 ## The manual
 

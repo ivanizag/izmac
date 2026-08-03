@@ -166,9 +166,9 @@ in the Finder.
 
 Then:
 
-- **Click on the window** to hand the mouse over to the machine. The pointer
-  is captured, so your own pointer stops moving; **right click**, or press
-  **Escape**, to get it back.
+- **Point at the window** and the machine points where you point. There is
+  nothing to click on first, and your own pointer is hidden while it is over
+  the screen because the machine is drawing one under it.
 - **F10** opens the emulator's menu, for the things the Macintosh knows
   nothing about: full speed, a screenshot, reset, and the diskette drives.
 - Your **Command** key is the Macintosh **Command** key, the one with the
@@ -178,7 +178,9 @@ Then:
   machine and paste outside it, and the other way round.
 
 That is enough to use the machine. The title bar tells you the speed it is
-running at and how to give the mouse over or take it back.
+running at, and how to give the mouse over or take it back on the days you ask
+for the mouse the hardware really had — see
+[Keyboard, mouse and the menu](controls.md).
 
 ## What is emulated
 

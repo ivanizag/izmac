@@ -53,6 +53,10 @@ type Configuration struct {
 	// host, in both directions
 	Clipboard bool
 
+	// Mouse is how the pointer of the machine is driven, mouseAbsolute or
+	// mouseRelative
+	Mouse string
+
 	// Speed is the processor clock in Mhz, or one of the names below
 	Speed string
 
@@ -77,6 +81,9 @@ type Configuration struct {
 	// cycleDurationNs is Speed as the nanoseconds a cycle lasts, or zero
 	// for no throttling at all
 	cycleDurationNs float64
+
+	// absoluteMouse is Mouse as the machine takes it
+	absoluteMouse bool
 }
 
 const (
@@ -89,6 +96,16 @@ const (
 	// as the host can go
 	speedPlus = "plus"
 	speedFull = "full"
+
+	/*
+		mouseAbsolute puts the pointer of the machine where the host has its
+		own, which the hardware can not be told and pointer.go goes around it
+		to do. mouseRelative pushes the pointer by the movement of the host's,
+		which is what the mouse of the machine really reports and what leaves
+		a frontend with a pointer to capture.
+	*/
+	mouseAbsolute = "absolute"
+	mouseRelative = "relative"
 
 	// defaultScsiDriverFile is where a borrowed SCSI driver is kept, and is
 	// not a ROM at all: it is the front of a disk image, the maps and the
@@ -130,11 +147,13 @@ const (
 // NewConfiguration returns the default configuration
 func NewConfiguration() *Configuration {
 	c := &Configuration{
-		PramFile:     defaultPramFile,
-		RamSizeKb:    defaultRamSizeKb,
-		Speed:        speedPlus,
-		Clipboard:    true,
-		disketteFile: defaultDisketteFile,
+		PramFile:      defaultPramFile,
+		RamSizeKb:     defaultRamSizeKb,
+		Speed:         speedPlus,
+		Mouse:         mouseAbsolute,
+		Clipboard:     true,
+		disketteFile:  defaultDisketteFile,
+		absoluteMouse: true,
 	}
 	c.cycleDurationNs = cycleDurationOf(CPUClockMhz)
 	return c
@@ -336,6 +355,11 @@ func (c *Configuration) AddFlags(fs *flag.FlagSet) {
 		"share the clipboard with the host, so that a copy on the machine "+
 			"can be pasted on the host and the other way round. "+
 			"Use -clipboard=false to keep them apart")
+	fs.StringVar(&c.Mouse, "mouse", c.Mouse,
+		"how the mouse is driven: '"+mouseAbsolute+"' puts the pointer of "+
+			"the machine where yours is, '"+mouseRelative+"' pushes it by "+
+			"the movement of yours, the way the hardware does, and the "+
+			"window captures your pointer to do it")
 	fs.StringVar(&c.Speed, "speed", c.Speed,
 		"cpu speed in Mhz, '"+speedPlus+"' for the real "+
 			"7.8336Mhz of the machine, '"+speedFull+"' for as fast as "+
@@ -374,7 +398,26 @@ func (c *Configuration) Validate() error {
 			DriveCount, len(c.Diskettes))
 	}
 
+	if err := c.parseMouse(); err != nil {
+		return err
+	}
+
 	return c.parseSpeed()
+}
+
+// parseMouse turns the mouse option into the one thing the machine takes from
+// it, whether the pointer is placed or pushed
+func (c *Configuration) parseMouse() error {
+	switch c.Mouse {
+	case mouseAbsolute, "":
+		c.absoluteMouse = true
+	case mouseRelative:
+		c.absoluteMouse = false
+	default:
+		return fmt.Errorf("invalid mouse %q, use '%v' or '%v'",
+			c.Mouse, mouseAbsolute, mouseRelative)
+	}
+	return nil
 }
 
 /*

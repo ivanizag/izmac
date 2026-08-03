@@ -91,6 +91,12 @@ func clampPending(pending int) int {
 	return pending
 }
 
+// forgetMovement drops the movement that has not been paid out yet, which is
+// what a mouse that is about to be placed rather than pushed has no use for
+func (m *mouse) forgetMovement() {
+	m.pendingX, m.pendingY = 0, 0
+}
+
 // setButton reports the state of the button and says whether that changed it,
 // which is the transition a double click is measured between
 func (m *mouse) setButton(pressed bool) bool {

@@ -183,16 +183,24 @@ func (m *Mac) tick(cycles uint64) {
 	m.updateInterrupts()
 }
 
-// updateInterrupts drives the interrupt request lines of the processor. The
-// VIA is on the level 1, the SCC will be on the level 2 and the programmer's
-// switch on the level 7.
+/*
+The levels the chips interrupt the processor on. The VIA has the vertical
+blanking, the one second and the keyboard, the SCC has the two axes of the
+mouse, and the programmer's switch would be on the level 7.
+*/
+const (
+	viaInterruptLevel = 1
+	sccInterruptLevel = 2
+)
+
+// updateInterrupts drives the interrupt request lines of the processor
 func (m *Mac) updateInterrupts() {
 	level := uint8(0)
 	if m.via.interruptAsserted() {
-		level = 1
+		level = viaInterruptLevel
 	}
 	if m.scc.InterruptAsserted() {
-		level = 2
+		level = sccInterruptLevel
 	}
 	m.cpu.SetIRQ(level)
 }
@@ -215,6 +223,20 @@ func (m *Mac) lineTick() {
 	// The sound takes one word of its buffer for every scan line, drawn or
 	// not, which is what makes the rate come out at 22254 a second
 	m.sound.tick(m.line)
+
+	/*
+		A pointer put where the host has its own is written into the low
+		memory the cursor task works from as the blanking starts, so that the
+		task, which runs on the interrupt raised just below, moves the cursor
+		on this frame and not on the next. The mask of the processor goes
+		with it: a machine that would not take that interrupt is one whose
+		low memory is not to be touched, which is the whole of the boot. A
+		machine whose mouse is pushed rather than placed has nothing to do
+		here at all.
+	*/
+	if m.line == vBlankLine {
+		m.pointer.place(m.mm, interruptMaskOf(m.cpu.GetSR()))
+	}
 
 	// One rising edge as the blanking starts and one falling edge as the
 	// next frame does, 60.15 times a second

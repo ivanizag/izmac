@@ -365,6 +365,8 @@ izmac/
   via.go              the Mac's VIA wiring, over component/mos6522.go
   keyboard.go         key code table and transition queue
   mouse.go            quadrature generation
+  pointer.go          the pointer put where the host's is, through the low
+                      memory the cursor task of the ROM works from
   iwm.go              the floppy controller: the soft switches, the status,
                       the data register and the handshake
   iwmDrive.go         a drive: the motor, the head, the lines it reports and
@@ -520,6 +522,43 @@ The number worth remembering is that **a disk byte is exactly 128 processor cycl
 falls out of 489.6 kbit/s against 7.8336MHz and makes the whole thing a counter. The one worth
 remembering after that is **778 bytes per sector**, which gets all five rotation speeds right
 without any of them being written down.
+
+**The pointer is placed rather than pushed**, which is the one place izmac deliberately goes
+around the hardware it emulates, and is the default. The mouse reports movement and nothing
+else, so a window that wants its own pointer and the machine's to be in the same place has to
+write the position into the low memory the ROM keeps it in. `CrsrVBLTask`, in
+`plus/hw/interrupts.s`, is the whole of the reason it works:
+
+- It does nothing at all unless `CrsrNew` `$08ce` is set, which the quadrature handlers set
+  with `MOVE.B CrsrCouple,CrsrNew`. Placing a position copies `CrsrCouple` the same way, so an
+  application that has uncoupled the cursor keeps it.
+- What it reads as the movement of the frame is `MTemp` `$0828` minus `RawMouse` `$082c`, which
+  it is free to double if `CrsrScale` is set and the distance passes `CrsrThresh`. **So both
+  have to be written.** Writing `MTemp` alone is a movement rather than a position, and the
+  acceleration will make it the wrong one. With the two equal there is nothing to scale, and
+  the pinning to `CrsrPin`, the `Mouse` global at `$0830` and the redraw all follow.
+
+The end to end test asserts `Mouse` and not only `RawMouse`, since nothing but the cursor task
+writes `Mouse`, and then counts the black pixels where the arrow should have been drawn and
+where it should have been erased. The relative mouse stays, on `-mouse relative` and on the
+menu, for anything that wants pushing rather than pointing at; the button is on the VIA either
+way and needs none of this.
+
+**And the one that got through: nothing may be written while the processor is masking the
+interrupt.** The overlay is cleared *before* the memory test, not after, so the low memory
+globals are RAM under test long before they are globals. A position written into the middle of
+the byte write subtest is read back as a pattern that was never written and the machine puts up
+**Sad Mac 03FFFF** — which it did, on the first real run, and on no test at all: every test
+placed the pointer on a machine that had already booted, which is the one case where this
+cannot happen. The guard is the interrupt mask rather than any pattern matching of the low
+memory, because it is the same condition twice over: `vectors.s:128` masks everything at level 7
+before the first instruction of the boot and `vectors.s:973` is the only place that drops it,
+after the memory test has passed, after the low memory is laid out, and after the cursor task is
+installed. A machine that would not take the vertical blanking is a machine whose cursor task
+will not run, so there is never anything to gain by writing behind the mask and, during the
+boot, everything to lose. It costs an occasional skipped frame while a System masks interrupts
+in a critical section, which is a frame in which the machine could not have moved its own cursor
+either.
 
 ## Worth building early
 
