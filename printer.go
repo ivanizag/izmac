@@ -103,19 +103,18 @@ func newPrinter(config *Configuration) (*printer, error) {
 		if prefix == "" {
 			prefix = defaultPrinterPagePrefix
 		}
-		p := &printer{
+		return &printer{
 			channel: channel,
 			name:    printerImageWriter,
 			target:  prefix + "_nnn.png",
-		}
-		p.open = func() (io.WriteCloser, error) {
-			w := imagewriter.New(prefix)
-			w.OnPage = func(name string) {
-				fmt.Printf("The printer has finished a page: %v\n", name)
-			}
-			return w, nil
-		}
-		return p, nil
+			open: func() (io.WriteCloser, error) {
+				w := imagewriter.New(prefix)
+				w.OnPage = func(name string) {
+					fmt.Printf("The printer has finished a page: %v\n", name)
+				}
+				return w, nil
+			},
+		}, nil
 	}
 
 	return nil, fmt.Errorf("unknown printer %q, use %v, %v or %v",
