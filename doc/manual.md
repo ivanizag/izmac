@@ -6,7 +6,7 @@ white screen, two 800K diskette drives and a SCSI bus. izmac runs the real
 ROM and the real software, and what you get on the screen is what the machine
 put there.
 
-This manual is in six parts. If you have never used a Macintosh of that age,
+This manual is in seven parts. If you have never used a Macintosh of that age,
 read the first two and stop; the rest is there when you want it.
 
 | | |
@@ -14,6 +14,7 @@ read the first two and stop; the rest is there when you want it.
 | **This page** | installing izmac, the first run, and what the machine is |
 | [Disks and diskettes](disks.md) | where the software comes from, and how to put it in |
 | [Keyboard, mouse and the menu](controls.md) | driving the machine and driving the emulator |
+| [Printing](printing.md) | the ImageWriter on the printer port, and where the pages go |
 | [Command line options](options.md) | every option of both frontends |
 | [Speed, the clock and the tracers](advanced.md) | the emulator's own knobs, and the debugging tools |
 | [When something goes wrong](troubleshooting.md) | the failures worth recognising |
@@ -189,12 +190,14 @@ and the ROM overlay, the video, the sound, the VIA and the real time clock
 with its parameter RAM, the keyboard and the mouse, the SCSI bus with up to
 seven disks on it, and both diskette drives — reading, writing and formatting.
 
-What is not there is the pair of serial ports. Enough of the serial chip is
-emulated for the mouse, which is wired to it, and no more. Nothing that talks
-over a serial port works: no LocalTalk network, no AppleTalk, no printing to
-an ImageWriter or a LaserWriter, no modem. izmac starts the machine with both
-ports marked as in use, which is what a real Macintosh with AppleTalk turned
-off in the Chooser looks like, and is what keeps a System from trying.
+The serial ports go one way. What the machine sends out of one of them arrives,
+which is what a printer needs: choose the ImageWriter in the Chooser and the
+pages come out as images beside the emulator. See [Printing](printing.md).
+Nothing arrives the other way, and nothing that has to be answered works: no
+LocalTalk network, no AppleTalk, no LaserWriter, no modem. izmac starts the
+machine with both ports marked as in use for a serial device, which is what a
+real Macintosh with AppleTalk turned off in the Chooser looks like, and is what
+keeps a System from taking a port for the network and waiting forever for it.
 
 ## Where izmac writes
 
@@ -206,6 +209,7 @@ Everything goes in the directory you ran it from:
 | `izmac_macpaint.dsk` | the MacPaint diskette, if izmac had to download one because you named no image |
 | `izmac_pram.bin` | the parameter RAM, which is where the machine keeps the date, the volume and the desktop settings between runs. Change it with `-pram` |
 | `izmac_<date>-<time>.png` | a screenshot, when you ask for one with F12 or from the menu |
+| `izmac_page_<n>.png` | a page the machine printed. Change it with `-printerfile`, or turn the printer off with `-printer none` |
 
 Your disk images are written in place, so what the Macintosh saves stays
 saved.

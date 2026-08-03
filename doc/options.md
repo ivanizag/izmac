@@ -37,6 +37,9 @@ Both frontends take all of these.
 | `-speed <mhz>` | `plus` | `plus` for the real 7.8336 MHz, `full` for as fast as your machine goes, or a number of Mhz |
 | `-pram <file>` | `izmac_pram.bin` | where the parameter RAM is kept between runs |
 | `-clipboard` | on | share the clipboard with your system, both ways. `-clipboard=false` keeps them apart. See [Keyboard, mouse and the menu](controls.md) |
+| `-printer <what>` | `imagewriter` | what is on the serial port: `imagewriter` for pages as images, `raw` to keep the bytes as they come, `none` for nothing. See [Printing](printing.md) |
+| `-printerport <port>` | `printer` | the port the printer is on, `printer` or `modem` |
+| `-printerfile <name>` | | where the printer writes: the file the raw mode appends to, or the prefix the page images are named after. Each mode has its own default |
 | `-wallclock` | off | read the clock from the host every time, instead of starting from it and counting the machine's own seconds |
 | `-trace <list>` | | tracers to turn on, comma separated: `cpu`, `toolbox`, `sadmac`, `scsi`, `floppy` |
 | `-profile` | off | write a CPU profile of the emulator itself |
@@ -88,4 +91,7 @@ izmac -rom macplus.rom -ram 4096 -speed full mydisk.img
 
 # Keep this machine's settings apart from the others
 izmac -pram work-pram.bin work.img
+
+# Print to the modem port instead, and keep the bytes rather than the pages
+izmac -printer raw -printerport modem work.img
 ```

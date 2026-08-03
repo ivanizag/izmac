@@ -248,7 +248,7 @@ the chip has no idea which is which.
 */
 func TestTheMouseReachesTheRightChannels(t *testing.T) {
 	m := newMouse()
-	s := component.NewSCC8530()
+	s := component.NewSCC8530(cyclesPerSecond)
 
 	/*
 		The lines settle before the interrupts are enabled, which is the

@@ -422,10 +422,14 @@ serial device instead of free.
 That difference keeps AppleTalk off. A System that finds a free port takes it
 for AppleTalk, and the LocalTalk driver then programs the SCC for a frame and
 waits, without a timeout, for the interrupt that says the frame went out. The
-SCC here is only as much of the chip as the mouse needs, so that interrupt
+SCC here is the asynchronous side of the chip and no more, so that interrupt
 never comes and the startup hangs: System 7.5 stops on its Starting up
 screen. Leaving the ports spoken for is what a Macintosh with AppleTalk
 turned off in the Chooser looks like, and it boots.
+
+Marking them for a serial device rather than free is also what lets a printer
+work: the serial driver takes a port already spoken for as one it may open,
+which is the same thing a Macintosh with a printer on it does.
 
 	$00 SPValid   $a8, the byte that says the rest is worth reading
 	$01 SPATalkA  the AppleTalk node hints, of no use with it off

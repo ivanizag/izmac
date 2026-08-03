@@ -121,18 +121,22 @@ func TestQuartersAreDecoded(t *testing.T) {
 /*
 The serial controller is reached on its own quarter, on the read side and on
 the write side, and it is not behind the device interface so it is checked by
-writing a register and reading it back.
+writing a register and reading it back. The register 15 is the one to use:
+the low registers report the state of the chip rather than what was written
+to them, and 15 is the one the ROM itself reads back. It is reached with the
+point high command, since the pointer is only three bits wide.
 */
 func TestTheSerialQuarterIsDecoded(t *testing.T) {
 	m := newTestMemoryManager(1024)
 	m.setOverlay(false)
 
+	const pointAt15 = 0x0f
+
 	for _, base := range []uint32{0x80_0000, 0xa0_0000} {
-		// Point at the register 1 and write it
-		m.Poke(base, 1)
+		m.Poke(base, pointAt15)
 		m.Poke(base, 0x5a)
 
-		m.Poke(base, 1)
+		m.Poke(base, pointAt15)
 		if got := m.Peek(base); got != 0x5a {
 			t.Errorf("$%06x did not reach the serial controller, it read $%02x",
 				base, got)

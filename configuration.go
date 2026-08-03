@@ -57,6 +57,18 @@ type Configuration struct {
 	// mouseRelative
 	Mouse string
 
+	// Printer is what is on the end of a serial port: none, raw or
+	// imagewriter
+	Printer string
+
+	// PrinterPort is the port it hangs from, printer or modem
+	PrinterPort string
+
+	// PrinterFile is where the printer writes: the file the raw mode
+	// appends to, or the prefix of the pages the ImageWriter draws. Empty
+	// takes the default of whichever mode is in use.
+	PrinterFile string
+
 	// Speed is the processor clock in Mhz, or one of the names below
 	Speed string
 
@@ -107,6 +119,11 @@ const (
 	mouseAbsolute = "absolute"
 	mouseRelative = "relative"
 
+	// The two serial ports a printer can be put on, named as the machine's
+	// own software names them
+	printerPortPrinter = "printer"
+	printerPortModem   = "modem"
+
 	// defaultScsiDriverFile is where a borrowed SCSI driver is kept, and is
 	// not a ROM at all: it is the front of a disk image, the maps and the
 	// SCSI driver in the layout they were found in. The name says what it
@@ -152,6 +169,8 @@ func NewConfiguration() *Configuration {
 		Speed:         speedPlus,
 		Mouse:         mouseAbsolute,
 		Clipboard:     true,
+		Printer:       printerImageWriter,
+		PrinterPort:   printerPortPrinter,
 		disketteFile:  defaultDisketteFile,
 		absoluteMouse: true,
 	}
@@ -360,6 +379,17 @@ func (c *Configuration) AddFlags(fs *flag.FlagSet) {
 			"the machine where yours is, '"+mouseRelative+"' pushes it by "+
 			"the movement of yours, the way the hardware does, and the "+
 			"window captures your pointer to do it")
+	fs.StringVar(&c.Printer, "printer", c.Printer,
+		"what to attach to the serial port: '"+printerNone+"', '"+
+			printerRaw+"' to append every byte sent to a file, or '"+
+			printerImageWriter+"' to draw the pages an ImageWriter II "+
+			"would print")
+	fs.StringVar(&c.PrinterPort, "printerport", c.PrinterPort,
+		"the serial port the printer is on, '"+printerPortPrinter+
+			"' or '"+printerPortModem+"'")
+	fs.StringVar(&c.PrinterFile, "printerfile", c.PrinterFile,
+		"where the printer writes: the file the raw mode appends to, or "+
+			"the prefix of the page images. Each mode has its own default")
 	fs.StringVar(&c.Speed, "speed", c.Speed,
 		"cpu speed in Mhz, '"+speedPlus+"' for the real "+
 			"7.8336Mhz of the machine, '"+speedFull+"' for as fast as "+
@@ -402,6 +432,10 @@ func (c *Configuration) Validate() error {
 		return err
 	}
 
+	if err := c.validatePrinter(); err != nil {
+		return err
+	}
+
 	return c.parseSpeed()
 }
 
@@ -417,6 +451,29 @@ func (c *Configuration) parseMouse() error {
 		return fmt.Errorf("invalid mouse %q, use '%v' or '%v'",
 			c.Mouse, mouseAbsolute, mouseRelative)
 	}
+	return nil
+}
+
+/*
+validatePrinter checks the printer options, so that a mode or a port that was
+mistyped is said so at once rather than on the first byte printed, which is
+minutes into a session and after the mistake has been forgotten.
+*/
+func (c *Configuration) validatePrinter() error {
+	switch c.Printer {
+	case printerNone, "", printerRaw, printerImageWriter:
+	default:
+		return fmt.Errorf("unknown printer %q, use %v, %v or %v",
+			c.Printer, printerNone, printerRaw, printerImageWriter)
+	}
+
+	switch c.PrinterPort {
+	case printerPortPrinter, "", printerPortModem:
+	default:
+		return fmt.Errorf("unknown serial port %q, use %v or %v",
+			c.PrinterPort, printerPortPrinter, printerPortModem)
+	}
+
 	return nil
 }
 

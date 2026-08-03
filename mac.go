@@ -36,6 +36,9 @@ type Mac struct {
 	// clipboard is nil when the machine keeps its clipboard to itself
 	clipboard *clipboard
 
+	// printer is nil when there is nothing on either serial port
+	printer *printer
+
 	commandChannel chan command
 
 	cycles uint64
@@ -192,6 +195,15 @@ func newMac(config *Configuration, r *storage.Rom, disks []storage.BlockDisk,
 
 	if config.Clipboard {
 		m.clipboard = newClipboard()
+	}
+
+	p, err := newPrinter(config)
+	if err != nil {
+		return nil, err
+	}
+	if p != nil {
+		m.printer = p
+		mm.scc.AttachSink(p.channel, p)
 	}
 
 	m.cpu = iz68000.NewM68000(mm)
@@ -549,6 +561,10 @@ func (m *Mac) Summary() []string {
 	for _, disk := range m.GetDisks() {
 		lines = append(lines, fmt.Sprintf("SCSI %v: %v, %v blocks",
 			disk.Id, disk.Name, disk.Blocks))
+	}
+
+	if m.printer != nil {
+		lines = append(lines, m.printer.String())
 	}
 
 	for _, diskette := range m.GetDiskettes() {

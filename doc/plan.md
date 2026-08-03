@@ -347,6 +347,74 @@ checksums cover the whole file and would otherwise be recomputed against it on e
 The write back happens when the motor stops, which the driver does a few seconds after it has
 finished, so the image on the host follows what the Macintosh believes it has saved.
 
+## The printer on the serial port
+
+The SCC was the mouse and nothing else: the two carrier detect inputs and the
+registers the interrupt handler reads. A printer needs the other half of it, the
+transmitter, and that turns out to be four things: **RR0 bit 2**, the transmit
+buffer empty the driver polls before every byte; the **data register** on the
+other side of the channel address; the **transmit interrupt**, vector `$0` for
+channel B and `$8` for channel A, cleared by the reset transmit interrupt
+pending command `$28`; and **RR1 bit 0**, the all sent the driver waits for
+before it closes the port.
+
+Two details of that are worth keeping.
+
+**The transmit interrupt must not hold the mouse up.** The y axis and the
+printer port are the same channel. `mouse.tick` is told to hold an axis still
+while its interrupt is unanswered, and if that "unanswered" includes the
+transmitter then every byte printed freezes the axis until the handler gets to
+it. The chip keeps the two interrupts apart and `Pending()` reports only the
+carrier detect one.
+
+**A byte takes the time it takes.** The registers 12 and 13 hold the baud rate
+generator's time constant, counted down from the 3.672MHz clock and divided
+again by the clock mode of the register 4, and the registers 4 and 5 say how
+many bits go round each byte. That is enough to work out that the 9600 baud the
+Macintosh asks for is 8160 cycles a byte, and the transmitter holds the buffer
+busy for exactly that. Handing every byte over the instant it is written also
+works — the driver polls before each one — but then a page prints in a tenth of
+a second, and the machine spends that tenth of a second in an interrupt storm
+rather than doing anything else.
+
+`printer.go` puts something on the end of the wire and `imagewriter/` is what
+that something is.
+
+**The ImageWriter was written off the wire, not out of a manual.** The raw mode
+came first: print a page from a real System with the real driver, look at what
+came out of the port. What it says is a short list.
+
+| | |
+|---|---|
+| `ESC G nnnn` | a run of graphics, `nnnn` bytes of it, one column of eight dots each |
+| `ESC F nnnn` | the head to a dot column |
+| `ESC T nn` | the line feed, in 144ths of an inch |
+| `LF`, `ESC f`, `ESC r` | feed the paper, forwards or backwards |
+| `ESC N`, `ESC P` and the rest | the character pitch, which is also the graphics density |
+
+**The bit 0 of a graphics byte is the top dot**, which is the other way round
+from the Epson printers everything else of the period spoke to. The way to tell
+without a manual is to print a page of text and look at the middle of the first
+`M`: the dots that make its V descend towards the middle of the letter one way
+round and rise the other, and the wrong one is a `W`.
+
+**The driver never sends a form feed.** It prints the page and then feeds the
+paper out — `ESC T 99` twice and some smaller ones — so a page here is finished
+when the paper has gone eleven inches and not when anything says so. Closing the
+printer finishes a page that never got that far, which is what the shutdown does.
+
+The paper moves in 144ths of an inch and the eight pins are a 72nd apart, so the
+page is drawn at **144 dots per inch** and a dot is two rows tall. Across, the
+Macintosh selects the pica pitch for its 72 dot per inch bitmap and the pica
+pitch prints 80 dots to the inch, which is why **a Macintosh page comes off an
+ImageWriter a tenth narrower than it was on the screen**. That is reproduced
+rather than corrected.
+
+**The thing that took the longest had nothing to do with any of this.** A
+System Folder with no printer driver in it gives no sign of missing one: the
+Chooser simply has an empty list, and the application says it cannot print. The
+driver is a separate file that a plain System install does not have.
+
 ## Package structure
 
 Flat root package with subpackages only where izapple2 has them, filename prefixes carrying
@@ -372,10 +440,13 @@ izmac/
   iwmDrive.go         a drive: the motor, the head, the lines it reports and
                       the track going past
   sound.go            sound buffer to audio sink
+  printer.go          what is on the end of a serial port, and the raw mode
   traceToolbox.go     A-line trap tracing by name
   traceSadMac.go      Sad Mac error code decoding
   component/          the chips, knowing nothing of the machine: the 6522
                       copied from izapple2 and extended, and the clock
+  imagewriter/        an ImageWriter II: the commands it takes and the pages
+                      it prints, knowing nothing of the machine
   scsi/               the bus, the 5380 and the disks on it
   storage/            the files read off the host: images, their kind, the ROM,
                       the group coded recording and the diskette layout
