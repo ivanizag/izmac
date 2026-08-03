@@ -211,6 +211,31 @@ func (m *memoryManager) Poke(address uint32, value uint8) {
 	}
 }
 
+/*
+peekLong and pokeLong read and write a long, the four bytes of an address in
+the order the machine holds them.
+
+They are methods of the manager and are deliberately not part of the Memory
+interface iz68000 takes. That one stays byte granular: the processor composes
+its own words and longs and raises the address error on an odd one while it
+does, and moving that in here would take the address errors away, which the
+ROM and MacsBug both depend on. Nothing above the processor is bound by that,
+and the low memory globals are read and written a long at a time.
+*/
+func (m *memoryManager) peekLong(address uint32) uint32 {
+	value := uint32(0)
+	for i := uint32(0); i < 4; i++ {
+		value = value<<8 | uint32(m.Peek(address+i))
+	}
+	return value
+}
+
+func (m *memoryManager) pokeLong(address uint32, value uint32) {
+	for i := uint32(0); i < 4; i++ {
+		m.Poke(address+i, uint8(value>>(24-8*i)))
+	}
+}
+
 const (
 	// The offsets from the base of each of the two serial ports
 	sccOffsetBControl = 0

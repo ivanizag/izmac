@@ -10,51 +10,37 @@ import (
 /*
 The mouse of the host handed to the machine, one of the two ways it can be.
 
-The Macintosh mouse is a relative device: the ROM counts quadrature
-transitions and keeps the pointer itself, so the hardware has nowhere to put a
-position and the honest way to drive it is to push it by the movement of the
-host's. That needs the pointer captured, so that the host's own one does not
-run off the window and so that the movement keeps coming once it reaches the
-edge of the screen. The secondary button gives it back, and so does escape:
-the Macintosh has one button and no escape key, so neither is anything the
-machine wants.
+The machine takes it either way: SetMousePosition for where the host has its
+pointer, MoveMouse for how far it has moved. Which of the two is wanted is the
+machine's to say, IsAbsoluteMouse, since the command line and the menu both
+change it.
 
-The other way goes around the hardware and writes the position into the low
-memory the ROM keeps the pointer in, which is what izmac does by default and
-what pointer.go explains. Then the pointer of the machine is always under the
-pointer of the host, there is nothing to capture and nothing to give back, and
-the host's own pointer is hidden while it is over the screen so that only one
-of the two is seen.
-
-Which of the two it is belongs to the machine rather than to this: the menu
-switches it while it runs and the command line sets it to start with.
+What is left for here is the window. A position wants the host pointer hidden
+while it is over the screen, since the machine draws one under it, and a
+movement wants it captured, so that it does not run off the window and keeps
+coming once it reaches the edge of the screen. Escape and the secondary button
+give it back: the Macintosh has one button and no escape key, so neither is
+anything the machine wants.
 */
 type ebitenMouse struct {
 	m *izmac.Mac
 
-	// The size of the screen of the machine, to tell a pointer over it from
-	// one somewhere else. It is taken from the image the machine hands over,
-	// as the window itself is.
+	// The screen of the machine, taken from the image it hands over as the
+	// window itself is, to tell a pointer over it from one somewhere else
 	width  int
 	height int
 
-	// captured is the pointer taken by the machine, which only the pushed
-	// mouse does, and lastX and lastY where it was when it was last looked at
+	// captured is the host pointer held by the window, and lastX and lastY
+	// where it was when it was last looked at
 	captured bool
 	lastX    int
 	lastY    int
 
-	// hidden is the pointer of the host taken out of sight under the one of
-	// the machine, which only the placed mouse does
+	// hidden is the host pointer taken out of sight under the machine's
 	hidden bool
 
-	/*
-		down is the button as the machine was last told of it. A press only
-		counts while the pointer is over the screen, so that a click meant for
-		something else on the host does not go through, and a release counts
-		wherever it happens, so that a drag out of the window is not left
-		held down.
-	*/
+	// down is the button as the machine was last told of it, so that a drag
+	// that leaves the window is released rather than left held
 	down bool
 }
 
@@ -76,12 +62,8 @@ func (mo *ebitenMouse) update() {
 	mo.updatePushed()
 }
 
-/*
-updatePlaced puts the pointer of the machine where the host has its own. There
-is nothing to capture: what the machine is given is a position, and the
-pointer of the host is only hidden while it is over the screen so that the two
-are not both drawn.
-*/
+// updatePlaced tells the machine where the host has its pointer, and hides it
+// while it is over the screen since the machine draws one under it
 func (mo *ebitenMouse) updatePlaced() {
 	if mo.captured {
 		// Left over from the other way round, the pointer goes back
@@ -99,12 +81,8 @@ func (mo *ebitenMouse) updatePlaced() {
 		pressed = false
 	}
 
-	/*
-		The position follows the pointer over the screen, and goes on
-		following it through a drag that has left it: the machine holds it
-		against the edge it left by, which is where a drag off the window is
-		pulling from, rather than dropping it where it happened to cross.
-	*/
+	// A drag that has left the screen goes on being reported, and the machine
+	// holds it against the edge it left by
 	if over || pressed {
 		mo.m.SetMousePosition(x, y)
 	}
@@ -117,8 +95,7 @@ func (mo *ebitenMouse) updatePlaced() {
 // has to hold on to the pointer to keep receiving
 func (mo *ebitenMouse) updatePushed() {
 	if !mo.captured {
-		// The pointer of the host was under the one of the machine while it
-		// was being placed, and there is nothing to hide it under now
+		// Nothing of the machine's is being drawn over it now
 		mo.hideCursor(false)
 
 		// Clicking on the window takes the pointer
@@ -145,29 +122,17 @@ func (mo *ebitenMouse) updatePushed() {
 	mo.m.SetMouseButton(ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft))
 }
 
-/*
-overScreen tells whether the pointer of the host is over the screen of the
-machine rather than somewhere else on the host.
-
-A window that does not have the focus is somewhere else, wherever the pointer
-happens to be. Ebiten goes on reporting a position over a window that is
-behind another one, and the machine has no business following a pointer that
-is being used on something else, or hiding it from whatever is in front.
-*/
+// overScreen tells whether the host pointer is over the screen of the machine.
+// A window without the focus is never it: ebiten goes on reporting a position
+// over a window that is behind another one, and a pointer being used on
+// something else is not the machine's to follow or to hide.
 func (mo *ebitenMouse) overScreen(x int, y int) bool {
 	return ebiten.IsFocused() &&
 		x >= 0 && x < mo.width && y >= 0 && y < mo.height
 }
 
-/*
-hideCursor takes the pointer of the host out of sight while it is over the
-screen, since the machine draws its own one under it, and gives it back as it
-leaves.
-
-The mode is only set as it changes. Ebiten takes it on every frame without
-complaining, but the frames where nothing has moved are the ones with nothing
-to say.
-*/
+// hideCursor takes the host pointer out of sight and gives it back, and only
+// says so to ebiten as it changes
 func (mo *ebitenMouse) hideCursor(hide bool) {
 	if hide == mo.hidden {
 		return
@@ -189,11 +154,8 @@ func (mo *ebitenMouse) capture() {
 	mo.hidden = false
 }
 
-/*
-release gives the pointer of the host back, however the machine was holding
-it. The menu asks for this as it opens: it is drawn over the screen of the
-machine and needs a pointer to be clicked with.
-*/
+// release gives the host pointer back, captured or hidden. The menu asks for
+// it as it opens, since it needs a pointer to be clicked with.
 func (mo *ebitenMouse) release() {
 	ebiten.SetCursorMode(ebiten.CursorModeVisible)
 	mo.hidden = false
@@ -202,11 +164,8 @@ func (mo *ebitenMouse) release() {
 	mo.m.SetMouseButton(false)
 }
 
-/*
-hint is what to put on the title bar to say how to get the pointer back, or
-how to give it over. A placed pointer needs neither and says nothing: it is
-already where the host is pointing and there is nothing to be told.
-*/
+// hint is what to put on the title bar to say how to give the pointer over or
+// get it back. A machine taking a position needs neither and says nothing.
 func (mo *ebitenMouse) hint() string {
 	if mo.m.IsAbsoluteMouse() {
 		return ""

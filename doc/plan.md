@@ -365,7 +365,7 @@ izmac/
   via.go              the Mac's VIA wiring, over component/mos6522.go
   keyboard.go         key code table and transition queue
   mouse.go            quadrature generation
-  pointer.go          the pointer put where the host's is, through the low
+  mousePointer.go     the pointer put where the host's is, through the low
                       memory the cursor task of the ROM works from
   iwm.go              the floppy controller: the soft switches, the status,
                       the data register and the handshake

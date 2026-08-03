@@ -235,7 +235,7 @@ func (m *Mac) lineTick() {
 		here at all.
 	*/
 	if m.line == vBlankLine {
-		m.pointer.place(m.mm, interruptMaskOf(m.cpu.GetSR()))
+		m.mousePointer.place(m.mm, interruptMaskOf(m.cpu.GetSR()))
 	}
 
 	// One rising edge as the blanking starts and one falling edge as the

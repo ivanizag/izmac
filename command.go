@@ -116,8 +116,8 @@ placed has no use for steps left over from being pushed: they would arrive
 after the placing and walk the pointer off it.
 */
 func (m *Mac) toggleAbsoluteMouse() {
-	absolute := !m.pointer.isAbsolute()
-	m.pointer.setAbsolute(absolute)
+	absolute := !m.mousePointer.isAbsolute()
+	m.mousePointer.setAbsolute(absolute)
 	if absolute {
 		m.mouse.forgetMovement()
 	}

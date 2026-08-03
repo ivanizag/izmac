@@ -4,7 +4,7 @@ import "testing"
 
 // newTestPointer returns a pointer placing positions on a machine that is off
 // the overlay map, which is where the low memory globals are RAM
-func newTestPointer(t *testing.T, absolute bool) (*pointer, *memoryManager) {
+func newTestMousePointer(t *testing.T, absolute bool) (*mousePointer, *memoryManager) {
 	t.Helper()
 
 	mm := newTestMemoryManager(1024)
@@ -14,12 +14,12 @@ func newTestPointer(t *testing.T, absolute bool) (*pointer, *memoryManager) {
 	// as except while an application is drawing over it
 	mm.Poke(crsrCoupleAddress, 0xff)
 
-	return newPointer(absolute), mm
+	return newMousePointer(absolute), mm
 }
 
 // pointAt reads one of the packed points of the low memory
 func pointAt(mm *memoryManager, address uint32) (v int16, h int16) {
-	point := peekPoint(mm, address)
+	point := mm.peekLong(address)
 	return int16(point >> 16), int16(point)
 }
 
@@ -40,7 +40,7 @@ func bothPoints(t *testing.T, mm *memoryManager) (v int16, h int16) {
 }
 
 func TestThePointerIsPlacedWhereItIsPut(t *testing.T) {
-	p, mm := newTestPointer(t, true)
+	p, mm := newTestMousePointer(t, true)
 
 	p.put(100, 50)
 	p.place(mm, 0)
@@ -63,7 +63,7 @@ rather than a one of their own. Placing a pointer does the same thing, so an
 application that has taken the cursor over keeps it.
 */
 func TestAnUncoupledCursorIsNotToldTheMouseMoved(t *testing.T) {
-	p, mm := newTestPointer(t, true)
+	p, mm := newTestMousePointer(t, true)
 	mm.Poke(crsrCoupleAddress, 0)
 
 	p.put(100, 50)
@@ -77,7 +77,7 @@ func TestAnUncoupledCursorIsNotToldTheMouseMoved(t *testing.T) {
 // A position off the screen is brought back to its edge, which is where a
 // drag that has left the window should be pulling from
 func TestThePointerIsBroughtBackToTheScreen(t *testing.T) {
-	p, mm := newTestPointer(t, true)
+	p, mm := newTestMousePointer(t, true)
 
 	for _, c := range []struct {
 		name  string
@@ -104,7 +104,7 @@ compared against, so this is also what keeps the cursor from being erased and
 drawn again sixty times a second while nothing is moving.
 */
 func TestAPointerAlreadyThereIsLeftAlone(t *testing.T) {
-	p, mm := newTestPointer(t, true)
+	p, mm := newTestMousePointer(t, true)
 
 	p.put(100, 50)
 	p.place(mm, 0)
@@ -133,14 +133,14 @@ cursor moved by anything else comes back on the next frame. An application
 moving it itself, a reset and the boot are all this case.
 */
 func TestAPointerMovedByTheMachineIsPutBack(t *testing.T) {
-	p, mm := newTestPointer(t, true)
+	p, mm := newTestMousePointer(t, true)
 
 	p.put(100, 50)
 	p.place(mm, 0)
 
 	// The machine takes the cursor somewhere of its own
-	pokePoint(mm, rawMouseAddress, packPoint(200, 300))
-	pokePoint(mm, mTempAddress, packPoint(200, 300))
+	mm.pokeLong(rawMouseAddress, packPoint(200, 300))
+	mm.pokeLong(mTempAddress, packPoint(200, 300))
 
 	p.place(mm, 0)
 	if v, h := bothPoints(t, mm); h != 100 || v != 50 {
@@ -152,7 +152,7 @@ func TestAPointerMovedByTheMachineIsPutBack(t *testing.T) {
 // A machine whose mouse is pushed rather than placed leaves the low memory
 // alone, whatever a frontend tells it about the pointer of the host
 func TestAPushedMouseIgnoresTheHostPointer(t *testing.T) {
-	p, mm := newTestPointer(t, false)
+	p, mm := newTestMousePointer(t, false)
 
 	p.put(100, 50)
 	p.place(mm, 0)
@@ -165,9 +165,9 @@ func TestAPushedMouseIgnoresTheHostPointer(t *testing.T) {
 // Until the host has pointed at the screen there is no position to place, and
 // the machine's own pointer is left where it is
 func TestAPointerNeverPutIsNotPlaced(t *testing.T) {
-	p, mm := newTestPointer(t, true)
+	p, mm := newTestMousePointer(t, true)
 
-	pokePoint(mm, rawMouseAddress, packPoint(200, 300))
+	mm.pokeLong(rawMouseAddress, packPoint(200, 300))
 	p.place(mm, 0)
 
 	if v, h := pointAt(mm, rawMouseAddress); h != 300 || v != 200 {
@@ -184,7 +184,7 @@ memory test writes patterns over the whole of the RAM and reads them back, and
 a position written into the middle of it is a Sad Mac.
 */
 func TestNothingIsPlacedWhileTheInterruptIsMasked(t *testing.T) {
-	p, mm := newTestPointer(t, true)
+	p, mm := newTestMousePointer(t, true)
 	p.put(100, 50)
 
 	for mask := uint8(viaInterruptLevel); mask <= 7; mask++ {
@@ -217,7 +217,7 @@ ROM, but the read that decides whether it is needed would be of ROM bytes and
 would ask for a write on every frame of the boot.
 */
 func TestNothingIsPlacedWhileTheOverlayIsOn(t *testing.T) {
-	p, mm := newTestPointer(t, true)
+	p, mm := newTestMousePointer(t, true)
 	mm.setOverlay(true)
 
 	writes := 0

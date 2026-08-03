@@ -69,7 +69,7 @@ const (
 pointer is where the host says its own pointer is, waiting to be given to the
 machine.
 */
-type pointer struct {
+type mousePointer struct {
 	/*
 		absolute is whether the pointer of the machine is put where the
 		host's is rather than pushed by the movement of it, and wanted is
@@ -85,24 +85,24 @@ type pointer struct {
 	wanted   atomic.Int64
 }
 
-// pointerNowhere is the wanted position while the host has not pointed at the
+// mousePointerNowhere is the wanted position while the host has not pointed at the
 // screen yet, which is not the same as pointing at its top left corner
-const pointerNowhere = -1
+const mousePointerNowhere = -1
 
-func newPointer(absolute bool) *pointer {
-	p := &pointer{}
+func newMousePointer(absolute bool) *mousePointer {
+	p := &mousePointer{}
 	p.absolute.Store(absolute)
-	p.wanted.Store(pointerNowhere)
+	p.wanted.Store(mousePointerNowhere)
 	return p
 }
 
 // isAbsolute tells whether the pointer of the machine is put where the host's
 // is rather than pushed by the movement of it
-func (p *pointer) isAbsolute() bool {
+func (p *mousePointer) isAbsolute() bool {
 	return p.absolute.Load()
 }
 
-func (p *pointer) setAbsolute(absolute bool) {
+func (p *mousePointer) setAbsolute(absolute bool) {
 	p.absolute.Store(absolute)
 }
 
@@ -114,7 +114,7 @@ machine would pin it there itself, and a drag that has left the window is the
 case that wants it: the pointer stays against the side it left by instead of
 stopping wherever it was when it crossed.
 */
-func (p *pointer) put(x int, y int) {
+func (p *mousePointer) put(x int, y int) {
 	p.wanted.Store(int64(packPoint(
 		clampToScreen(y, height), clampToScreen(x, width))))
 }
@@ -132,13 +132,13 @@ machine coming up, an application moving the cursor itself and a reset all
 right themselves on the next frame, instead of leaving the two pointers apart
 until the host is moved.
 */
-func (p *pointer) place(mm *memoryManager, interruptMask uint8) {
+func (p *mousePointer) place(mm *memoryManager, interruptMask uint8) {
 	if !p.absolute.Load() {
 		return
 	}
 
 	wanted := p.wanted.Load()
-	if wanted == pointerNowhere {
+	if wanted == mousePointerNowhere {
 		return
 	}
 
@@ -161,12 +161,12 @@ func (p *pointer) place(mm *memoryManager, interruptMask uint8) {
 		return
 	}
 
-	if peekPoint(mm, rawMouseAddress) == uint32(wanted) {
+	if mm.peekLong(rawMouseAddress) == uint32(wanted) {
 		return
 	}
 
-	pokePoint(mm, mTempAddress, uint32(wanted))
-	pokePoint(mm, rawMouseAddress, uint32(wanted))
+	mm.pokeLong(mTempAddress, uint32(wanted))
+	mm.pokeLong(rawMouseAddress, uint32(wanted))
 	mm.Poke(crsrNewAddress, mm.Peek(crsrCoupleAddress))
 }
 
@@ -188,22 +188,8 @@ func clampToScreen(value int, size int) int {
 	return value
 }
 
-// packPoint packs a Point the way the machine holds one, the vertical word
-// first
+// packPoint packs a Point into the long the machine holds one in, the
+// vertical word first
 func packPoint(v int, h int) uint32 {
 	return uint32(uint16(v))<<16 | uint32(uint16(h))
-}
-
-func peekPoint(mm *memoryManager, address uint32) uint32 {
-	point := uint32(0)
-	for i := uint32(0); i < 4; i++ {
-		point = point<<8 | uint32(mm.Peek(address+i))
-	}
-	return point
-}
-
-func pokePoint(mm *memoryManager, address uint32, point uint32) {
-	for i := uint32(0); i < 4; i++ {
-		mm.Poke(address+i, uint8(point>>(24-8*i)))
-	}
 }
