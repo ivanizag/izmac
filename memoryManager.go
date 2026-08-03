@@ -114,7 +114,7 @@ func newMemoryManager(ramSizeKb int, romData []uint8, floppyTrace bool) *memoryM
 	}
 
 	m.scsi = scsi.NewBus()
-	m.scc = component.NewSCC8530()
+	m.scc = component.NewSCC8530(cyclesPerSecond)
 	m.iwm = newIwm(floppyTrace)
 
 	return m

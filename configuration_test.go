@@ -55,6 +55,31 @@ func TestTheDefaults(t *testing.T) {
 	if !c.Clipboard {
 		t.Error("the clipboard is not shared with the host by default")
 	}
+
+	// A machine of the time had a printer on the printer port, and one
+	// that is never printed to writes nothing anywhere
+	if c.Printer != printerImageWriter {
+		t.Errorf("the printer defaults to %v, wanted %v", c.Printer, printerImageWriter)
+	}
+	if c.PrinterPort != printerPortPrinter {
+		t.Errorf("the printer is on the %v port by default, wanted the %v one",
+			c.PrinterPort, printerPortPrinter)
+	}
+}
+
+// And it is taken off the machine altogether by asking for none
+func TestThePrinterCanBeTakenOff(t *testing.T) {
+	c := NewConfiguration()
+	err := c.ParseFlags("izmac", []string{"-rom", "rom.bin", "-printer", printerNone},
+		io.Discard)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	m := ensureNewMac(t, c, storage.RomFromData(make([]uint8, storage.RomSize)), nil, nil)
+	if m.printer != nil {
+		t.Error("-printer none left a printer on the machine")
+	}
 }
 
 /*

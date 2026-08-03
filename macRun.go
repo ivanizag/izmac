@@ -166,6 +166,7 @@ func (m *Mac) tick(cycles uint64) {
 
 	m.via.tick(cycles)
 	m.iwm.tick(cycles)
+	m.scc.Tick(cycles)
 
 	m.secondCycles += cycles
 	if m.secondCycles >= cyclesPerSecond {

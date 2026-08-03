@@ -131,6 +131,13 @@ func (m *Mac) executeCommands() bool {
 		case c := <-m.commandChannel:
 			switch c.getId() {
 			case CommandKill:
+				// A page that was still being printed when the machine
+				// was shut down is finished rather than lost
+				if m.printer != nil {
+					if err := m.printer.close(); err != nil {
+						fmt.Println(err)
+					}
+				}
 				return true
 			case CommandReset:
 				m.reset()

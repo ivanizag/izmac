@@ -68,12 +68,12 @@ image has no SCSI driver — a raw file of zeros is not a startup disk. See
 
 ## It stops on the *Welcome to Macintosh* or *Starting up* screen
 
-If the machine gets that far and stops, the usual cause is AppleTalk. The
-serial ports are not emulated, so the LocalTalk driver programs the chip,
-waits for an interrupt that can never arrive, and never gives up. izmac starts
-the machine with both ports marked as in use so this does not happen, but a
-`izmac_pram.bin` saved by something else, or a System where AppleTalk was switched
-on, can get past that.
+If the machine gets that far and stops, the usual cause is AppleTalk. Only the
+asynchronous side of the serial chip is emulated, the side a printer is on, so
+the LocalTalk driver programs the chip for a frame, waits for an interrupt that
+can never arrive, and never gives up. izmac starts the machine with both ports
+marked as in use so this does not happen, but an `izmac_pram.bin` saved by
+something else, or a System where AppleTalk was switched on, can get past that.
 
 Delete `izmac_pram.bin` and start again, or switch AppleTalk off in the Chooser
 before it is saved.
@@ -119,6 +119,27 @@ character and no room for the em dashes, curly quotes and emoji of a modern
 system. What it has no equivalent for arrives as a question mark.
 
 **Pictures do not cross.** Text only, in both directions.
+
+## Printing
+
+**The Chooser has nothing in it, or an application says it cannot print until
+a printer is selected.** There is no printer driver in the System Folder of the
+disk you booted, and a System Folder gives no sign of missing one. The driver
+is a file called `ImageWriter`, it is not part of a plain System install, and
+[Printing](printing.md) says where to find one and what to do with it.
+
+**The printer is chosen and nothing comes out.** Look for the port: the Chooser
+asks for one after the ImageWriter icon is clicked, and izmac puts the printer
+on the printer port unless `-printerport modem` said otherwise. A page is
+written when the paper has gone past the end of it, which is a moment after the
+last line of it prints, and when the machine is shut down.
+
+**The page is narrower than it looked on the screen.** That is the machine and
+not the emulator: the screen is 72 dots to the inch and the printer prints them
+at 80. Every Macintosh page off an ImageWriter was a tenth narrow.
+
+**A LaserWriter does not appear.** It is on AppleTalk, which needs the side of
+the serial chip izmac does not emulate. The ImageWriter is the printer here.
 
 ## Disks
 

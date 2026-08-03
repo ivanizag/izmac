@@ -8,8 +8,10 @@ A Macintosh Plus emulator written in Go for macOS, Windows and Linux. Built on
 It runs the real ROM and the real software: the processor, the memory, the
 video and the sound, the clock with its parameter RAM, the keyboard and the
 mouse, the SCSI bus with up to seven disks on it, and both diskette drives,
-reading, writing and formatting. The clipboard is shared with the host. The
-serial ports are not there, so nothing that needs one works.
+reading, writing and formatting. The clipboard is shared with the host, and an
+ImageWriter II on the printer port turns what the machine prints into images.
+Nothing arrives the other way down a serial line, so AppleTalk and the
+LaserWriter are out.
 
 The development was assisted by Claude Code based on the architecture of my previous similar pre-AI projects [izapple2](https://github.com/ivanizag/izapple2), [iz6502](https://github.com/ivanizag/iz6502) and [bbz](https://github.com/ivanizag/bbz)
 
@@ -51,6 +53,7 @@ More info in the [manual](doc/manual.md) .
 | [The manual](doc/manual.md) | installing izmac, the first run, and what the machine is |
 | [Disks and diskettes](doc/disks.md) | where the software comes from, and how to put it in |
 | [Keyboard, mouse and the menu](doc/controls.md) | driving the machine and driving the emulator |
+| [Printing](doc/printing.md) | the ImageWriter on the printer port, and where the pages go |
 | [Command line options](doc/options.md) | every option of both frontends |
 | [Speed, the clock and the tracers](doc/advanced.md) | the emulator's own knobs, and the debugging tools |
 | [When something goes wrong](doc/troubleshooting.md) | the failures worth recognising |
