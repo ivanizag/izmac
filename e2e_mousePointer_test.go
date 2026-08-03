@@ -6,7 +6,7 @@ import "testing"
 The absolute pointer, end to end on the booted machine.
 
 What it checks is Mouse, the location at $0830 that every application reads,
-and not only the RawMouse that pointer.go writes. Nothing but the cursor task
+and not only the RawMouse that mousePointer.go writes. Nothing but the cursor task
 of the ROM writes Mouse, so a position turning up there is the whole chain
 working: the low memory was written where the task looks, CrsrNew was set the
 way the task wants it, the task ran on the vertical blanking and took the

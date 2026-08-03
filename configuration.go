@@ -99,7 +99,7 @@ const (
 
 	/*
 		mouseAbsolute puts the pointer of the machine where the host has its
-		own, which the hardware can not be told and pointer.go goes around it
+		own, which the hardware can not be told and mousePointer.go goes around it
 		to do. mouseRelative pushes the pointer by the movement of the host's,
 		which is what the mouse of the machine really reports and what leaves
 		a frontend with a pointer to capture.

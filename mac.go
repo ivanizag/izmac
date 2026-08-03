@@ -18,20 +18,20 @@ import (
 type Mac struct {
 	Name string
 
-	config   *Configuration
-	cpu      *iz68000.State
-	mm       *memoryManager
-	rom      *storage.Rom
-	video    *video
-	via      *via
-	rtc      *component.AppleRTC
-	keyboard *keyboard
-	mouse    *mouse
-	pointer  *pointer
-	scc      *component.SCC8530
-	sound    *sound
-	scsi     *scsi.Bus
-	iwm      *iwm
+	config       *Configuration
+	cpu          *iz68000.State
+	mm           *memoryManager
+	rom          *storage.Rom
+	video        *video
+	via          *via
+	rtc          *component.AppleRTC
+	keyboard     *keyboard
+	mouse        *mouse
+	mousePointer *mousePointer
+	scc          *component.SCC8530
+	sound        *sound
+	scsi         *scsi.Bus
+	iwm          *iwm
 
 	// clipboard is nil when the machine keeps its clipboard to itself
 	clipboard *clipboard
@@ -174,7 +174,7 @@ func newMac(config *Configuration, r *storage.Rom, disks []storage.BlockDisk,
 		rtc:            c,
 		keyboard:       k,
 		mouse:          mo,
-		pointer:        newPointer(config.absoluteMouse),
+		mousePointer:   newMousePointer(config.absoluteMouse),
 		sound:          so,
 		scsi:           mm.scsi,
 		scc:            mm.scc,
@@ -352,12 +352,12 @@ back to its edge.
 
 The mouse of the Macintosh reports movement and never a position, so this
 goes around it and writes the low memory the ROM keeps the pointer in, which
-pointer.go explains. A machine whose mouse is being pushed rather than placed
+mousePointer.go explains. A machine whose mouse is being pushed rather than placed
 ignores what is put here, so a frontend can keep telling it where the host
 points and leave the choice between the two to IsAbsoluteMouse.
 */
 func (m *Mac) SetMousePosition(x int, y int) {
-	m.pointer.put(x, y)
+	m.mousePointer.put(x, y)
 }
 
 /*
@@ -366,7 +366,7 @@ host's is, rather than pushed by the movement of it. It is what a frontend
 asks before deciding whether it has a pointer to capture.
 */
 func (m *Mac) IsAbsoluteMouse() bool {
-	return m.pointer.isAbsolute()
+	return m.mousePointer.isAbsolute()
 }
 
 /*
