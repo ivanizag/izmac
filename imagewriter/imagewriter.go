@@ -60,11 +60,8 @@ type ImageWriter struct {
 	// pages is how many have come out
 	pages int
 
-	// names is what they were called, for a caller that wants to say
-	names []string
-
-	// OnPage is told the name of every page as it comes out, for a caller
-	// that would rather say so as it happens than ask afterwards
+	// OnPage is told the name of every page as it comes out, which is how a
+	// caller says so
 	OnPage func(name string)
 
 	/*
@@ -163,11 +160,6 @@ func New(prefix string) *ImageWriter {
 	}
 	w.emit = w.writePng
 	return w
-}
-
-// Pages returns the names of the pages printed so far
-func (w *ImageWriter) Pages() []string {
-	return w.names
 }
 
 // Write takes bytes off the serial line
@@ -491,7 +483,6 @@ func (w *ImageWriter) finishPage() error {
 		return err
 	}
 
-	w.names = append(w.names, name)
 	if w.OnPage != nil {
 		w.OnPage(name)
 	}
