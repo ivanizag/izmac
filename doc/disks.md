@@ -122,6 +122,63 @@ DiskCopy image is written back as a DiskCopy image, checksums and all.
 image is recognised as a diskette and turned away with a reason rather than
 quietly attached to the SCSI bus as a hard disk.
 
+### Archives
+
+Most of the old Macintosh software on the web does not come as a disk image
+but wrapped for the mail and FTP servers of its day: BinHex, MacBinary,
+StuffIt, zip, often several of them one inside the other. izmac takes those as
+they come, the way [macprep](https://github.com/mastorak/macprep) prepares them
+for Mini vMac, and attaches the disk images it finds inside:
+
+```bash
+izmac "Mac System Software 6.0.8.7z"
+```
+
+```
+Unpacking Mac System Software 6.0.8.7z, a 7-Zip archive
+  + Printing Tools.img, an 800Kb diskette, in memory
+  + System Tools.img, an 800Kb diskette, in memory
+  - Utilities 1.img, left out: both drives are taken
+  - Utilities 2.img, left out: both drives are taken
+```
+
+BinHex (`.hqx`), MacBinary (`.bin`), zip and gzip are unpacked by izmac
+itself. StuffIt in all its versions, Compact Pro, 7-Zip and RAR are handed to
+`unar`, from The Unarchiver, which has to be installed for those
+(`brew install unar`, or `unar` in most package managers). Without it izmac says
+which archive needed it.
+
+The disk images in an archive go where they belong as any other image does,
+diskettes in the drives and hard disks on the bus. When there are more than fit
+the rest are left out, with a line saying so. The files that are not disk
+images, read me files and loose applications, are left out too: izmac does not
+build a volume to put them on.
+
+The same goes for a file dropped on the window: the first diskette in it goes
+in the drive.
+
+**What is unpacked lives in memory, and is gone when izmac stops.** The
+archive is never touched. The Macintosh can write to the images all the same,
+but what it saves on them is lost with them. To keep the images, and what is
+saved on them, add `-persist`:
+
+```bash
+izmac -persist "Mac System Software 6.0.8.7z"
+```
+
+They are then written to the working directory, named after the archive, and
+used from there like any other image: `izmac_Game.dsk` for an archive with one
+image in it, `izmac_Mac System Software 6.0.8 - System Tools.dsk` for one of
+several. The next run with `-persist` finds them there and uses them as they
+are, so what the Macintosh saved on them is kept rather than unpacked over.
+Delete them to start again from the archive, or name them directly to leave
+the archive out of it.
+
+A diskette image that has picked up some padding on its travels, 401K or 807K
+rather than 400K or 800K, is mended on the way in: the volume inside is checked
+to end where the diskette would, and the rest is dropped. That happens in
+memory too, and is kept the same way with `-persist`.
+
 ### When you name nothing at all
 
 A machine with no disk in it sits on the blinking diskette forever, so izmac

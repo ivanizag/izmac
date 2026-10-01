@@ -38,6 +38,15 @@ type Configuration struct {
 	*/
 	ScsiDriverFile string
 
+	/*
+		Persist keeps the disk images that had to be unpacked out of an
+		archive, or mended, as izmac_ files on the working directory, where
+		they are writable and found again on the next run. Without it they
+		are held in memory, and lost with what was written to them when
+		izmac stops.
+	*/
+	Persist bool
+
 	// PramFile is where the parameter RAM is persisted between runs
 	PramFile string
 
@@ -96,6 +105,13 @@ type Configuration struct {
 
 	// absoluteMouse is Mouse as the machine takes it
 	absoluteMouse bool
+
+	// memoryImages are the images held in memory rather than in a file,
+	// by the names DiskFiles and Diskettes carry for them
+	memoryImages map[string][]uint8
+
+	// messages is where unpacking the images is reported
+	messages io.Writer
 }
 
 const (
@@ -173,6 +189,7 @@ func NewConfiguration() *Configuration {
 		PrinterPort:   printerPortPrinter,
 		disketteFile:  defaultDisketteFile,
 		absoluteMouse: true,
+		messages:      os.Stdout,
 	}
 	c.cycleDurationNs = cycleDurationOf(CPUClockMhz)
 	return c
@@ -214,30 +231,50 @@ func IsHelpRequested(err error) bool {
 /*
 AddFiles takes the files named on the command line without a flag and puts
 each where it belongs, working out from the image itself whether it is a hard
-disk or a diskette.
+disk or a diskette. An archive is unpacked and the disk images in it are put
+where they belong in the same way.
 */
 func (c *Configuration) AddFiles(filenames []string) error {
-	if len(filenames) == 0 {
-		return nil
-	}
-
 	for _, filename := range filenames {
-		kind, err := storage.Classify(filename)
+		images, err := c.prepare(filename)
 		if err != nil {
 			return err
 		}
 
-		// A bare volume goes on the bus with the rest of the hard disks.
-		// What it lacks is made up when it is attached, so there is
-		// nothing to sort it out from them here.
-		if kind == storage.KindFloppy {
-			c.Diskettes = append(c.Diskettes, filename)
-		} else {
-			c.DiskFiles = append(c.DiskFiles, filename)
+		for _, image := range images {
+			c.add(image, len(images) > 1)
 		}
 	}
 
 	return nil
+}
+
+/*
+add puts one image where it belongs. A bare volume goes on the bus with the
+rest of the hard disks: what it lacks is made up when it is attached, so there
+is nothing to sort it out from them here.
+
+Naming more images than there is room for is an error that Validate reports.
+Images out of an archive holding several are let off: the ones that do not fit
+are left out with a word, so that an archive with four diskettes in it starts
+the machine with two of them.
+*/
+func (c *Configuration) add(image preparedImage, several bool) {
+	if image.kind == storage.KindFloppy {
+		if several && len(c.Diskettes) >= DriveCount {
+			c.leftOut(image, "both drives are taken")
+			return
+		}
+		c.Diskettes = append(c.Diskettes, image.name)
+	} else {
+		if several && len(c.DiskFiles) >= scsi.TargetCount {
+			c.leftOut(image, "the SCSI bus is full")
+			return
+		}
+		c.DiskFiles = append(c.DiskFiles, image.name)
+	}
+
+	c.placed(image)
 }
 
 /*
@@ -247,6 +284,13 @@ is left alone: opening it later says so, and says it better than this could.
 */
 func (c *Configuration) needsScsiDriver() (bool, error) {
 	for _, filename := range c.DiskFiles {
+		if data, inMemory := c.memoryImages[filename]; inMemory {
+			if storage.ClassifyData(data) == storage.KindBareVolume {
+				return true, nil
+			}
+			continue
+		}
+
 		kind, err := storage.Classify(filename)
 		if err != nil {
 			continue
@@ -354,10 +398,17 @@ func (c *Configuration) AddFlags(fs *flag.FlagSet) {
 		"path to the Macintosh Plus ROM image, 128Kb. Downloaded to "+
 			defaultRomFile+" if not given and not already there")
 	fs.Var((*stringList)(&c.DiskFiles), "hd",
-		"hard disk image to attach to the SCSI bus, repeat for more than one")
+		"hard disk image to attach to the SCSI bus, or an archive holding "+
+			"one, repeat for more than one")
 	fs.Var((*stringList)(&c.Diskettes), "floppy",
-		"400K or 800K diskette image, plain or DiskCopy 4.2, to put in a "+
-			"drive. Repeat for the external drive as well")
+		"400K or 800K diskette image, plain or DiskCopy 4.2, or an archive "+
+			"holding one, to put in a drive. Repeat for the external drive "+
+			"as well")
+	fs.BoolVar(&c.Persist, "persist", c.Persist,
+		"keep the disk images unpacked out of an archive, or mended, as "+
+			"izmac_ files on the working directory, writable and found "+
+			"again on the next run. Without it they are held in memory, "+
+			"and lost with what was written to them when izmac stops")
 	fs.StringVar(&c.ScsiDriverFile, "scsidriver", c.ScsiDriverFile,
 		"a disk image to borrow a SCSI driver from, needed only to attach a "+
 			"bare volume, an image with no partition map on it. Nothing is "+
@@ -409,6 +460,17 @@ func (c *Configuration) Validate() error {
 	}
 	if c.RamSizeKb != 1024 && c.RamSizeKb != 4096 {
 		return fmt.Errorf("unsupported RAM size %vKb, use 1024 or 4096", c.RamSizeKb)
+	}
+
+	// The images named with -hd and -floppy can be archives too
+	var err error
+	c.DiskFiles, err = c.expand(c.DiskFiles, scsi.TargetCount, "the SCSI bus is full")
+	if err != nil {
+		return err
+	}
+	c.Diskettes, err = c.expand(c.Diskettes, DriveCount, "both drives are taken")
+	if err != nil {
+		return err
 	}
 
 	if len(c.DiskFiles) > scsi.TargetCount {

@@ -131,7 +131,7 @@ func NewMac(config *Configuration) (*Mac, error) {
 
 	disks := make([]storage.BlockDisk, 0, len(config.DiskFiles))
 	for _, filename := range config.DiskFiles {
-		disk, err := storage.NewBlockDisk(filename, scsiDriver, false)
+		disk, err := config.openDisk(filename, scsiDriver)
 		if err != nil {
 			return nil, err
 		}
@@ -142,7 +142,7 @@ func NewMac(config *Configuration) (*Mac, error) {
 	// internal one first
 	diskettes := make([]*storage.FloppyDisk, 0, len(config.Diskettes))
 	for _, filename := range config.Diskettes {
-		diskette, err := storage.NewFloppyDisk(filename, false)
+		diskette, err := config.openDiskette(filename)
 		if err != nil {
 			return nil, err
 		}
@@ -305,13 +305,43 @@ InsertDiskette puts an image in one of the drives. It is how the machine is
 set up before it runs; once it is running a frontend goes through
 SendInsertDiskette instead, so that the drive is not changed under the
 emulation.
+
+The image can be in an archive, as on the command line. An archive holding
+several diskettes puts the first in the drive and says which were left out.
 */
 func (m *Mac) InsertDiskette(drive int, filename string) error {
 	if drive < 0 || drive >= driveCount {
 		return fmt.Errorf("the machine has no diskette drive %v", drive)
 	}
 
-	disk, err := storage.NewFloppyDisk(filename, false)
+	images, err := m.config.prepare(filename)
+	if err != nil {
+		return err
+	}
+
+	chosen := -1
+	for i, image := range images {
+		if image.kind == storage.KindFloppy {
+			chosen = i
+			break
+		}
+	}
+	if chosen < 0 {
+		return fmt.Errorf("%v holds no diskette. A hard disk goes on the "+
+			"SCSI bus, which is set up when the machine starts: name it "+
+			"on the command line", filename)
+	}
+
+	// The configuration is left as it was: the image goes in the drive
+	// and nowhere else, and is gone when the drive lets go of it
+	m.config.report(images[chosen])
+	for i, image := range images {
+		if i != chosen && image.kind == storage.KindFloppy {
+			m.config.leftOut(image, "only one goes in a drive at a time")
+		}
+	}
+
+	disk, err := images[chosen].openDiskette()
 	if err != nil {
 		return err
 	}

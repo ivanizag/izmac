@@ -50,6 +50,10 @@ type FloppyDisk struct {
 	// diskCopy says the image on the host has a DiskCopy header, so that
 	// writing it back puts one there again
 	diskCopy bool
+
+	// inMemory says there is no file behind the diskette, so that what the
+	// machine writes stays in memory and is never written back
+	inMemory bool
 }
 
 // NewFloppyDisk reads a diskette image, plain or DiskCopy 4.2
@@ -72,6 +76,27 @@ func NewFloppyDisk(filename string, readOnly bool) (*FloppyDisk, error) {
 	}
 
 	if err := d.load(raw); err != nil {
+		return nil, err
+	}
+
+	return d, nil
+}
+
+/*
+NewFloppyDiskData makes a diskette of an image held in memory, which has no
+file to be written back to. The machine can write to it all the same, and what
+it writes lasts as long as the diskette does.
+*/
+func NewFloppyDiskData(name string, data []uint8) (*FloppyDisk, error) {
+	d := &FloppyDisk{
+		name:     name,
+		filename: name,
+		inMemory: true,
+	}
+
+	// The image is copied so that the diskette has its own, whatever the
+	// caller goes on to do with the one it passed
+	if err := d.load(append([]uint8(nil), data...)); err != nil {
 		return nil, err
 	}
 
@@ -235,6 +260,10 @@ func (d *FloppyDisk) WriteTrack(track int, side int, nibbles []uint8) (int, erro
 // Flush writes the image back to the host if anything has changed
 func (d *FloppyDisk) Flush() error {
 	if !d.modified || d.readOnly {
+		return nil
+	}
+	if d.inMemory {
+		d.modified = false
 		return nil
 	}
 
