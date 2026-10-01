@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -21,8 +22,9 @@ image of exactly that size is one.
 
 What is left is too big to be a diskette and has no map at the front of it.
 If an HFS volume starts where the map should be it is a bare volume, an image
-made for the emulators that patch the ROM to supply a driver of their own,
-and the machine can do nothing with it. Anything else is taken for a hard
+made for the emulators that patch the ROM to supply a driver of their own. No
+ROM boots it as it is, so the map and a SCSI driver are made up in front of it
+when it is attached. Anything else is taken for a hard
 disk, a blank image among them: an image with nothing in it yet is what gets
 attached to be formatted from the machine.
 
@@ -74,8 +76,19 @@ func Classify(filename string) (Kind, error) {
 		return KindHardDisk, err
 	}
 
+	return classify(file, info.Size())
+}
+
+// ClassifyData says the same of an image held in memory
+func ClassifyData(data []uint8) Kind {
+	// Reading from memory can not fail
+	kind, _ := classify(bytes.NewReader(data), int64(len(data)))
+	return kind
+}
+
+func classify(r io.ReaderAt, size int64) (Kind, error) {
 	header := make([]uint8, diskCopyHeaderSize)
-	read, _ := file.ReadAt(header, 0)
+	read, _ := r.ReadAt(header, 0)
 	header = header[:read]
 
 	// A DiskCopy header settles it the other way, and is looked at first
@@ -95,14 +108,14 @@ func Classify(filename string) (Kind, error) {
 		opening one can say why it is no good, rather than leaving a
 		1.44Mb image to be quietly attached to the SCSI bus as a hard disk.
 	*/
-	switch info.Size() {
+	switch size {
 	case floppySize400K, floppySize800K, floppySize720K, floppySize1440K:
 		return KindFloppy, nil
 	}
 
 	// Too big for a drive and with no map in front of it. An HFS volume
 	// where the map should be is an image no ROM can boot.
-	signature, err := blockSignature(file, volumeHeaderBlock)
+	signature, err := blockSignature(r, volumeHeaderBlock)
 	if err != nil {
 		return KindHardDisk, err
 	}

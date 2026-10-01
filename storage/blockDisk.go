@@ -62,6 +62,31 @@ func NewBlockDisk(filename string, scsiDriver *ScsiDriver, readOnly bool) (Block
 	return newBareVolumeDisk(disk, scsiDriver)
 }
 
+/*
+NewBlockDiskData puts an image held in memory on the bus. The writes go to the
+memory, there being no file behind it for them to go to. A bare volume is
+dressed the way NewBlockDisk dresses one.
+*/
+func NewBlockDiskData(name string, data []uint8, scsiDriver *ScsiDriver) (BlockDisk, error) {
+	if len(data) < BlockSize {
+		return nil, fmt.Errorf("%v is %v bytes, too small to hold a block", name, len(data))
+	}
+
+	disk := &blockDiskMemory{
+		data: data[:len(data)/BlockSize*BlockSize],
+		name: name,
+	}
+
+	if ClassifyData(data) != KindBareVolume {
+		return disk, nil
+	}
+
+	if scsiDriver == nil {
+		return nil, bareVolumeError(name)
+	}
+	return newBareVolumeDisk(disk, scsiDriver)
+}
+
 // newBlockDiskFile opens a disk image. The image is a plain sequence of
 // blocks, which is what a disk copied with dd or made by a Macintosh
 // formatter looks like.
@@ -140,15 +165,17 @@ func (d *blockDiskFile) Write(block uint32, data []uint8) error {
 	return err
 }
 
-// blockDiskMemory is a block device on a slice, for the tests
+// blockDiskMemory is a block device on a slice, an image unpacked out of an
+// archive or a blank one for the tests
 type blockDiskMemory struct {
 	data     []uint8
+	name     string
 	readOnly bool
 }
 
-// NewBlockDiskMemory builds a block device of the given size in memory
+// NewBlockDiskMemory builds a blank block device of the given size in memory
 func NewBlockDiskMemory(blocks uint32) BlockDisk {
-	return &blockDiskMemory{data: make([]uint8, blocks*BlockSize)}
+	return &blockDiskMemory{data: make([]uint8, blocks*BlockSize), name: "memory"}
 }
 
 func (d *blockDiskMemory) Blocks() uint32 {
@@ -160,7 +187,7 @@ func (d *blockDiskMemory) IsReadOnly() bool {
 }
 
 func (d *blockDiskMemory) Name() string {
-	return "memory"
+	return d.name
 }
 
 func (d *blockDiskMemory) Read(block uint32) ([]uint8, error) {

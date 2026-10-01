@@ -210,6 +210,8 @@ Everything goes in the directory you ran it from:
 | `izmac_pram.bin` | the parameter RAM, which is where the machine keeps the date, the volume and the desktop settings between runs. Change it with `-pram` |
 | `izmac_<date>-<time>.png` | a screenshot, when you ask for one with F12 or from the menu |
 | `izmac_page_<n>.png` | a page the machine printed. Change it with `-printerfile`, or turn the printer off with `-printer none` |
+| `izmac_<name>.dsk` | a disk image unpacked out of an archive, kept because you asked for it with `-persist` |
 
 Your disk images are written in place, so what the Macintosh saves stays
-saved.
+saved. The ones izmac unpacks out of an archive are the exception: what is
+saved on them is lost when izmac stops, unless you keep them with `-persist`.

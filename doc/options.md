@@ -18,8 +18,9 @@ go run ./frontend/headless  [options] [disk images...]
 after it is taken as a disk image.
 
 Any file named without an option is a disk image, and izmac works out from the
-image itself whether it is a hard disk or a diskette. See
-[Disks and diskettes](disks.md). Name none at all and izmac fetches a MacPaint
+image itself whether it is a hard disk or a diskette. It can also be an
+archive, BinHex, MacBinary, zip, StuffIt and the like, and the disk images in it
+are attached. See [Disks and diskettes](disks.md). Name none at all and izmac fetches a MacPaint
 diskette to boot from, once, and keeps it as `izmac_macpaint.dsk`.
 
 ## The machine
@@ -29,8 +30,9 @@ Both frontends take all of these.
 | Option | Default | Meaning |
 |---|---|---|
 | `-rom <file>` | `izmac_default.rom` | the Macintosh Plus ROM image, 128Kb. If the option is not given and the file is not there, it is downloaded once |
-| `-hd <file>` | | a hard disk image for the SCSI bus. Repeat it for more than one, up to seven |
-| `-floppy <file>` | | a 400K or 800K diskette image, plain or DiskCopy 4.2, to put in a drive. Repeat it for the external drive as well |
+| `-hd <file>` | | a hard disk image for the SCSI bus, or an archive holding one. Repeat it for more than one, up to seven |
+| `-floppy <file>` | | a 400K or 800K diskette image, plain or DiskCopy 4.2, or an archive holding one, to put in a drive. Repeat it for the external drive as well |
+| `-persist` | off | keep the disk images unpacked out of an archive, or mended, as `izmac_` files on the working directory, writable and found again on the next run. Without it they are held in memory, and lost with whatever was written to them when izmac stops. See [Disks and diskettes](disks.md) |
 | `-scsidriver <file>` | `izmac_hddriver.rom` | a disk image to borrow a SCSI driver from, for hard disk images that carry none of their own. If the option is not given and the file is not there, one is downloaded the first time a disk needs it. See [Disks and diskettes](disks.md) |
 | `-ram <kb>` | `1024` | the memory size in Kb, `1024` or `4096`. Those are the two the real machine could be built with |
 | `-mouse <how>` | `absolute` | `absolute` puts the pointer of the machine where yours is, `relative` pushes it by the movement of yours the way the hardware does, with your pointer captured by the window. See [Keyboard, mouse and the menu](controls.md) |
