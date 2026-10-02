@@ -73,8 +73,27 @@ The Macintosh needs the AppleShare client, the `AppleShare` file in the System
 Folder that puts the AppleShare icon in the Chooser. System 6.0.8 has it on
 the *Utilities 1* diskette, and System 7 in the Extensions folder.
 
-For now the server lets the machine log in and lists the volume, but does not
-open it yet.
+Once logged in, choose the volume and it appears on the desktop like a disk,
+to read and write. A file the machine makes, a folder, a rename, a move, are
+the same on your computer at once.
+
+What makes a Macintosh file more than its data, its resource fork and its type
+and creator, is kept where the host keeps it. On macOS that is with the file
+itself, where the Finder of the Mac copies it along, so applications can be
+put in the folder and run from there. On Linux and Windows it is in a second
+file next to each, named with `._` in front, the AppleDouble files netatalk
+and macOS write on disks of other kinds. A file from the host that has none
+is a plain document, or a text file for TeachText when its name ends in
+`.txt`.
+
+Names the machine cannot have as they are, longer than 31 characters or with
+characters Mac OS Roman does not have, are shortened with a `#` and a number
+in them. Files and folders whose names start with a dot are not shown.
+
+The icons and the applications that open each kind of document, which the
+Finder keeps in the Desktop file of a disk, are found by looking in the
+applications on the folder the first time the volume opens, and kept until
+izmac stops; so are the comments of Get Info.
 
 ## What changes
 
