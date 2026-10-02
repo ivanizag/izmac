@@ -19,6 +19,10 @@ disk images the machine can use. The idea comes from macprep
 Macintosh software into images for Mini vMac: an archive is unpacked, as many
 times as it takes, and the disk images that come out of it are attached.
 
+Files that are not disk images, the application in an archive or a folder of
+documents on the host, are put on a new volume made for them, an 800Kb
+diskette when they fit on one and a hard disk when they do not.
+
 A file that is already a disk image goes on as it always has, read and written
 in place. Anything that had to be unpacked or mended is held in memory instead,
 and gone when izmac stops: the file named is never touched. The machine can
@@ -26,9 +30,9 @@ write to it, and what it writes lasts until izmac stops.
 
 With -persist the images are written out instead, as izmac_ files on the
 working directory named after what they came out of, and attached from there
-like any other image, writable. On the next run with -persist the file is
-already there and is used as it is, so what the machine saved on it is kept
-rather than unpacked over.
+like any other image, writable. A record of which came from where, kept.go,
+lets the next run with -persist go straight to them, so what the machine saved
+on them is kept rather than unpacked over.
 */
 
 // persistPrefix is what the images kept with -persist are named with, the
@@ -63,24 +67,39 @@ type preparedImage struct {
 
 /*
 prepare works out the disk images a file named holds. A disk image is one, and
-is taken as it is. An archive can hold any number of them, and the files in it
-that are not disk images are left out: putting those on a volume of their own
-is not something izmac does yet.
+is taken as it is. An archive can hold any number of them, and what else is in
+it goes on a new volume. A folder, or a file that is neither a disk image nor
+an archive, goes on a new volume of its own.
 
 It changes nothing on the configuration, so that a file dropped on the window
 of a running machine goes through it as well.
 */
 func (c *Configuration) prepare(filename string) ([]preparedImage, error) {
+	// What was kept on an earlier run is used without looking any further,
+	// so a folder that has changed since is not packed for nothing
+	if c.Persist {
+		images, found, err := c.keptImages(filename)
+		if err != nil {
+			return nil, err
+		}
+		if found {
+			return images, nil
+		}
+	}
+
+	info, err := os.Stat(filename)
+	if err != nil {
+		return nil, fmt.Errorf("can not open the disk image: %w", err)
+	}
+	if info.IsDir() {
+		return c.prepareLoose(filename, "a folder")
+	}
+
 	file, err := os.Open(filename)
 	if err != nil {
 		return nil, fmt.Errorf("can not open the disk image: %w", err)
 	}
 	defer file.Close()
-
-	info, err := file.Stat()
-	if err != nil {
-		return nil, err
-	}
 	size := info.Size()
 
 	head := make([]uint8, min(size, unwrap.HeadSize))
@@ -95,6 +114,10 @@ func (c *Configuration) prepare(filename string) ([]preparedImage, error) {
 	if format == "" {
 		floppy, padded := storage.PaddedFloppySize(head, size)
 		if !padded {
+			if isLooseFile(filename, head, size) {
+				return c.prepareLoose(filename, "not a disk image")
+			}
+
 			// A disk image as it comes, the usual case by far
 			kind, err := storage.Classify(filename)
 			if err != nil {
@@ -128,8 +151,72 @@ func (c *Configuration) prepare(filename string) ([]preparedImage, error) {
 }
 
 /*
+isLooseFile tells a file named that is no disk image at all, to be put on a
+volume of its own, from one that is. A disk image says what it is in its first
+blocks, or is a blank one waiting to be formatted from the machine and is all
+zeros there; anything else is a file.
+
+Two things settle it before the zeros are looked at. A file too small to hold
+a block is no disk, and that is what an application named from macOS looks
+like: all of it is in the resource fork and the data fork is empty. And one
+the host keeps a resource fork or Finder information for is a Macintosh file,
+unless it said it was a disk image first, which a DiskCopy image copied off a
+Macintosh does while carrying both.
+*/
+func isLooseFile(filename string, head []uint8, size int64) bool {
+	if size < storage.BlockSize {
+		return true
+	}
+	if storage.LooksLikeDiskImage(head, size) {
+		return false
+	}
+	if unwrap.HasHostMetadata(filename) {
+		return true
+	}
+
+	blank := size%storage.BlockSize == 0
+	for _, b := range head {
+		if b != 0 {
+			blank = false
+			break
+		}
+	}
+	return !blank
+}
+
+/*
+prepareLoose puts a folder of the host, or a file that is not a disk image, on
+a new volume named after it
+*/
+func (c *Configuration) prepareLoose(filename string, what string) ([]preparedImage, error) {
+	files, err := unwrap.ReadHost(filename)
+	if err != nil {
+		return nil, fmt.Errorf("can not read %v: %w", filename, err)
+	}
+
+	var kept []unwrap.File
+	for _, f := range files {
+		if !f.IsClutter() {
+			kept = append(kept, f)
+		}
+	}
+	if len(kept) == 0 {
+		return nil, fmt.Errorf("%v holds no files", filename)
+	}
+
+	fmt.Fprintf(c.out(), "Packing %v, %v\n", filename, what)
+	volume, err := c.packVolume(unwrap.Stem(filepath.Base(filename)), kept)
+	if err != nil {
+		return nil, err
+	}
+	return c.place(filename, []unwrap.File{volume}, true)
+}
+
+/*
 diskImagesIn unpacks an archive and keeps the disk images in it, mending the
-padded diskettes on the way
+padded diskettes on the way. What else is in it goes on a new volume: all of
+it when there are no disk images, and only the Macintosh files when there are,
+since what comes with a disk image is a read me or a checksum for the host.
 */
 func (c *Configuration) diskImagesIn(unwrapper *unwrap.Unwrapper, filename string,
 	data []uint8) ([]unwrap.File, error) {
@@ -139,31 +226,56 @@ func (c *Configuration) diskImagesIn(unwrapper *unwrap.Unwrapper, filename strin
 		return nil, err
 	}
 
-	var images []unwrap.File
-	var others []string
+	var images, others []unwrap.File
 	for _, f := range unpacked {
+		if f.IsClutter() {
+			continue
+		}
+
 		head := f.Data[:min(len(f.Data), unwrap.HeadSize)]
 		if floppy, padded := storage.PaddedFloppySize(head, int64(len(f.Data))); padded {
 			f.Data = f.Data[:floppy]
 		}
 
-		if storage.IsDiskImage(f.Data) {
+		// A file with a resource fork is an application or a document,
+		// whatever its data fork looks like
+		if len(f.Resource) == 0 && storage.IsDiskImage(f.Data) {
 			images = append(images, f)
 		} else {
-			others = append(others, f.Name)
+			others = append(others, f)
 		}
 	}
 
+	stem := unwrap.Stem(filepath.Base(filename))
 	if len(images) == 0 {
 		if len(others) == 0 {
 			return nil, fmt.Errorf("%v holds nothing", filename)
 		}
-		return nil, fmt.Errorf("%v holds no disk image, only files that would have to "+
-			"be put on one, which izmac does not do yet: %v", filename, listNames(others))
+		volume, err := c.packVolume(stem, others)
+		if err != nil {
+			return nil, err
+		}
+		return []unwrap.File{volume}, nil
 	}
 
-	if len(others) != 0 {
-		fmt.Fprintf(c.out(), "  - left out, not disk images: %v\n", listNames(others))
+	var packed []unwrap.File
+	var left []string
+	for _, f := range others {
+		if f.IsMacFile() {
+			packed = append(packed, f)
+		} else {
+			left = append(left, f.Name)
+		}
+	}
+	if len(left) != 0 {
+		fmt.Fprintf(c.out(), "  - left out, not disk images: %v\n", listNames(left))
+	}
+	if len(packed) != 0 {
+		volume, err := c.packVolume(stem+" Files", packed)
+		if err != nil {
+			return nil, err
+		}
+		images = append(images, volume)
 	}
 
 	return images, nil
@@ -178,6 +290,15 @@ both in memory and when it is kept.
 func (c *Configuration) place(filename string, found []unwrap.File, mended bool) ([]preparedImage, error) {
 	several := len(found) > 1
 	used := make(map[string]bool)
+
+	var record *keptRecord
+	var kept []keptImage
+	if c.Persist {
+		var err error
+		if record, err = loadKeptRecord(); err != nil {
+			return nil, err
+		}
+	}
 
 	images := make([]preparedImage, 0, len(found))
 	for _, f := range found {
@@ -198,13 +319,20 @@ func (c *Configuration) place(filename string, found []unwrap.File, mended bool)
 			continue
 		}
 
-		kept, err := c.persist(filename, f, several, used)
+		image, err := c.persist(filename, f, several, record, used)
 		if err != nil {
 			return nil, err
 		}
-		images = append(images, kept)
+		images = append(images, image)
+		kept = append(kept, keptImage{Image: image.name, Label: f.Name})
 	}
 
+	if record != nil {
+		record.Sources[sourceKey(filename)] = kept
+		if err := record.save(); err != nil {
+			return nil, err
+		}
+	}
 	return images, nil
 }
 
@@ -214,7 +342,7 @@ an earlier run and leaves it alone, which is the whole point: what the machine
 saved on it last time is on it still.
 */
 func (c *Configuration) persist(filename string, f unwrap.File, several bool,
-	used map[string]bool) (preparedImage, error) {
+	record *keptRecord, used map[string]bool) (preparedImage, error) {
 
 	stem := unwrap.SafeName(unwrap.Stem(filename))
 	if stem == "" {
@@ -226,7 +354,7 @@ func (c *Configuration) persist(filename string, f unwrap.File, several bool,
 			stem += " - " + inner
 		}
 	}
-	name := unique(persistPrefix+stem, used) + ".dsk"
+	name := keptName(persistPrefix+stem, sourceKey(filename), record, used)
 
 	if _, err := os.Stat(name); err == nil {
 		kind, err := storage.Classify(name)

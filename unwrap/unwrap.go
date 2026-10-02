@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"path"
 	"strings"
+	"time"
 )
 
 /*
@@ -23,14 +24,54 @@ archivers that came after it have too many compression methods between them to
 be worth carrying, so those are handed to unar, from The Unarchiver, when it is
 installed, and turned away with a reason when it is not.
 
-Only the data fork of anything is kept. Disk images, which are what is being
-looked for, keep everything in it.
+What comes out is a Macintosh file as far as the wrappers kept one: both forks,
+the type and creator and the Finder flags, when it was last changed, and the
+folders it was in. A disk image keeps everything in its data fork; an
+application keeps most of itself in its resource fork.
 */
 
-// File is what is left once the wrappers are off: a name and the data fork
+// File is what is left once the wrappers are off
 type File struct {
 	Name string
-	Data []uint8
+
+	// Folders are the folders the file was in, the outermost first, as the
+	// archive had them. A file in an archive that was itself in a folder
+	// is in that folder too.
+	Folders []string
+
+	Data     []uint8
+	Resource []uint8
+
+	// Type and Creator are the Finder's, zero for a file that never had any
+	Type    [4]uint8
+	Creator [4]uint8
+
+	// Flags are the Finder flags
+	Flags uint16
+
+	// Modified is when the file was last changed, zero when nothing said
+	Modified time.Time
+}
+
+// IsMacFile tells a file made on a Macintosh from one made anywhere else, by
+// what only a Macintosh gives a file: a resource fork, or a type and creator
+func (f *File) IsMacFile() bool {
+	return len(f.Resource) != 0 || f.Type != [4]uint8{} || f.Creator != [4]uint8{}
+}
+
+/*
+IsClutter tells the files nobody put in an archive on purpose: what the Finder
+and Windows leave in every folder they open, and the desktop databases of the
+volume the files came from, which would only mislead the Finder of a new one.
+*/
+func (f *File) IsClutter() bool {
+	switch f.Name {
+	case ".DS_Store", "Thumbs.db", "desktop.ini", "Desktop DB", "Desktop DF":
+		return true
+	case "Desktop":
+		return string(f.Type[:]) == "FNDR"
+	}
+	return isMacMetadata(f.Name)
 }
 
 const (
@@ -128,6 +169,9 @@ func (u *Unwrapper) unwrap(file File, depth int, total *int64) ([]File, error) {
 
 	var found []File
 	for _, f := range inside {
+		// What was in an archive goes where the archive was
+		f.Folders = append(append([]string(nil), file.Folders...), f.Folders...)
+
 		unwrapped, err := u.unwrap(f, depth+1, total)
 		if err != nil {
 			return nil, err

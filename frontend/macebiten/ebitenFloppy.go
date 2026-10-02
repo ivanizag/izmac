@@ -30,7 +30,8 @@ Nothing has been dropped on almost every frame there is, and the file system is
 nil then, so that has to be the quiet answer rather than a crash. A file that is
 not on a real disk is passed over as well, which is what a browser hands out:
 the file exists only inside the page and there would be nowhere to write a
-changed diskette back to. So is a folder, which holds no diskette.
+changed diskette back to. A folder is taken like a file: it goes on a new
+volume, and opening it gives its path the same way.
 */
 func pathOfDropped(dropped fs.FS) (string, bool) {
 	if dropped == nil {
@@ -43,10 +44,6 @@ func pathOfDropped(dropped fs.FS) (string, bool) {
 	}
 
 	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-
 		file, err := dropped.Open(entry.Name())
 		if err != nil {
 			continue

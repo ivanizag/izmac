@@ -146,6 +146,10 @@ func (m *Mac) step() {
 
 	pc := m.cpu.GetPC()
 
+	if m.disketteHeld {
+		m.insertHeldDiskettes(pc)
+	}
+
 	if m.toolboxTrace {
 		m.traceToolboxAt(pc)
 	}

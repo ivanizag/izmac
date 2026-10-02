@@ -163,6 +163,16 @@ func (d *FloppyDisk) Name() string {
 	return d.name
 }
 
+/*
+IsStartupDisk tells whether the diskette has boot blocks, the "LK" the ROM
+looks for at the start of a diskette to start the machine from it. One that
+does not is a diskette for documents and applications, which the ROM ejects
+if it is in a drive when the machine starts.
+*/
+func (d *FloppyDisk) IsStartupDisk() bool {
+	return len(d.data) >= 2 && d.data[0] == 'L' && d.data[1] == 'K'
+}
+
 // Sides is one for a 400Kb diskette and two for an 800Kb one
 func (d *FloppyDisk) Sides() int {
 	return d.sides

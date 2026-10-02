@@ -3,6 +3,7 @@ package unwrap
 import (
 	"encoding/binary"
 	"fmt"
+	"time"
 )
 
 /*
@@ -19,10 +20,14 @@ multiple of 128:
 	  2 63  the name, in Mac OS Roman
 	 65  4  the type
 	 69  4  the creator
+	 73  1  the high byte of the Finder flags
 	 74  1  zero
 	 82  1  zero
 	 83  4  the length of the data fork
 	 87  4  the length of the resource fork
+	 91  4  created, on the clock of the machine
+	 95  4  modified
+	101  1  the low byte of the Finder flags, MacBinary II
 	120  2  the length of a secondary header, MacBinary II
 	122  1  the version that wrote it, 129 or 130, MacBinary II and III
 	124  2  the CRC of the first 124 bytes, MacBinary II and III
@@ -48,7 +53,7 @@ func isMacBinary(head []uint8, size int64) bool {
 
 /*
 parseMacBinary checks the header and returns where the data fork starts and
-how long it is
+how long it is. The resource fork starts after the data fork, padded.
 */
 func parseMacBinary(head []uint8, size int64) (int64, int64, bool) {
 	if len(head) < macBinaryHeaderSize {
@@ -94,16 +99,48 @@ func parseMacBinary(head []uint8, size int64) (int64, int64, bool) {
 	return start, dataLength, true
 }
 
-// openMacBinary takes the data fork out
+// openMacBinary takes the file out, both forks and its Finder information
 func openMacBinary(data []uint8) (File, error) {
 	start, length, ok := parseMacBinary(data, int64(len(data)))
 	if !ok {
 		return File{}, fmt.Errorf("the MacBinary header does not hold together")
 	}
 
-	name := macRoman(data[2 : 2+int(data[1])])
-	return File{Name: name, Data: data[start : start+length]}, nil
+	file := File{
+		Name:     macRoman(data[2 : 2+int(data[1])]),
+		Data:     data[start : start+length],
+		Flags:    uint16(data[73])<<8 | uint16(data[101]),
+		Modified: fromMacTime(binary.BigEndian.Uint32(data[95:99])),
+	}
+	copy(file.Type[:], data[65:69])
+	copy(file.Creator[:], data[69:73])
+
+	// The resource fork can be cut short in a file that was padded with
+	// less than it should have been, and is then taken as far as it goes
+	resourceStart := start + padded(length)
+	resourceLength := int64(binary.BigEndian.Uint32(data[87:91]))
+	if resourceStart < int64(len(data)) {
+		file.Resource = data[resourceStart:min(int64(len(data)), resourceStart+resourceLength)]
+	}
+
+	return file, nil
 }
+
+/*
+fromMacTime turns a time on the clock of the machine, the seconds since 1904 in
+local time, into one on the host. Zero is no time at all.
+*/
+func fromMacTime(seconds uint32) time.Time {
+	if seconds == 0 {
+		return time.Time{}
+	}
+	t := time.Unix(int64(seconds)-macEpoch, 0)
+	_, zone := t.Zone()
+	return t.Add(-time.Duration(zone) * time.Second)
+}
+
+// macEpoch is 1904 on the Unix clock
+const macEpoch = 2082844800
 
 // padded rounds a length up to the 128 bytes MacBinary pads to
 func padded(length int64) int64 {

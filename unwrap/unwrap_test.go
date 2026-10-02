@@ -21,18 +21,24 @@ written: the BinHex decoding of catfinder-270-x.sit.hqx from info-mac, a StuffIt
 // encodeBinHex wraps a data fork in BinHex, with some mail in front of it and
 // the lines broken where BinHex breaks them
 func encodeBinHex(name string, fork []uint8) []uint8 {
+	return encodeBinHexForks(name, fork, nil)
+}
+
+// encodeBinHexForks does the same with a resource fork as well
+func encodeBinHexForks(name string, fork []uint8, resource []uint8) []uint8 {
 	var plain []uint8
 	plain = append(plain, uint8(len(name)))
 	plain = append(plain, name...)
 	plain = append(plain, 0)             // version
 	plain = append(plain, "TEXTttxt"...) // type and creator
-	plain = append(plain, 0, 0)          // flags
+	plain = append(plain, 0x21, 0x00)    // flags
 	plain = binary.BigEndian.AppendUint32(plain, uint32(len(fork)))
-	plain = binary.BigEndian.AppendUint32(plain, 0) // no resource fork
+	plain = binary.BigEndian.AppendUint32(plain, uint32(len(resource)))
 	plain = binary.BigEndian.AppendUint16(plain, crc16(plain))
 	plain = append(plain, fork...)
 	plain = binary.BigEndian.AppendUint16(plain, crc16(fork))
-	plain = binary.BigEndian.AppendUint16(plain, 0) // the empty resource fork
+	plain = append(plain, resource...)
+	plain = binary.BigEndian.AppendUint16(plain, crc16(resource))
 
 	// Run length encoding, for runs of more than three
 	var packed []uint8
@@ -81,18 +87,54 @@ func encodeBinHex(name string, fork []uint8) []uint8 {
 // encodeMacBinary wraps a data fork in MacBinary II, or the first version
 // with no CRC
 func encodeMacBinary(name string, fork []uint8, second bool) []uint8 {
+	return encodeMacBinaryForks(name, fork, nil, second)
+}
+
+// encodeMacBinaryForks does the same with a resource fork as well
+func encodeMacBinaryForks(name string, fork []uint8, resource []uint8, second bool) []uint8 {
 	header := make([]uint8, macBinaryHeaderSize)
 	header[1] = uint8(len(name))
 	copy(header[2:], name)
-	copy(header[65:], "TEXTttxt")
+	copy(header[65:], "APPLGAME")
+	header[73] = 0x20 // the high byte of the flags, the bundle bit
 	binary.BigEndian.PutUint32(header[83:], uint32(len(fork)))
+	binary.BigEndian.PutUint32(header[87:], uint32(len(resource)))
+	binary.BigEndian.PutUint32(header[95:], 0xa0000000) // in 1989
 	if second {
 		header[122], header[123] = 129, 129
 		binary.BigEndian.PutUint16(header[124:], crc16(header[:124]))
 	}
 
 	out := append(header, fork...)
-	return append(out, make([]uint8, padded(int64(len(fork)))-int64(len(fork)))...)
+	out = append(out, make([]uint8, padded(int64(len(fork)))-int64(len(fork)))...)
+	out = append(out, resource...)
+	return append(out, make([]uint8, padded(int64(len(resource)))-int64(len(resource)))...)
+}
+
+/*
+encodeAppleDouble makes the ._ file macOS puts next to a file on a volume that
+cannot keep its resource fork, with the Finder information macOS writes, an
+extended attribute header and all after the 32 bytes that matter
+*/
+func encodeAppleDouble(resource []uint8, typeCreator string) []uint8 {
+	finder := make([]uint8, 32+50)
+	copy(finder, typeCreator)
+	copy(finder[32:], "ATTR")
+
+	header := make([]uint8, 26+2*12)
+	binary.BigEndian.PutUint32(header, appleDoubleMagic)
+	binary.BigEndian.PutUint32(header[4:], 0x00020000)
+	binary.BigEndian.PutUint16(header[24:], 2)
+
+	at := uint32(len(header))
+	binary.BigEndian.PutUint32(header[26:], entryFinder)
+	binary.BigEndian.PutUint32(header[30:], at)
+	binary.BigEndian.PutUint32(header[34:], uint32(len(finder)))
+	binary.BigEndian.PutUint32(header[38:], entryResource)
+	binary.BigEndian.PutUint32(header[42:], at+uint32(len(finder)))
+	binary.BigEndian.PutUint32(header[46:], uint32(len(resource)))
+
+	return append(append(header, finder...), resource...)
 }
 
 func encodeZip(t *testing.T, files map[string][]uint8, order []string) []uint8 {
@@ -170,6 +212,22 @@ func TestBinHexIsUndone(t *testing.T) {
 	}
 }
 
+func TestBinHexKeepsTheResourceForkAndTheFinderInformation(t *testing.T) {
+	resource := someImage(3000)
+	file := unwrapOne(t, "app.hqx", encodeBinHexForks("App", []uint8("data"), resource))
+
+	if !bytes.Equal(file.Resource, resource) {
+		t.Errorf("the resource fork came back as %v bytes", len(file.Resource))
+	}
+	if string(file.Type[:]) != "TEXT" || string(file.Creator[:]) != "ttxt" || file.Flags != 0x2100 {
+		t.Errorf("the Finder information came back as %q %q $%04x",
+			file.Type, file.Creator, file.Flags)
+	}
+	if !file.IsMacFile() {
+		t.Errorf("a file with a resource fork is not taken for a Macintosh one")
+	}
+}
+
 func TestBinHexNamesAreMacRoman(t *testing.T) {
 	file := unwrapOne(t, "game.hqx", encodeBinHex("Game \xc4", someImage(100)))
 
@@ -218,6 +276,22 @@ func TestMacBinaryIsUndone(t *testing.T) {
 	}
 }
 
+func TestMacBinaryKeepsTheResourceForkAndTheFinderInformation(t *testing.T) {
+	resource := someImage(1000)
+	file := unwrapOne(t, "game.bin", encodeMacBinaryForks("Game", nil, resource, true))
+
+	if !bytes.Equal(file.Resource, resource) || len(file.Data) != 0 {
+		t.Errorf("the forks came back as %v and %v bytes", len(file.Data), len(file.Resource))
+	}
+	if string(file.Type[:]) != "APPL" || string(file.Creator[:]) != "GAME" || file.Flags != 0x2000 {
+		t.Errorf("the Finder information came back as %q %q $%04x",
+			file.Type, file.Creator, file.Flags)
+	}
+	if file.Modified.Year() != 1989 {
+		t.Errorf("the file was modified on %v, wanted in 1989", file.Modified)
+	}
+}
+
 func TestAnImageIsNotTakenForMacBinary(t *testing.T) {
 	u := NewUnwrapper()
 
@@ -234,25 +308,55 @@ func TestAnImageIsNotTakenForMacBinary(t *testing.T) {
 	}
 }
 
-func TestEveryFileInAZipComesOutButTheMacintoshOnes(t *testing.T) {
+func TestTheHalvesOfMacintoshFilesInAZipGoBackTogether(t *testing.T) {
 	one, two := someImage(3000), someImage(4000)
+	resource := someImage(500)
 	archive := encodeZip(t, map[string][]uint8{
 		"Disks/One.dsk":            one,
-		"__MACOSX/Disks/._One.dsk": {1, 2, 3},
-		"Disks/._Two.dsk":          {4, 5, 6},
+		"__MACOSX/Disks/._One.dsk": encodeAppleDouble(resource, "dImgdCpy"),
+		"Disks/._Two.dsk":          encodeAppleDouble(nil, "TEXTttxt"),
 		"Disks/Two.dsk":            two,
-	}, []string{"Disks/One.dsk", "__MACOSX/Disks/._One.dsk", "Disks/._Two.dsk", "Disks/Two.dsk"})
+		"Disks/._App":              encodeAppleDouble(resource, "APPLGAME"),
+	}, []string{"Disks/One.dsk", "__MACOSX/Disks/._One.dsk", "Disks/._Two.dsk",
+		"Disks/Two.dsk", "Disks/._App"})
 
 	files, err := NewUnwrapper().Unwrap("disks.zip", archive)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if len(files) != 2 || files[0].Name != "One.dsk" || files[1].Name != "Two.dsk" {
-		t.Fatalf("the zip gave %v files, wanted One.dsk and Two.dsk", len(files))
+	if len(files) != 3 {
+		t.Fatalf("the zip gave %v files, wanted One.dsk, Two.dsk and App", len(files))
 	}
-	if !bytes.Equal(files[0].Data, one) || !bytes.Equal(files[1].Data, two) {
-		t.Errorf("the files did not come out as they went in")
+	gotOne, gotTwo, app := files[0], files[1], files[2]
+
+	if gotOne.Name != "One.dsk" || !bytes.Equal(gotOne.Data, one) ||
+		!bytes.Equal(gotOne.Resource, resource) || string(gotOne.Type[:]) != "dImg" {
+		t.Errorf("One.dsk did not get its resource fork and type back from __MACOSX")
+	}
+	if gotTwo.Name != "Two.dsk" || !bytes.Equal(gotTwo.Data, two) || string(gotTwo.Creator[:]) != "ttxt" {
+		t.Errorf("Two.dsk did not get its creator back from the ._ file beside it")
+	}
+	if len(gotOne.Folders) != 1 || gotOne.Folders[0] != "Disks" {
+		t.Errorf("One.dsk is in the folders %v, wanted Disks", gotOne.Folders)
+	}
+
+	// An application with no data fork leaves nothing but the ._ file
+	if app.Name != "App" || len(app.Data) != 0 || !bytes.Equal(app.Resource, resource) ||
+		string(app.Type[:]) != "APPL" {
+		t.Errorf("the application made of its ._ file alone is %q, %v bytes of resource fork",
+			app.Name, len(app.Resource))
+	}
+}
+
+func TestWhatIsInAnArchiveInAFolderStaysInTheFolder(t *testing.T) {
+	inner := encodeZip(t, map[string][]uint8{"Levels/One": {1}}, []string{"Levels/One"})
+	outer := encodeZip(t, map[string][]uint8{"Game/levels.zip": inner}, []string{"Game/levels.zip"})
+
+	file := unwrapOne(t, "game.zip", outer)
+	if strings.Join(file.Folders, "/") != "Game/Levels" || file.Name != "One" {
+		t.Errorf("the file came out as %v in %v, wanted One in Game/Levels",
+			file.Name, file.Folders)
 	}
 }
 
@@ -335,11 +439,13 @@ func TestUnarUnpacks(t *testing.T) {
 		t.Skip("unar is not installed")
 	}
 
-	// unar takes zips as well, and a zip is the archive the tests can make
+	// unar takes zips as well, and a zip is the archive the tests can make.
+	// The resource fork comes back out of unar in a ._ file of its own.
 	image := someImage(3000)
+	resource := someImage(700)
 	archive := encodeZip(t, map[string][]uint8{
 		"Disks/One.dsk":   image,
-		"Disks/._One.dsk": {1, 2, 3},
+		"Disks/._One.dsk": encodeAppleDouble(resource, "dImgdCpy"),
 	}, []string{"Disks/One.dsk", "Disks/._One.dsk"})
 
 	files, err := NewUnwrapper().openWithUnar("zip", File{Name: "disks.zip", Data: archive})
@@ -348,7 +454,28 @@ func TestUnarUnpacks(t *testing.T) {
 	}
 
 	if len(files) != 1 || files[0].Name != "One.dsk" || !bytes.Equal(files[0].Data, image) {
-		t.Errorf("unar gave %v files, wanted One.dsk as it went in", len(files))
+		t.Fatalf("unar gave %v files, wanted One.dsk as it went in", len(files))
+	}
+	if !bytes.Equal(files[0].Resource, resource) || string(files[0].Type[:]) != "dImg" {
+		t.Errorf("One.dsk lost its resource fork or its type on the way through unar")
+	}
+}
+
+func TestClutterIsToldFromFiles(t *testing.T) {
+	clutter := []File{
+		{Name: ".DS_Store"},
+		{Name: "._Game"},
+		{Name: "Desktop", Type: [4]uint8{'F', 'N', 'D', 'R'}},
+		{Name: "Desktop DB"},
+	}
+	for _, f := range clutter {
+		if !f.IsClutter() {
+			t.Errorf("%v was not taken for clutter", f.Name)
+		}
+	}
+
+	if f := (File{Name: "Desktop", Type: [4]uint8{'T', 'E', 'X', 'T'}}); f.IsClutter() {
+		t.Errorf("a document called Desktop was taken for clutter")
 	}
 }
 

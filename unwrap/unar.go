@@ -128,15 +128,26 @@ func (u *Unwrapper) openWithUnar(format string, file File) ([]File, error) {
 	return readUnpacked(out)
 }
 
-// readUnpacked reads back what unar left, every file in every folder
+// readUnpacked reads back what unar left, every file in every folder, with
+// the AppleDouble files put back with the files they belong to
 func readUnpacked(dir string) ([]File, error) {
-	var files []File
+	loose, err := readFolder(dir)
+	if err != nil {
+		return nil, err
+	}
+	return assemble(loose), nil
+}
+
+// readFolder reads every file under a folder of the host, by its path from
+// the folder
+func readFolder(dir string) ([]looseFile, error) {
+	var loose []looseFile
 
 	err := filepath.WalkDir(dir, func(name string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		if !entry.Type().IsRegular() || isMacMetadata(entry.Name()) {
+		if !entry.Type().IsRegular() {
 			return nil
 		}
 
@@ -144,11 +155,24 @@ func readUnpacked(dir string) ([]File, error) {
 		if err != nil {
 			return err
 		}
-		files = append(files, File{Name: entry.Name(), Data: data})
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		relative, err := filepath.Rel(dir, name)
+		if err != nil {
+			return err
+		}
+
+		loose = append(loose, looseFile{
+			path:     filepath.ToSlash(relative),
+			data:     data,
+			modified: info.ModTime(),
+		})
 		return nil
 	})
 
-	return files, err
+	return loose, err
 }
 
 /*

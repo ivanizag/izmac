@@ -83,6 +83,13 @@ type Mac struct {
 	// has nothing to do until there is a paste waiting to be delivered
 	pastePending bool
 
+	// heldDiskettes are the diskettes named at startup that do not start
+	// the machine, waiting to go in their drives once it has started, and
+	// disketteHeld guards the hook in the instruction loop that puts them
+	// there. See insertHeldDiskettes.
+	heldDiskettes [driveCount]*storage.FloppyDisk
+	disketteHeld  bool
+
 	cpuTrace     bool
 	toolboxTrace bool
 	sadMacTrace  bool
@@ -218,12 +225,65 @@ func newMac(config *Configuration, r *storage.Rom, disks []storage.BlockDisk,
 			return nil, fmt.Errorf("the machine has %v diskette drives, %v were given",
 				driveCount, len(diskettes))
 		}
+
+		// A diskette that would only be ejected as the machine starts
+		// waits for it to have started instead
+		if !diskette.IsStartupDisk() {
+			m.heldDiskettes[i] = diskette
+			m.disketteHeld = true
+			continue
+		}
 		if err := mm.iwm.drives[i].insert(diskette); err != nil {
 			return nil, err
 		}
 	}
 
 	return m, nil
+}
+
+/*
+The event traps, which an application calls to ask for what the user did next.
+The first one called is the machine having started, with the Finder running.
+*/
+const (
+	trapGetNextEvent  = 0xa970
+	trapWaitNextEvent = 0xa860
+)
+
+/*
+insertHeldDiskettes puts the diskettes named at startup that do not start the
+machine in their drives, once it has started.
+
+The ROM looks in the drives first when the machine starts, and ejects a
+diskette with no boot blocks to go on to the next place to start from: a
+diskette of documents or applications, and every volume izmac makes for loose
+files. That is what the real machine did with one left in the drive, and it
+is no use to anybody who named one on the command line to have it on the
+desktop. So such a diskette is not put in the drive at the start but once an
+application asks for its first event, which is the Finder running: it goes in
+then as though it had been put in by hand, and the Finder mounts it.
+
+This looks at every instruction, which costs, and only does while a diskette
+is waiting, which is the few seconds the machine takes to start. With nothing
+to start from at all the machine shows the flashing question mark and the
+diskettes stay out, as they would have been ejected.
+*/
+func (m *Mac) insertHeldDiskettes(pc uint32) {
+	opcode := uint16(m.mm.Peek(pc))<<8 | uint16(m.mm.Peek(pc+1))
+	if opcode != trapGetNextEvent && opcode != trapWaitNextEvent {
+		return
+	}
+
+	for i, diskette := range m.heldDiskettes {
+		if diskette == nil {
+			continue
+		}
+		if err := m.iwm.drives[i].insert(diskette); err != nil {
+			fmt.Printf("Floppy: %v\n", err)
+		}
+		m.heldDiskettes[i] = nil
+	}
+	m.disketteHeld = false
 }
 
 // DiskDescription names an attached disk for a frontend to report
@@ -633,6 +693,11 @@ func (m *Mac) Summary() []string {
 	}
 
 	for _, diskette := range m.GetDiskettes() {
+		if held := m.heldDiskettes[diskette.Drive]; held != nil {
+			lines = append(lines, fmt.Sprintf("Floppy %v: %v, once the machine has started",
+				diskette.Name, held.Name()))
+			continue
+		}
 		if diskette.Image == "" {
 			lines = append(lines, fmt.Sprintf("Floppy %v: empty", diskette.Name))
 			continue

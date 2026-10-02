@@ -25,13 +25,7 @@ const (
 	// preferredRomChecksum is the revision izmac targets, 'Loud Harmonicas'
 	preferredRomChecksum = 0x4d1f8172
 
-	/*
-		defaultRomFile is the ROM used when none is named. It carries the
-		izmac_ prefix that everything izmac writes for itself carries: the
-		files land in the directory it was run from, beside whatever else is
-		there, and the prefix is what says which of them are izmac's and
-		which are the user's own.
-	*/
+	// defaultRomFile is the ROM used when none is named.
 	defaultRomFile = "izmac_default.rom"
 
 	// defaultRomURL is the revision izmac targets, inside the Macintosh ROM
