@@ -24,8 +24,8 @@ call behind it.
 
 The first Systems have no such alert. Their Finder ejects the diskettes and
 restarts the machine, which then waits for a disk with the flashing question
-mark, and that is the moment to switch off. softwareReset.go notices it, and
-it lasts until a disk goes in, which the machine would start from.
+mark, and izmac leaves it there: a machine waiting for a disk is a machine
+that can be given one. See softwareReset.go.
 */
 
 const (
@@ -36,15 +36,10 @@ const (
 	shutDownAlert = 42
 )
 
-// watchSwitchOff looks at the last system error once a frame, and at whether
-// a machine shut down by its Finder has been given a disk since
+// watchSwitchOff looks at the last system error once a frame
 func (m *Mac) watchSwitchOff() {
-	if m.shutDownByReset && m.hasStartupDisk() {
-		m.shutDownByReset = false
-	}
-
 	code := uint16(m.mm.Peek(dsErrCodeAddress))<<8 | uint16(m.mm.Peek(dsErrCodeAddress+1))
-	m.readyToSwitchOff.Store(code == shutDownAlert || m.shutDownByReset)
+	m.readyToSwitchOff.Store(code == shutDownAlert)
 }
 
 /*

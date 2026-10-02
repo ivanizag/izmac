@@ -83,9 +83,10 @@ func TestShutDownOnSystemSeven(t *testing.T) {
 /*
 The MacPaint diskette, with the System 2.0 of 1985 on it, where Shut Down is the
 Finder ejecting the diskette and executing RESET. The machine starts again with
-no disk and waits for one, and that is it shut down. The diskette is the one
-izmac fetches when nothing is named, which the ebiten frontend keeps on its own
-directory.
+no disk and waits for one with the flashing question mark, and stays there:
+there is no alert to say it can be switched off, and izmac does not close. The
+diskette is the one izmac fetches when nothing is named, which the ebiten
+frontend keeps on its own directory.
 */
 func TestShutDownOnSystemTwo(t *testing.T) {
 	const paintDisk = "frontend/macebiten/" + defaultDisketteFile
@@ -118,9 +119,24 @@ func TestShutDownOnSystemTwo(t *testing.T) {
 
 	// Special is where it is on System 6, and Shut Down its last item
 	shutDownFromTheFinder(t, m, 185, 200, 123)
-	waitForSwitchOff(t, m)
+	m.RunFrames(1500)
 
 	if drive := m.GetDiskette(DriveInternal); drive.Image != "" {
 		t.Errorf("the diskette is still in the drive after Shut Down")
+	}
+
+	/*
+		Had the machine not started again, the Finder would have carried on
+		and asked for the diskette it had just ejected, with the disk switch
+		alert, whose code is 30
+	*/
+	const diskSwitchAlert = 30
+	code := uint16(m.mm.Peek(dsErrCodeAddress))<<8 | uint16(m.mm.Peek(dsErrCodeAddress+1))
+	if code == diskSwitchAlert {
+		t.Errorf("the machine asks for the diskette back instead of starting again")
+	}
+
+	if m.IsReadyToSwitchOff() {
+		t.Errorf("the machine waiting for a disk was taken for it switched off")
 	}
 }

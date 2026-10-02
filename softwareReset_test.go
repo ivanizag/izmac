@@ -42,19 +42,11 @@ func TestTheResetInstructionStartsTheMachineAgain(t *testing.T) {
 		t.Fatalf("the machine started %v times, wanted twice: once and again after RESET", n)
 	}
 
-	// With no disk to start from, that was a Shut Down
-	if !m.IsReadyToSwitchOff() {
-		t.Errorf("a RESET that left no disk to start from was not taken for a Shut Down")
-	}
-
-	// And a diskette put in is something to start from again
-	floppy := writeImage(t, "floppy.dsk", 800*1024, false)
-	if err := m.InsertDiskette(DriveInternal, floppy); err != nil {
-		t.Fatal(err)
-	}
-	m.RunFrames(1)
+	// With no disk to start from the machine waits for one, and that is not
+	// it switched off
 	if m.IsReadyToSwitchOff() {
-		t.Errorf("the machine is still ready to be switched off with a diskette in it")
+		t.Errorf("a RESET that left no disk to start from was taken for the machine " +
+			"being switched off")
 	}
 }
 

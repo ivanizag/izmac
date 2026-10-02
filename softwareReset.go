@@ -7,8 +7,7 @@ the machine, and how Shut Down ends on them.
 The Finder of System 2.0 has no Shut Down Manager to call. Its Shut Down puts
 the disks away, ejects the diskettes from both drives and executes RESET, and
 on a real Macintosh Plus that is the end of it: the machine starts again,
-finds no disk, and shows the flashing question mark, which is when it is
-switched off. That code was read off the Finder of the MacPaint diskette, in
+finds no disk, and shows the flashing question mark. That code was read off the Finder of the MacPaint diskette, in
 memory after it had run; it checks the ROM header for the Macintosh XL first,
 which needs something else.
 
@@ -31,25 +30,12 @@ instruction has returned.
 */
 
 /*
-softwareReset restarts the machine the way the reset line does. When it
-leaves the machine nothing to start from, no diskette in a drive and no disk
-on the bus, it is a Shut Down: the machine is ready to be switched off for as
-long as it waits for a disk.
+softwareReset restarts the machine the way the reset line does. After a Shut
+Down of the first Systems there is no disk left to start from, and the machine
+waits for one with the flashing question mark, as the real one did. That is
+not taken for the machine being switched off: the window stays up, for a disk
+to be put in or for it to be closed by hand.
 */
 func (m *Mac) softwareReset() {
 	m.reset()
-	m.shutDownByReset = !m.hasStartupDisk()
-}
-
-// hasStartupDisk tells whether there is anything the machine could start from
-func (m *Mac) hasStartupDisk() bool {
-	if len(m.scsi.Attached()) != 0 {
-		return true
-	}
-	for _, d := range m.GetDiskettes() {
-		if d.Image != "" {
-			return true
-		}
-	}
-	return false
 }

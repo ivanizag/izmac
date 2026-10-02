@@ -291,7 +291,6 @@ func (m *Mac) Reset() {
 
 func (m *Mac) reset() {
 	m.started = true
-	m.shutDownByReset = false
 	m.via.reset()
 	m.iwm.reset()
 	m.scc.Reset()
