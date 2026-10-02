@@ -138,6 +138,12 @@ func (m *Mac) executeCommands() bool {
 						fmt.Println(err)
 					}
 				}
+				// And so is what the machine wrote to a diskette whose
+				// motor had not stopped yet, which is when it is written
+				// back otherwise
+				if err := m.FlushDiskettes(); err != nil {
+					fmt.Printf("Floppy: %v\n", err)
+				}
 				return true
 			case CommandReset:
 				m.reset()

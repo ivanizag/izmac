@@ -1,6 +1,7 @@
 package izmac
 
 import (
+	"os"
 	"strings"
 	"testing"
 
@@ -94,5 +95,54 @@ func TestTheDisksTakeTheIdsInOrder(t *testing.T) {
 			t.Errorf("the disk at the id %v has %v blocks, wanted %v",
 				d.Id, d.Blocks, disks[i].Blocks())
 		}
+	}
+}
+
+/*
+Stopping the machine writes back what it left on a diskette whose motor had not
+stopped yet. That is the window being closed with the drive still turning, and
+the writes of the last few seconds would otherwise not reach the file.
+*/
+func TestStoppingTheMachineWritesTheDiskettesBack(t *testing.T) {
+	floppy := writeImage(t, "floppy.dsk", 800*1024, false)
+
+	config, _ := quietConfiguration()
+	config.RomFile = "<test>"
+	m := ensureNewMac(t, config, storage.RomFromData(make([]uint8, storage.RomSize)), nil, nil)
+	if err := m.InsertDiskette(DriveInternal, floppy); err != nil {
+		t.Fatal(err)
+	}
+
+	// The machine writes the first track, the same but for one byte, which
+	// is taken from a diskette that has that byte changed
+	changed := make([]uint8, 800*1024)
+	changed[0] = 'W'
+	source, err := storage.NewFloppyDiskData("changed", changed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	track, err := source.ReadTrack(0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	disk := m.iwm.drives[DriveInternal].disk
+	if stored, err := disk.WriteTrack(0, 0, track); err != nil || stored == 0 {
+		t.Fatalf("writing a track stored %v sectors: %v", stored, err)
+	}
+
+	stopped := make(chan struct{})
+	go func() {
+		m.Run()
+		close(stopped)
+	}()
+	m.SendCommand(CommandKill)
+	<-stopped
+
+	data, err := os.ReadFile(floppy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if data[0] != 'W' {
+		t.Errorf("the write to the diskette did not reach the file")
 	}
 }
