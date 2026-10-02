@@ -7,6 +7,7 @@ require (
 	github.com/hajimehoshi/ebiten/v2 v2.9.9
 	github.com/ivanizag/iz68000 v1.0.1
 	github.com/pkg/profile v1.7.0
+	github.com/sfiera/multitalk v0.2.0
 	golang.org/x/sys v0.36.0
 	golang.org/x/text v0.29.0
 )

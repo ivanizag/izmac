@@ -2,7 +2,11 @@ package izmac
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
+
+	"github.com/ivanizag/izmac/component"
+	"github.com/ivanizag/izmac/localtalk"
 )
 
 /*
@@ -174,5 +178,86 @@ func TestSystemSevenOpensAppleTalkAsItStarts(t *testing.T) {
 	}
 	if probes(recorder.frames)[node] == 0 {
 		t.Errorf("System 7 took node %v without probing it", node)
+	}
+}
+
+// pramWithNodeHint writes a parameter RAM file whose AppleTalk node hint, the
+// address the driver tries first, is the one given
+func pramWithNodeHint(t *testing.T, hint uint8) string {
+	t.Helper()
+	r := component.NewAppleRTC("", false)
+	image := r.Image()
+	const spATalkB = 0x12 // the classic byte 2, in the extended parameter RAM
+	image[spATalkB] = hint
+
+	file := filepath.Join(t.TempDir(), "pram.bin")
+	if err := os.WriteFile(file, image, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return file
+}
+
+// networkedMac is the e2e machine on a copy of the System 6 disk, on the
+// network given
+func networkedMac(t *testing.T, network *localtalk.Network, hint uint8) *Mac {
+	t.Helper()
+	config := realConfig(t)
+	config.DiskFiles = []string{copyFile(t, config.DiskFiles[0])}
+	config.AppleTalk = appleTalkLocal
+	config.PrinterPort = ""
+	config.PramFile = pramWithNodeHint(t, hint)
+	config.localTalkNetwork = network
+	if err := config.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	m, err := NewMac(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return m
+}
+
+// runBoth runs two machines side by side, a frame at a time, so that each
+// answers the other while it waits
+func runBoth(a *Mac, b *Mac, frames int) {
+	for i := 0; i < frames; i++ {
+		a.RunFrames(1)
+		b.RunFrames(1)
+	}
+}
+
+/*
+Two machines on one network, both told by their parameter RAM to try the same
+node first. The first takes it. The second probes it, and it is the first
+machine's own ROM that answers with the lapACK, across the network, which
+makes the second take another: two Macintoshes talking to each other.
+*/
+func TestTwoMachinesShareTheNetwork(t *testing.T) {
+	const hint = 0x33
+	network := localtalk.NewNetwork()
+	a := networkedMac(t, network, hint)
+	b := networkedMac(t, network, hint)
+
+	runBoth(a, b, int(bootFrames))
+	openChooser(t, a)
+	if node := nodeAddress(a); node != hint {
+		t.Fatalf("the first machine took node %v, wanted the hint %v", node, hint)
+	}
+
+	// The second opens its Chooser with the first one running beside it
+	moveMouseTo(t, b, 16, 10)
+	b.SetMouseButton(true)
+	b.RunFrames(30)
+	moveMouseTo(t, b, 60, 91)
+	b.RunFrames(10)
+	b.SetMouseButton(false)
+	runBoth(a, b, 600)
+
+	node := nodeAddress(b)
+	if node == 0 {
+		t.Fatalf("the second machine took no node")
+	}
+	if node == hint {
+		t.Errorf("both machines took node %v: the first did not answer the second's probe", hint)
 	}
 }

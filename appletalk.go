@@ -2,6 +2,7 @@ package izmac
 
 import (
 	"github.com/ivanizag/izmac/component"
+	"github.com/ivanizag/izmac/localtalk"
 )
 
 /*
@@ -23,8 +24,10 @@ acquisition, goes on the network as it is.
 
 const (
 	// appleTalkLocal is a LocalTalk network with nothing on it but what
-	// izmac puts there
+	// izmac puts there, and appleTalkUDP the LocalTalk of the local
+	// network, over UDP
 	appleTalkLocal = "local"
+	appleTalkUDP   = "udp"
 
 	// The LLAP control frames, by type
 	lapEnq = 0x81
@@ -90,6 +93,35 @@ func (p *localTalkPort) SendFrame(frame []uint8) {
 	if p.network != nil {
 		p.network.send(frame)
 	}
+}
+
+// Receive takes a frame another station sent, as a station on the network
+func (p *localTalkPort) Receive(frame []uint8) {
+	p.deliver(frame)
+}
+
+// networkLink is the network as the port sends to it, from the port
+type networkLink struct {
+	network *localtalk.Network
+	port    *localTalkPort
+}
+
+func (l networkLink) send(frame []uint8) {
+	l.network.Send(l.port, frame)
+}
+
+/*
+joinNetwork puts the port on a network, and the network on the LocalTalk of
+the local network if the option says so
+*/
+func (p *localTalkPort) joinNetwork(network *localtalk.Network, appleTalk string) (*localtalk.UDP, error) {
+	network.Attach(p)
+	p.network = networkLink{network: network, port: p}
+
+	if appleTalk != appleTalkUDP {
+		return nil, nil
+	}
+	return localtalk.JoinUDP(network, "")
 }
 
 /*
