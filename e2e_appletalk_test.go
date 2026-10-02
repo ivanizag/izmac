@@ -49,16 +49,13 @@ func (n *addressTaker) send(frame []uint8) {
 	}
 }
 
-// appleTalkMac is the e2e machine with AppleTalk on and a recorder on the
-// network
+// appleTalkMac is the e2e machine on a copy of a test disk, with AppleTalk on
+// and a recorder on the network
 func appleTalkMac(t *testing.T, disk string, ramKb int) (*Mac, *networkRecorder) {
 	t.Helper()
 
 	config := realConfig(t)
-	if _, err := os.Stat(disk); err != nil {
-		t.Skipf("%v is not here, this test needs it", disk)
-	}
-	config.DiskFiles = []string{disk}
+	config.DiskFiles = []string{testImage(t, disk)}
 	config.RamSizeKb = ramKb
 	config.AppleTalk = appleTalkLocal
 	config.PrinterPort = ""
@@ -110,7 +107,7 @@ func probes(frames [][]uint8) map[uint8]int {
 }
 
 func TestTheChooserOpensAppleTalkOnSystemSix(t *testing.T) {
-	m, recorder := appleTalkMac(t, "frontend/macebiten/HD20SC.vhd", 1024)
+	m, recorder := appleTalkMac(t, testSystemSixDisk, 1024)
 	m.RunFrames(bootFrames)
 
 	if nodeAddress(m) != 0 {
@@ -144,7 +141,7 @@ come back in through the receiver, its interrupt and the driver's own polling,
 and the driver gives that address up for another
 */
 func TestATakenAddressIsGivenUp(t *testing.T) {
-	m, _ := appleTalkMac(t, "frontend/macebiten/HD20SC.vhd", 1024)
+	m, _ := appleTalkMac(t, testSystemSixDisk, 1024)
 	taker := &addressTaker{port: m.localTalk}
 	m.localTalk.network = taker
 	m.RunFrames(bootFrames)
@@ -170,7 +167,7 @@ driver could not be found, before AppleTalk opens; with the extended parameter
 RAM there, the ROM sets it up on the first start and System 7 goes on.
 */
 func TestSystemSevenOpensAppleTalkAsItStarts(t *testing.T) {
-	m, recorder := appleTalkMac(t, systemSevenDisk, 4096)
+	m, recorder := appleTalkMac(t, testSystemSevenDisk, 4096)
 	m.RunFrames(systemSevenBootFrames)
 
 	node := nodeAddress(m)
@@ -203,7 +200,6 @@ func pramWithNodeHint(t *testing.T, hint uint8) string {
 func networkedMac(t *testing.T, network *localtalk.Network, hint uint8) *Mac {
 	t.Helper()
 	config := realConfig(t)
-	config.DiskFiles = []string{copyFile(t, config.DiskFiles[0])}
 	config.AppleTalk = appleTalkLocal
 	config.PrinterPort = ""
 	config.PramFile = pramWithNodeHint(t, hint)
@@ -263,17 +259,12 @@ func TestTwoMachinesShareTheNetwork(t *testing.T) {
 	}
 }
 
-// fileServerMac is System 6.0.8 from the Utilities 1 diskette, the one with
+// fileServerMac is System 6.0.8 from the test diskette, the one with
 // AppleShare in its System Folder, sharing a folder
 func fileServerMac(t *testing.T, share string) *Mac {
 	t.Helper()
-	const utilities = "izmac_sys608 - Utilities 1.dsk"
-	if _, err := os.Stat(utilities); err != nil {
-		t.Skipf("%v is not here, this test needs it", utilities)
-	}
-	config := realConfig(t)
-	config.DiskFiles = nil
-	config.Diskettes = []string{copyFile(t, utilities)}
+	config := testConfig(t)
+	config.Diskettes = []string{testImage(t, testSystemSixDiskette)}
 	config.RamSizeKb = 4096
 	config.Share = share
 	config.PrinterPort = ""
@@ -323,6 +314,41 @@ func logInAsGuest(t *testing.T, m *Mac) {
 }
 
 /*
+openSharedFolder mounts the shared folder on System 6, and opens its window:
+the server and the guest in the Chooser, the volume, OK, the Chooser closed,
+and the volume's icon, under the diskette's on the desktop, opened. A folder
+with a file, readme.txt, and a folder, Folder, shows them at 178,125 and
+119,125.
+*/
+func openSharedFolder(t *testing.T, m *Mac) {
+	t.Helper()
+	chooseFileServer(t, m)
+	logInAsGuest(t, m)
+
+	moveMouseTo(t, m, 200, 111)
+	clickMouse(m)
+	m.RunFrames(60)
+	moveMouseTo(t, m, 336, 258)
+	clickMouse(m)
+	m.RunFrames(1200)
+	moveMouseTo(t, m, 71, 47)
+	clickMouse(m)
+	m.RunFrames(1200)
+
+	doubleClickAt(t, m, 472, 104)
+	m.RunFrames(1500)
+}
+
+// doubleClickAt opens what is at a place on the screen
+func doubleClickAt(t *testing.T, m *Mac, h int16, v int16) {
+	t.Helper()
+	moveMouseTo(t, m, h, v)
+	clickMouse(m)
+	m.RunFrames(8)
+	clickMouse(m)
+}
+
+/*
 The file server, from a Macintosh. The Chooser finds the server by NBP, gets
 its status by ASP to ask how to log in, and logs in as a guest, which opens a
 session and asks the server for its volumes; Quit in that dialog closes the
@@ -366,29 +392,10 @@ func TestTheFinderDuplicatesAFileOnTheSharedFolder(t *testing.T) {
 	}
 
 	m := fileServerMac(t, share)
-	chooseFileServer(t, m)
-	logInAsGuest(t, m)
-
-	// The volume, OK, and the Chooser closed
-	moveMouseTo(t, m, 200, 111)
-	clickMouse(m)
-	m.RunFrames(60)
-	moveMouseTo(t, m, 336, 258)
-	clickMouse(m)
-	m.RunFrames(1200)
-	moveMouseTo(t, m, 71, 47)
-	clickMouse(m)
-	m.RunFrames(1200)
-
-	// The volume opened, under the disk on the desktop
-	moveMouseTo(t, m, 472, 104)
-	clickMouse(m)
-	m.RunFrames(8)
-	clickMouse(m)
-	m.RunFrames(1500)
+	openSharedFolder(t, m)
 
 	// The file selected, and Duplicate from the File menu
-	moveMouseTo(t, m, 173, 110)
+	moveMouseTo(t, m, 178, 125)
 	clickMouse(m)
 	m.RunFrames(60)
 	moveMouseTo(t, m, 55, 10)
@@ -397,9 +404,12 @@ func TestTheFinderDuplicatesAFileOnTheSharedFolder(t *testing.T) {
 	moveMouseTo(t, m, 78, 139)
 	m.RunFrames(10)
 	m.SetMouseButton(false)
-	m.RunFrames(1500)
 
 	copied := filepath.Join(share, "Copy of readme.txt")
+	waitUntil(m, 180, func() bool {
+		data, err := os.ReadFile(copied)
+		return err == nil && string(data) == text && hasFinderInfo(copied)
+	})
 	data, err := os.ReadFile(copied)
 	if err != nil || string(data) != text {
 		t.Fatalf("the copy has %q, %v", data, err)
@@ -408,4 +418,10 @@ func TestTheFinderDuplicatesAFileOnTheSharedFolder(t *testing.T) {
 	if string(finder[0:8]) != "TEXTttxt" {
 		t.Errorf("the copy's Finder information is %q", finder[0:8])
 	}
+}
+
+// hasFinderInfo tells whether the server keeps Finder information for a file
+func hasFinderInfo(host string) bool {
+	_, ok := afp.FinderInfo(host)
+	return ok
 }

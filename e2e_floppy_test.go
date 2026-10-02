@@ -154,3 +154,95 @@ func pressKey(m *Mac, name string) {
 	m.PutKey(code, false)
 	m.RunFrames(10)
 }
+
+// pressCommand taps a key with the command key held, a menu accelerator
+func pressCommand(m *Mac, name string) {
+	codes := KeyCodes()
+	m.PutKey(codes["Command"], true)
+	m.RunFrames(6)
+	m.PutKey(codes[name], true)
+	m.RunFrames(6)
+	m.PutKey(codes[name], false)
+	m.RunFrames(6)
+	m.PutKey(codes["Command"], false)
+	m.RunFrames(6)
+}
+
+// typeText types lower case letters and spaces, as a hand would
+func typeText(m *Mac, text string) {
+	for _, r := range text {
+		name := "Space"
+		if r != ' ' {
+			name = string(r - 'a' + 'A')
+		}
+		pressKey(m, name)
+	}
+}
+
+// currentApplication is the name of the application running, which the
+// Segment Loader keeps in CurApName, a Pascal string at $0910
+func currentApplication(m *Mac) string {
+	const curApName = 0x0910
+	name := make([]uint8, min(int(m.mm.Peek(curApName)), 31))
+	for i := range name {
+		name[i] = m.mm.Peek(uint32(curApName + 1 + i))
+	}
+	return string(name)
+}
+
+/*
+waitUntil runs the machine a second at a time until something has happened,
+for as many seconds as given, and tells whether it did. What another machine
+or a server does on the other end of the network takes the time of the host,
+and the emulated machine runs many times faster than that, more so on a host
+busy with other tests: a wait for something done over the network is for its
+outcome, not for a number of frames.
+*/
+func waitUntil(m *Mac, seconds int, done func() bool) bool {
+	for i := 0; i < seconds; i++ {
+		if done() {
+			return true
+		}
+		m.RunFrames(60)
+	}
+	return done()
+}
+
+// waitForApplication runs the machine until an application is running, for
+// as many seconds as given
+func waitForApplication(t *testing.T, m *Mac, name string, seconds int) {
+	t.Helper()
+	if !waitUntil(m, seconds, func() bool { return currentApplication(m) == name }) {
+		t.Fatalf("%v was not running after %v seconds, %q is", name, seconds, currentApplication(m))
+	}
+}
+
+/*
+mountedVolumes are the names of the volumes the machine has mounted, the one
+it started from first: the queue of volume control blocks, VCBQHdr at $0356,
+whose head is the first, each linking to the next, with its name at 44
+*/
+func mountedVolumes(m *Mac) []string {
+	const vcbQueueHead, vcbName = 0x0358, 44
+	readLong := func(address uint32) uint32 {
+		return uint32(m.mm.Peek(address))<<24 | uint32(m.mm.Peek(address+1))<<16 |
+			uint32(m.mm.Peek(address+2))<<8 | uint32(m.mm.Peek(address+3))
+	}
+	var names []string
+	for vcb := readLong(vcbQueueHead); vcb != 0 && len(names) < 16; vcb = readLong(vcb) {
+		name := make([]uint8, min(int(m.mm.Peek(vcb+vcbName)), 27))
+		for i := range name {
+			name[i] = m.mm.Peek(vcb + vcbName + 1 + uint32(i))
+		}
+		names = append(names, string(name))
+	}
+	return names
+}
+
+// startupVolume is the name of the volume the machine started from
+func startupVolume(m *Mac) string {
+	if volumes := mountedVolumes(m); len(volumes) != 0 {
+		return volumes[0]
+	}
+	return ""
+}

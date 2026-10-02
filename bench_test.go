@@ -1,32 +1,17 @@
 package izmac
 
 import (
-	"os"
 	"testing"
 )
 
+// BenchmarkBoot is the first twenty emulated seconds of booting the System 6
+// test disk
 func BenchmarkBoot(b *testing.B) {
-	const (
-		diskFile = "frontend/macebiten/HD20SC.vhd"
-		romFile  = defaultRomFile
-	)
-	for _, name := range []string{diskFile, romFile} {
-		if _, err := os.Stat(name); err != nil {
-			b.Skipf("%v is not here", name)
-		}
-	}
-
+	disk := testImage(b, testSystemSixDisk)
 	for b.Loop() {
-		config := NewConfiguration()
-		config.RomFile = romFile
-		config.DiskFiles = []string{diskFile}
-		if err := config.Validate(); err != nil {
-			b.Fatal(err)
-		}
-		m, err := NewMac(config)
-		if err != nil {
-			b.Fatal(err)
-		}
+		config := testConfig(b)
+		config.DiskFiles = []string{disk}
+		m := buildTestMac(b, config)
 		m.RunFrames(1200)
 	}
 }

@@ -10,6 +10,10 @@ pram.bin
 # documentation is written around are not
 !doc/*.png
 
+# The images the tests run on are part of the repository, see
+# test_images/README.md
+!test_images/*
+
 frontend/*/*.vhd
 AGENTS.md
 todo.txt

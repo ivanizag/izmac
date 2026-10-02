@@ -222,3 +222,9 @@ func guessFinderInfo(name string) [32]uint8 {
 func FinderInfo(host string) ([32]uint8, bool) {
 	return newMetadataStore("").finderInfo(host)
 }
+
+// ResourceFork is the resource fork the server keeps for a file of the host,
+// empty if it has none
+func ResourceFork(host string) []uint8 {
+	return newMetadataStore("").resource(host)
+}
