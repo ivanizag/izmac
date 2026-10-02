@@ -72,23 +72,25 @@ func TestADetachedStationHearsNothing(t *testing.T) {
 }
 
 /*
-Two networks joined to the LocalTalk of the local network, which is the same
-UDP multicast group, see each other's frames and not their own. Multicast is
-not everywhere, a container or a locked down CI machine among the places, and
-the test skips where it can not be joined or nothing comes back.
+Two networks joined to LocalTalk over UDP, which is the same multicast group,
+see each other's frames and not their own: two izmacs on one computer. Over
+the local network that needs it to carry multicast, which a container, a
+locked down CI machine or a managed firewall may not, and the test skips where
+it can not be joined or nothing comes back. On the loopback interface it
+needs nothing but the computer.
 */
-func TestTwoNetworksMeetOverUDP(t *testing.T) {
+func meetOverUDP(t *testing.T, loopback bool) {
 	one, two := NewNetwork(), NewNetwork()
 	a, b := newRecorder(), newRecorder()
 	one.Attach(a)
 	two.Attach(b)
 
-	ua, err := JoinUDP(one, "", nil)
+	ua, err := JoinUDP(one, loopback, nil)
 	if err != nil {
 		t.Skipf("multicast is not available here: %v", err)
 	}
 	defer ua.Close()
-	ub, err := JoinUDP(two, "", nil)
+	ub, err := JoinUDP(two, loopback, nil)
 	if err != nil {
 		t.Skipf("multicast is not available here: %v", err)
 	}
@@ -100,7 +102,7 @@ func TestTwoNetworksMeetOverUDP(t *testing.T) {
 	select {
 	case <-b.got:
 	case <-time.After(2 * time.Second):
-		t.Skip("nothing came back from the multicast group, which this host may not loop back")
+		t.Skip("nothing came back from the multicast group, which this host may not let through")
 	}
 
 	if got := b.received(); !bytes.Equal(got[0], frame) {
@@ -112,6 +114,14 @@ func TestTwoNetworksMeetOverUDP(t *testing.T) {
 	if len(a.received()) != 0 {
 		t.Errorf("the sender's network heard its own frame back: %x", a.received())
 	}
+}
+
+func TestTwoNetworksMeetOverUDP(t *testing.T) {
+	meetOverUDP(t, false)
+}
+
+func TestTwoNetworksMeetOverTheLoopback(t *testing.T) {
+	meetOverUDP(t, true)
 }
 
 /*
@@ -174,11 +184,44 @@ func TestASwallowingNetworkDoesNotHoldUpTheSender(t *testing.T) {
 		t.Errorf("sending 640 frames took %v", took)
 	}
 
-	time.Sleep(100 * time.Millisecond)
+	// Enough failures in a row to say so, at 20ms each
+	time.Sleep(time.Duration(failuresToWarn+4) * 20 * time.Millisecond)
 	u.Close()
 	mutex.Lock()
 	defer mutex.Unlock()
 	if warnings != 1 {
 		t.Errorf("the failure was said %v times, wanted once", warnings)
+	}
+}
+
+// A send that fails now and then, on a busy computer, is not a network that
+// lets nothing out, and is not said
+func TestASlowSendNowAndThenIsNotWarnedOf(t *testing.T) {
+	var mutex sync.Mutex
+	sends, warnings := 0, 0
+	send := func([]uint8) error {
+		mutex.Lock()
+		defer mutex.Unlock()
+		sends++
+		if sends%5 == 0 {
+			return errors.New("i/o timeout")
+		}
+		return nil
+	}
+	u := newUDP(NewNetwork(), 1, send, func(error) {
+		mutex.Lock()
+		defer mutex.Unlock()
+		warnings++
+	})
+	for i := 0; i < 50; i++ {
+		u.Receive([]uint8{0x7f, 0x7f, 0x81})
+		time.Sleep(time.Millisecond)
+	}
+	u.Close()
+
+	mutex.Lock()
+	defer mutex.Unlock()
+	if warnings != 0 {
+		t.Errorf("one send in five failing was warned of")
 	}
 }

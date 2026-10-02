@@ -14,10 +14,12 @@ AppleTalk is off unless you ask for it:
 izmac -appletalk local System.img
 ```
 
-`local` is a LocalTalk network with nothing on it but this machine. `udp` puts
-it on the LocalTalk of your local network instead:
+`local` is a LocalTalk network with nothing on it but this machine. `host`
+puts it on a LocalTalk with the other izmacs on this computer, and `udp` on
+the LocalTalk of your local network:
 
 ```bash
+izmac -appletalk host System.img
 izmac -appletalk udp System.img
 ```
 
@@ -37,7 +39,14 @@ same file corrupt it.
 The first time, macOS asks whether izmac may accept incoming network
 connections. Say yes: the frames of the other machines come in that way, and
 without them each machine is alone on its network. Some networks do not carry
-multicast between computers at all, a guest Wi-Fi among them.
+multicast between computers at all, a guest Wi-Fi among them, and a firewall
+managed by someone else may keep it from leaving the computer. When frames do
+not get out, izmac says so once, and the machine goes on alone.
+
+`host` is the same LocalTalk over UDP kept inside the computer, on its
+loopback interface. It reaches every izmac started with `host` on the same
+computer and nothing else, and works where `udp` cannot: no firewall stands
+between a computer and itself.
 
 The LocalTalk handshake, the RTS and CTS before every frame to one node, never
 crosses the network. It has to be answered within 200µs, which no network

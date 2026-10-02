@@ -11,6 +11,7 @@ import (
 
 	"github.com/sfiera/multitalk/pkg/llap"
 	"github.com/sfiera/multitalk/pkg/ltou"
+	"golang.org/x/net/ipv4"
 )
 
 /*
@@ -21,7 +22,8 @@ Everything on the local network listening to the group is on the same
 LocalTalk: other izmacs, Mini vMacs, and through a bridge such as MultiTalk or
 TashRouter, EtherTalk and real LocalTalk.
 
-A multicast datagram comes back to the sender as well, so every transport has
+A multicast datagram comes back to the sender as well, which is what lets two
+izmacs on one computer hear each other, so every transport has
 an id of its own, and drops what carries it. Mini vMac uses its process id
 for that; the id here is random, so that two transports in one process, a
 test's for one, do not take each other for themselves.
@@ -34,7 +36,9 @@ is queued, and sent from a goroutine of its own, with a deadline. A network
 that swallows multicast, as some managed ones do, otherwise blocks the first
 send that finds the socket full, and the machine with it. A frame that finds
 the queue full or does not get out in time is dropped, as a frame on a busy
-wire is, and the first one that fails is said once.
+wire is. A send now and then can take longer than the deadline on a busy
+computer; when several in a row fail, nothing is getting out, and that is said
+once.
 */
 
 const (
@@ -44,6 +48,10 @@ const (
 	// The frames waiting to be sent, and how long each may take
 	sendQueue   = 64
 	sendTimeout = 100 * time.Millisecond
+
+	// failuresToWarn is how many sends in a row fail before nothing is
+	// taken to be getting out
+	failuresToWarn = 8
 )
 
 // UDP is the transport, a station that stands for everything on the group
@@ -78,16 +86,19 @@ func newUDP(network *Network, id uint32, send func([]uint8) error, warn func(err
 }
 
 /*
-JoinUDP puts a network on the LocalTalk of the local network. The interface is
-the one to join the group on, or empty for the system's choice. Warn, if not
-nil, is told of the first frame that could not be sent.
+JoinUDP puts a network on LocalTalk over UDP: that of the local network, or
+with loopback that of this computer alone, the same group on its loopback
+interface, which reaches every izmac on the computer and nothing outside it.
+That one works where the local network does not carry multicast, or a
+firewall keeps it from leaving the computer. Warn, if not nil, is told when
+frames stop getting out.
 */
-func JoinUDP(network *Network, iface string, warn func(error)) (*UDP, error) {
+func JoinUDP(network *Network, loopback bool, warn func(error)) (*UDP, error) {
 	var ifi *net.Interface
-	if iface != "" {
+	if loopback {
 		var err error
-		if ifi, err = net.InterfaceByName(iface); err != nil {
-			return nil, fmt.Errorf("can not use the interface %v for LocalTalk: %w", iface, err)
+		if ifi, err = loopbackInterface(); err != nil {
+			return nil, err
 		}
 	}
 
@@ -95,6 +106,23 @@ func JoinUDP(network *Network, iface string, warn func(error)) (*UDP, error) {
 	conn, err := net.ListenMulticastUDP("udp4", ifi, group)
 	if err != nil {
 		return nil, fmt.Errorf("can not join LocalTalk over UDP on %v: %w", group, err)
+	}
+
+	/*
+		Go turns multicast loopback off, and without it what one izmac
+		sends never reaches another on the same computer: on, and the
+		datagrams that come back to their sender are dropped by its id
+	*/
+	p := ipv4.NewPacketConn(conn)
+	if err := p.SetMulticastLoopback(true); err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("can not loop back LocalTalk over UDP: %w", err)
+	}
+	if ifi != nil {
+		if err := p.SetMulticastInterface(ifi); err != nil {
+			conn.Close()
+			return nil, fmt.Errorf("can not send LocalTalk over UDP on %v: %w", ifi.Name, err)
+		}
 	}
 
 	var id [4]uint8
@@ -134,17 +162,38 @@ func (u *UDP) Receive(frame []uint8) {
 func (u *UDP) sending() {
 	defer close(u.stopped)
 	warned := false
+	failures := 0
 	for {
 		select {
 		case <-u.stop:
 			return
 		case data := <-u.outgoing:
-			if err := u.send(data); err != nil && !warned && u.warn != nil {
+			err := u.send(data)
+			if err == nil {
+				failures = 0
+				continue
+			}
+			failures++
+			if failures >= failuresToWarn && !warned && u.warn != nil {
 				warned = true
 				u.warn(err)
 			}
 		}
 	}
+}
+
+// loopbackInterface is the interface of the computer to itself
+func loopbackInterface() (*net.Interface, error) {
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		return nil, err
+	}
+	for i := range interfaces {
+		if interfaces[i].Flags&net.FlagLoopback != 0 && interfaces[i].Flags&net.FlagUp != 0 {
+			return &interfaces[i], nil
+		}
+	}
+	return nil, errors.New("this computer has no loopback interface for LocalTalk")
 }
 
 // encodeDatagram makes the datagram of a frame, with the sender id in front
