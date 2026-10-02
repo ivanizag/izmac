@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/ivanizag/iz68000"
+	"github.com/ivanizag/izmac/appletalk"
 	"github.com/ivanizag/izmac/component"
 	"github.com/ivanizag/izmac/localtalk"
 	"github.com/ivanizag/izmac/scsi"
@@ -45,6 +46,10 @@ type Mac struct {
 	// local network when that is the network
 	localTalk *localTalkPort
 	udp       *localtalk.UDP
+
+	// fileServer is the AppleShare server of the shared folder, nil when
+	// no folder is shared
+	fileServer *appletalk.Listener
 
 	commandChannel chan command
 
@@ -235,6 +240,10 @@ func newMac(config *Configuration, r *storage.Rom, disks []storage.BlockDisk,
 		m.udp, err = m.localTalk.joinNetwork(network, config.AppleTalk)
 		if err != nil {
 			return nil, err
+		}
+
+		if config.Share != "" {
+			m.fileServer = shareFolder(network, config.Share)
 		}
 	}
 

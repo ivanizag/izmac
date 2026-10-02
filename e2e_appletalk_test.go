@@ -261,3 +261,71 @@ func TestTwoMachinesShareTheNetwork(t *testing.T) {
 		t.Errorf("both machines took node %v: the first did not answer the second's probe", hint)
 	}
 }
+
+/*
+The file server, from a Macintosh: System 6.0.8 from the Utilities 1 diskette,
+the one with AppleShare in its System Folder. The Chooser finds the server by
+NBP, gets its status by ASP to ask how to log in, and logs in as a guest, which
+opens a session and asks the server for its volumes; Quit in that dialog
+closes the session again.
+*/
+func TestTheChooserLogsInToTheFileServer(t *testing.T) {
+	const utilities = "izmac_sys608 - Utilities 1.dsk"
+	if _, err := os.Stat(utilities); err != nil {
+		t.Skipf("%v is not here, this test needs it", utilities)
+	}
+	config := realConfig(t)
+	config.DiskFiles = nil
+	config.Diskettes = []string{copyFile(t, utilities)}
+	config.RamSizeKb = 4096
+	config.Share = t.TempDir()
+	config.PrinterPort = ""
+	if err := config.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	m, err := NewMac(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(m.fileServer.Stop)
+	m.RunFrames(3000)
+
+	// The Chooser, then AppleShare in it
+	moveMouseTo(t, m, 16, 10)
+	m.SetMouseButton(true)
+	m.RunFrames(30)
+	moveMouseTo(t, m, 50, 59)
+	m.RunFrames(10)
+	m.SetMouseButton(false)
+	m.RunFrames(1800)
+	moveMouseTo(t, m, 100, 85)
+	clickMouse(m)
+	m.RunFrames(1200)
+
+	// The server, the one in the list, and OK, which asks how to log in
+	moveMouseTo(t, m, 300, 88)
+	clickMouse(m)
+	m.RunFrames(60)
+	moveMouseTo(t, m, 330, 177)
+	clickMouse(m)
+	m.RunFrames(900)
+	if n := m.fileServer.Sessions(); n != 0 {
+		t.Fatalf("%v sessions are open before logging in", n)
+	}
+
+	// OK again, as a guest, which logs in and lists the volumes
+	moveMouseTo(t, m, 390, 258)
+	clickMouse(m)
+	m.RunFrames(900)
+	if n := m.fileServer.Sessions(); n != 1 {
+		t.Fatalf("%v sessions are open after logging in, wanted one", n)
+	}
+
+	// Quit leaves the server
+	moveMouseTo(t, m, 166, 258)
+	clickMouse(m)
+	m.RunFrames(600)
+	if n := m.fileServer.Sessions(); n != 0 {
+		t.Errorf("%v sessions are still open after quitting", n)
+	}
+}

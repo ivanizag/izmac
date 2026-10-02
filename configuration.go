@@ -86,6 +86,13 @@ type Configuration struct {
 	*/
 	AppleTalk string
 
+	/*
+		Share is a folder of the host served to the machine as an
+		AppleShare volume, by a file server of izmac's own on the same
+		LocalTalk network. It turns AppleTalk on if nothing else did.
+	*/
+	Share string
+
 	// localTalkNetwork is the network the printer port goes on, made for
 	// the machine when nil. It is how a test puts two machines on one.
 	localTalkNetwork *localtalk.Network
@@ -457,6 +464,9 @@ func (c *Configuration) AddFlags(fs *flag.FlagSet) {
 		"the serial port the printer is on, '"+printerPortPrinter+
 			"' or '"+printerPortModem+"'. The default is the printer "+
 			"port, or the modem port when AppleTalk is on")
+	fs.StringVar(&c.Share, "share", c.Share,
+		"a folder to serve to the machine as an AppleShare volume, over "+
+			"AppleTalk, which this turns on")
 	fs.StringVar(&c.AppleTalk, "appletalk", c.AppleTalk,
 		"turn AppleTalk on, on the printer port: '"+appleTalkLocal+
 			"' for a LocalTalk network with nothing else on it, '"+
@@ -559,6 +569,16 @@ func (c *Configuration) validatePrinter() error {
 	default:
 		return fmt.Errorf("unknown serial port %q, use %v or %v",
 			c.PrinterPort, printerPortPrinter, printerPortModem)
+	}
+
+	if c.Share != "" {
+		info, err := os.Stat(c.Share)
+		if err != nil || !info.IsDir() {
+			return fmt.Errorf("the folder to share, %v, is not a folder", c.Share)
+		}
+		if c.AppleTalk == "" {
+			c.AppleTalk = appleTalkLocal
+		}
 	}
 
 	switch c.AppleTalk {
