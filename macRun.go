@@ -219,6 +219,8 @@ func (m *Mac) lineTick() {
 		if m.clipboard != nil {
 			m.clipboardFrame()
 		}
+
+		m.watchSwitchOff()
 	}
 
 	// The sound takes one word of its buffer for every scan line, drawn or

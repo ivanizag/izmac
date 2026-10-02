@@ -122,6 +122,18 @@ While the menu is up the machine sees neither the keys nor the pointer, and
 anything you were holding down is released, so it does not stay held while you
 are looking at the menu.
 
+## Shutting down
+
+Choose **Shut Down** from the Special menu of the Finder, the way you would on
+the real machine. The Macintosh puts its disks away and then says you may
+switch it off; izmac takes that as the power switch, and closes the window two
+seconds later. Click **Restart** within those two seconds to stay.
+
+Closing the window yourself works too, and loses nothing that has been saved:
+what is still waiting to be written to a diskette is written as it closes. Shut
+Down is still the tidier way out, as it was on the real machine, since it is
+the System that puts its disks away and closing the window does not ask it.
+
 ## Screenshots
 
 **F12**, or **Print Screen** on a keyboard that has one, writes the screen as

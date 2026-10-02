@@ -75,6 +75,10 @@ type Mac struct {
 	paused  atomic.Bool
 	started bool
 
+	// readyToSwitchOff is set while the machine has been shut down and
+	// waits for the power to go, for a frontend to read. See switchOff.go.
+	readyToSwitchOff atomic.Bool
+
 	// pastePending guards the clipboard hook in the instruction loop, which
 	// has nothing to do until there is a paste waiting to be delivered
 	pastePending bool
