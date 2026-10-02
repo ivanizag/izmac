@@ -1,6 +1,8 @@
 package izmac
 
 import (
+	"fmt"
+
 	"github.com/ivanizag/izmac/component"
 	"github.com/ivanizag/izmac/localtalk"
 )
@@ -121,7 +123,10 @@ func (p *localTalkPort) joinNetwork(network *localtalk.Network, appleTalk string
 	if appleTalk != appleTalkUDP {
 		return nil, nil
 	}
-	return localtalk.JoinUDP(network, "")
+	return localtalk.JoinUDP(network, "", func(err error) {
+		fmt.Printf("AppleTalk: frames are not getting out to LocalTalk over UDP, "+
+			"the machine is alone on the network: %v\n", err)
+	})
 }
 
 /*

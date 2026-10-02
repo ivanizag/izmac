@@ -2,6 +2,7 @@ package localtalk
 
 import (
 	"bytes"
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -82,12 +83,12 @@ func TestTwoNetworksMeetOverUDP(t *testing.T) {
 	one.Attach(a)
 	two.Attach(b)
 
-	ua, err := JoinUDP(one, "")
+	ua, err := JoinUDP(one, "", nil)
 	if err != nil {
 		t.Skipf("multicast is not available here: %v", err)
 	}
 	defer ua.Close()
-	ub, err := JoinUDP(two, "")
+	ub, err := JoinUDP(two, "", nil)
 	if err != nil {
 		t.Skipf("multicast is not available here: %v", err)
 	}
@@ -143,5 +144,41 @@ func TestTheDatagramIsTheIdAndTheFrame(t *testing.T) {
 	data, _ = encodeDatagram(enq, 7)
 	if got, ok := decodeDatagram(data, 8); !ok || !bytes.Equal(got, enq) {
 		t.Errorf("a lapENQ came through as %x", got)
+	}
+}
+
+/*
+A network that swallows multicast, as a managed one can, blocks a send once
+the socket is full. The machine sending never waits for it: frames queue, the
+ones that find the queue full are dropped, and the failure is said once.
+*/
+func TestASwallowingNetworkDoesNotHoldUpTheSender(t *testing.T) {
+	var mutex sync.Mutex
+	warnings := 0
+	send := func([]uint8) error {
+		time.Sleep(20 * time.Millisecond)
+		return errors.New("i/o timeout")
+	}
+	u := newUDP(NewNetwork(), 1, send, func(error) {
+		mutex.Lock()
+		defer mutex.Unlock()
+		warnings++
+	})
+
+	enq := []uint8{0x7f, 0x7f, 0x81}
+	start := time.Now()
+	for i := 0; i < 640; i++ {
+		u.Receive(enq)
+	}
+	if took := time.Since(start); took > 100*time.Millisecond {
+		t.Errorf("sending 640 frames took %v", took)
+	}
+
+	time.Sleep(100 * time.Millisecond)
+	u.Close()
+	mutex.Lock()
+	defer mutex.Unlock()
+	if warnings != 1 {
+		t.Errorf("the failure was said %v times, wanted once", warnings)
 	}
 }

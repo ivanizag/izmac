@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"time"
 
 	"github.com/sfiera/multitalk/pkg/llap"
 	"github.com/sfiera/multitalk/pkg/ltou"
@@ -27,26 +28,61 @@ test's for one, do not take each other for themselves.
 
 The packets are encoded by sfiera's MultiTalk, whose ltou and llap packages
 are the format as the rest of the LocalTalk world reads it.
+
+Sending never holds up whoever sends, which is the emulated machine: a frame
+is queued, and sent from a goroutine of its own, with a deadline. A network
+that swallows multicast, as some managed ones do, otherwise blocks the first
+send that finds the socket full, and the machine with it. A frame that finds
+the queue full or does not get out in time is dropped, as a frame on a busy
+wire is, and the first one that fails is said once.
 */
 
-// maxDatagram is more than any LLAP frame, which is 603 bytes at most
-const maxDatagram = 1024
+const (
+	// maxDatagram is more than any LLAP frame, which is 603 bytes at most
+	maxDatagram = 1024
+
+	// The frames waiting to be sent, and how long each may take
+	sendQueue   = 64
+	sendTimeout = 100 * time.Millisecond
+)
 
 // UDP is the transport, a station that stands for everything on the group
 type UDP struct {
 	network *Network
 	conn    *net.UDPConn
-	group   *net.UDPAddr
 	id      uint32
+
+	outgoing chan []uint8
+	send     func([]uint8) error
+	warn     func(error)
+	stop     chan struct{}
+	stopped  chan struct{}
 
 	closing sync.Once
 }
 
+// newUDP is a transport with the id given, sending with the function given,
+// and its sender running
+func newUDP(network *Network, id uint32, send func([]uint8) error, warn func(error)) *UDP {
+	u := &UDP{
+		network:  network,
+		id:       id,
+		outgoing: make(chan []uint8, sendQueue),
+		send:     send,
+		warn:     warn,
+		stop:     make(chan struct{}),
+		stopped:  make(chan struct{}),
+	}
+	go u.sending()
+	return u
+}
+
 /*
 JoinUDP puts a network on the LocalTalk of the local network. The interface is
-the one to join the group on, or empty for the system's choice.
+the one to join the group on, or empty for the system's choice. Warn, if not
+nil, is told of the first frame that could not be sent.
 */
-func JoinUDP(network *Network, iface string) (*UDP, error) {
+func JoinUDP(network *Network, iface string, warn func(error)) (*UDP, error) {
 	var ifi *net.Interface
 	if iface != "" {
 		var err error
@@ -67,24 +103,47 @@ func JoinUDP(network *Network, iface string) (*UDP, error) {
 		return nil, err
 	}
 
-	u := &UDP{
-		network: network,
-		conn:    conn,
-		group:   group,
-		id:      binary.BigEndian.Uint32(id[:]),
+	send := func(data []uint8) error {
+		conn.SetWriteDeadline(time.Now().Add(sendTimeout))
+		_, err := conn.WriteToUDP(data, group)
+		return err
 	}
+	u := newUDP(network, binary.BigEndian.Uint32(id[:]), send, warn)
+	u.conn = conn
 	network.Attach(u)
 	go u.listen()
 	return u, nil
 }
 
 /*
-Receive sends a frame of the network out to the group. A frame that can not be
-encoded or sent is dropped, as a frame on a wire can be.
+Receive queues a frame of the network to go out to the group. A frame that can
+not be encoded, or finds the queue full, is dropped.
 */
 func (u *UDP) Receive(frame []uint8) {
-	if data, ok := encodeDatagram(frame, u.id); ok {
-		u.conn.WriteToUDP(data, u.group)
+	data, ok := encodeDatagram(frame, u.id)
+	if !ok {
+		return
+	}
+	select {
+	case u.outgoing <- data:
+	default:
+	}
+}
+
+// sending sends what is queued, until the transport closes
+func (u *UDP) sending() {
+	defer close(u.stopped)
+	warned := false
+	for {
+		select {
+		case <-u.stop:
+			return
+		case data := <-u.outgoing:
+			if err := u.send(data); err != nil && !warned && u.warn != nil {
+				warned = true
+				u.warn(err)
+			}
+		}
 	}
 }
 
@@ -133,7 +192,11 @@ func (u *UDP) Close() error {
 	var err error
 	u.closing.Do(func() {
 		u.network.Detach(u)
-		err = u.conn.Close()
+		close(u.stop)
+		if u.conn != nil {
+			err = u.conn.Close()
+		}
+		<-u.stopped
 	})
 	return err
 }
