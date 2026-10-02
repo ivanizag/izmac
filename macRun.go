@@ -155,6 +155,16 @@ func (m *Mac) step() {
 
 	startCycles := m.cpu.GetCycles()
 	m.cpu.ExecuteInstruction()
+
+	// The RESET instruction asserted the reset line. The machine starts
+	// again now that the instruction has returned, since that resets the
+	// processor too.
+	if m.mm.resetAsserted {
+		m.mm.resetAsserted = false
+		m.softwareReset()
+		return
+	}
+
 	m.tick(m.cpu.GetCycles() - startCycles)
 }
 
@@ -219,6 +229,8 @@ func (m *Mac) lineTick() {
 		if m.clipboard != nil {
 			m.clipboardFrame()
 		}
+
+		m.watchSwitchOff()
 	}
 
 	// The sound takes one word of its buffer for every scan line, drawn or

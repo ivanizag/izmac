@@ -122,6 +122,25 @@ While the menu is up the machine sees neither the keys nor the pointer, and
 anything you were holding down is released, so it does not stay held while you
 are looking at the menu.
 
+## Shutting down
+
+Choose **Shut Down** from the Special menu of the Finder, the way you would on
+the real machine. The Macintosh puts its disks away and then says you may
+switch it off; izmac takes that as the power switch, and closes the window two
+seconds later. Click **Restart** within those two seconds to stay.
+
+The Systems of 1985 and 1986, such as the one on the MacPaint diskette izmac
+starts with when nothing is named, have no such message. Their Shut Down
+ejects the diskettes and starts the machine again, which with no disk left
+waits for one with the flashing question mark, as the real machine did. izmac
+stays open there: drop a diskette on the window to start from it, or close
+the window when you are done.
+
+Closing the window yourself works too, and loses nothing that has been saved:
+what is still waiting to be written to a diskette is written as it closes. Shut
+Down is still the tidier way out, as it was on the real machine, since it is
+the System that puts its disks away and closing the window does not ask it.
+
 ## Screenshots
 
 **F12**, or **Print Screen** on a keyboard that has one, writes the screen as

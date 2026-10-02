@@ -153,9 +153,9 @@ contents, and a file that is neither formatted by Apple's tools nor exactly
 `-floppy`.
 
 **Nothing was saved to a diskette.** The image is written back when the drive
-motor stops, a couple of seconds after the machine has finished with it.
-Closing the window before then loses it. Eject the diskette, or wait for the
-drive to go quiet.
+motor stops, a couple of seconds after the machine has finished with it, when
+it is ejected, and when the window closes. If the file still did not change,
+check that it is not read only on the host: see the next entry.
 
 **The Finder refuses to change anything on a disk.** The file is read only on
 the host, so the machine sees a locked diskette or a hard disk it cannot write

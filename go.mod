@@ -5,7 +5,7 @@ go 1.26.0
 require (
 	github.com/atotto/clipboard v0.1.4
 	github.com/hajimehoshi/ebiten/v2 v2.9.9
-	github.com/ivanizag/iz68000 v1.0.0
+	github.com/ivanizag/iz68000 v1.0.1
 	github.com/pkg/profile v1.7.0
 	golang.org/x/text v0.29.0
 )

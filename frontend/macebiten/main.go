@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"time"
 
 	"github.com/ivanizag/izmac"
 
@@ -32,9 +33,24 @@ type game struct {
 
 	updates uint64
 	paused  bool
+
+	// switchedOffAt is when the machine was seen to be shut down, zero
+	// while it is not
+	switchedOffAt time.Time
 }
 
+/*
+switchOffDelay is how long the window stays up once the machine has been shut
+down: long enough to see that it was, and to reach for Restart, and short
+enough that nobody has to close it by hand.
+*/
+const switchOffDelay = 2 * time.Second
+
 func (g *game) Update() error {
+	if g.switchedOff() {
+		return ebiten.Termination
+	}
+
 	// The menu takes the keys and the pointer while it is up, so that the
 	// machine does not also get them
 	if !g.menu.update() {
@@ -66,6 +82,24 @@ func (g *game) Update() error {
 	g.updates++
 
 	return nil
+}
+
+/*
+switchedOff tells when to close: once the machine has sat on the alert that
+says it can be switched off for switchOffDelay. Restart takes it off the alert
+and the countdown starts again from nothing.
+*/
+func (g *game) switchedOff() bool {
+	if !g.m.IsReadyToSwitchOff() {
+		g.switchedOffAt = time.Time{}
+		return false
+	}
+
+	if g.switchedOffAt.IsZero() {
+		g.switchedOffAt = time.Now()
+		return false
+	}
+	return time.Since(g.switchedOffAt) >= switchOffDelay
 }
 
 func (g *game) Draw(dst *ebiten.Image) {
