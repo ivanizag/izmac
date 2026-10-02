@@ -2,7 +2,12 @@ package izmac
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 
+	"github.com/ivanizag/izmac/afp"
+	"github.com/ivanizag/izmac/appletalk"
 	"github.com/ivanizag/izmac/component"
 	"github.com/ivanizag/izmac/localtalk"
 )
@@ -152,4 +157,26 @@ func (p *localTalkPort) poll() {
 			return
 		}
 	}
+}
+
+/*
+shareFolder puts a file server on the network serving a folder of the host,
+named after the host, as the Chooser lists it, with the folder's name for the
+volume's
+*/
+func shareFolder(network *localtalk.Network, folder string) *appletalk.Listener {
+	name := serverName()
+	volume := filepath.Base(filepath.Clean(folder))
+	server := afp.NewServer(name, volume, folder)
+	return appletalk.Listen(network, server.Name(), server)
+}
+
+// serverName is the host's name without its domain, or izmac when it has none
+func serverName() string {
+	name, err := os.Hostname()
+	if err != nil || name == "" {
+		return "izmac"
+	}
+	name, _, _ = strings.Cut(name, ".")
+	return name
 }

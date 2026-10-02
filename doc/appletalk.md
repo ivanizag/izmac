@@ -52,6 +52,30 @@ The LocalTalk handshake, the RTS and CTS before every frame to one node, never
 crosses the network. It has to be answered within 200µs, which no network
 does, so each machine answers it for itself, as Mini vMac does.
 
+## Sharing a folder
+
+`-share` puts a folder of your computer on the network, served by an AppleShare
+file server inside izmac:
+
+```bash
+izmac -share ~/Documents/ForTheMac System.img
+```
+
+It turns AppleTalk on, `local` unless `-appletalk` says otherwise. The server
+is a node of its own on the network, named after your computer, and the folder
+is its one volume, under the folder's name. In the Chooser, pick AppleShare,
+then the server, and log in as a guest: there are no users and no passwords,
+and anyone who sees the server can use the folder. With `-appletalk host`, that
+is every izmac on this computer, and with `udp` every machine on the LocalTalk
+of your network.
+
+The Macintosh needs the AppleShare client, the `AppleShare` file in the System
+Folder that puts the AppleShare icon in the Chooser. System 6.0.8 has it on
+the *Utilities 1* diskette, and System 7 in the Extensions folder.
+
+For now the server lets the machine log in and lists the volume, but does not
+open it yet.
+
 ## What changes
 
 With AppleTalk on, the printer port is AppleTalk's, as it was on a Macintosh

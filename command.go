@@ -139,6 +139,9 @@ func (m *Mac) executeCommands() bool {
 					}
 				}
 				// The machine leaves the LocalTalk of the local network
+				if m.fileServer != nil {
+					m.fileServer.Stop()
+				}
 				if m.udp != nil {
 					m.udp.Close()
 				}

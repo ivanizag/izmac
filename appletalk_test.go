@@ -3,6 +3,8 @@ package izmac
 import (
 	"bytes"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -158,5 +160,38 @@ func TestAnUnknownAppleTalkNetworkIsRefused(t *testing.T) {
 	c := NewConfiguration()
 	if err := c.ParseFlags("izmac", []string{"-rom", "rom.bin", "-appletalk", "ethernet"}, io.Discard); err == nil {
 		t.Errorf("an unknown AppleTalk network was accepted")
+	}
+}
+
+func TestSharingAFolderTurnsAppleTalkOn(t *testing.T) {
+	c := NewConfiguration()
+	if err := c.ParseFlags("izmac", []string{"-rom", "rom.bin", "-share", t.TempDir()}, io.Discard); err != nil {
+		t.Fatal(err)
+	}
+	if c.AppleTalk != appleTalkLocal {
+		t.Errorf("sharing a folder left AppleTalk as %q", c.AppleTalk)
+	}
+
+	// On the network it was asked for, if one was
+	udp := NewConfiguration()
+	if err := udp.ParseFlags("izmac", []string{"-rom", "rom.bin", "-share", t.TempDir(),
+		"-appletalk", "udp"}, io.Discard); err != nil {
+		t.Fatal(err)
+	}
+	if udp.AppleTalk != appleTalkUDP {
+		t.Errorf("sharing a folder changed AppleTalk to %q", udp.AppleTalk)
+	}
+}
+
+func TestOnlyAFolderCanBeShared(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "file")
+	if err := os.WriteFile(file, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, share := range []string{file, filepath.Join(t.TempDir(), "missing")} {
+		c := NewConfiguration()
+		if err := c.ParseFlags("izmac", []string{"-rom", "rom.bin", "-share", share}, io.Discard); err == nil {
+			t.Errorf("sharing %v was accepted", share)
+		}
 	}
 }
