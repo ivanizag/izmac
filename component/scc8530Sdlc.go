@@ -102,10 +102,18 @@ const (
 	// after the data of a frame
 	crcLength = 2
 
-	// interFrameBytes is the quiet the wire keeps between two frames, in
-	// byte times: about 70µs, under the 200µs a LocalTalk station waits
-	// for an answer
-	interFrameBytes = 2
+	/*
+		quietBytes is the quiet before a frame from another station starts on
+		the wire, after one the machine received or sent, in byte times:
+		about 2ms. On a real wire every frame to one node is a dialog of its
+		own, the line idle for 400µs, a random wait, an RTS and a CTS before
+		it, and the station on the other end takes its time to answer. The
+		AppleTalk of the machine counts on it: a frame that follows the end
+		of the last one at once is lost while the driver is still finishing
+		with it, and what was lost is retried seconds later. The answers in
+		the same dialog, a CTS or an ACK, are the exception, see AnswerFrame.
+	*/
+	quietBytes = 60
 
 	// maxQueuedFrames is how many frames wait for a receiver that is not
 	// listening before the oldest is dropped, as a busy wire would drop it
@@ -197,6 +205,22 @@ func (s *SCC8530) ReceiveFrame(channel int, frame []uint8) {
 	c.sdlc.rxQueue = append(c.sdlc.rxQueue, append([]uint8(nil), frame...))
 }
 
+/*
+AnswerFrame puts a frame on the wire of a channel ahead of everything waiting,
+and with no quiet before it: the answer to the frame the machine just sent,
+which it waits for in the next 200µs and takes nothing else for. That is the
+lapCTS to its lapRTS and the lapACK to its lapENQ, which no other station can
+come between on a real wire.
+*/
+func (s *SCC8530) AnswerFrame(channel int, frame []uint8) {
+	c := &s.channels[channel]
+	if !c.isSdlc() || len(frame) == 0 {
+		return
+	}
+	c.sdlc.rxQueue = append([][]uint8{append([]uint8(nil), frame...)}, c.sdlc.rxQueue...)
+	c.sdlc.rxQuiet = 0
+}
+
 // sdlcByteCycles is how long a byte takes on LocalTalk
 func (c *channel) sdlcByteCycles() uint64 {
 	return c.cyclesPerSecond * 8 / localTalkBitRate
@@ -229,6 +253,8 @@ func (c *channel) transmitterDry() {
 	frame := c.sdlc.txFrame
 	c.sdlc.txFrame = nil
 	if len(frame) != 0 && c.sdlc.link != nil {
+		// The others answer after a quiet, as after any frame
+		c.sdlc.rxQuiet = max(c.sdlc.rxQuiet, quietBytes*c.sdlcByteCycles())
 		c.sdlc.link.SendFrame(frame)
 	}
 }
@@ -304,7 +330,7 @@ func (c *channel) receiveByte() {
 	w.rxPosition++
 	if last {
 		w.rxWire = nil
-		w.rxQuiet = interFrameBytes * c.sdlcByteCycles()
+		w.rxQuiet = quietBytes * c.sdlcByteCycles()
 		w.lineQuiet = true
 
 		if c.write[15]&wr15BreakAbortInterrupt != 0 && c.write[1]&wr1ExternalInterrupt != 0 {

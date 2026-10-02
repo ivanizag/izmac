@@ -68,8 +68,10 @@ func (s xattrStore) setResource(host string, data []uint8) error {
 	if hasSidecar(host) {
 		return s.appleDoubleStore.setResource(host, data)
 	}
-	if len(data) == 0 {
-		return removeXattr(host, xattrResource)
+	// The resource fork attribute is written into, as a fork is, and a
+	// shorter one leaves the end of the longer one there: it goes first
+	if err := removeXattr(host, xattrResource); err != nil || len(data) == 0 {
+		return err
 	}
 	return unix.Setxattr(host, xattrResource, data, 0)
 }

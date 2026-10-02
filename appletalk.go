@@ -91,7 +91,7 @@ func (p *localTalkPort) SendFrame(frame []uint8) {
 	switch kind {
 	case lapRts:
 		if destination != lapBroadcast {
-			p.scc.ReceiveFrame(component.ChannelB, []uint8{source, destination, lapCts})
+			p.scc.AnswerFrame(component.ChannelB, []uint8{source, destination, lapCts})
 		}
 		return
 	case lapCts:
@@ -147,12 +147,21 @@ func (p *localTalkPort) deliver(frame []uint8) {
 	}
 }
 
-// poll puts the frames that arrived on the wire of the chip, from the run loop
+/*
+poll puts the frames that arrived on the wire of the chip, from the run loop.
+A lapACK is the answer to the lapENQ the machine sent, in the same dialog, and
+comes at once, as the lapCTS does; everything else after the quiet of the
+wire.
+*/
 func (p *localTalkPort) poll() {
 	for {
 		select {
 		case frame := <-p.incoming:
-			p.scc.ReceiveFrame(component.ChannelB, frame)
+			if len(frame) >= lapHeaderLength && frame[2] == lapAck {
+				p.scc.AnswerFrame(component.ChannelB, frame)
+			} else {
+				p.scc.ReceiveFrame(component.ChannelB, frame)
+			}
 		default:
 			return
 		}

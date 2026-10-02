@@ -345,3 +345,25 @@ func TestAppleDoubleFilesKeepWhatTheHostCannot(t *testing.T) {
 		t.Errorf("an empty AppleDouble file was kept")
 	}
 }
+
+/*
+The Finder of System 7 copies a resource fork by setting it to the size of its
+buffer, flushing, writing, and setting it to the size it has. What the host
+keeps is that last size, not the longest, which on macOS needs the attribute
+written anew rather than into.
+*/
+func TestAResourceForkThatShrinksIsKeptShort(t *testing.T) {
+	c := newTestClient(t)
+	c.call(errNoErr, fpCreateFile, 0, uint16(volumeID), uint32(rootID), longPath("App"))
+
+	ref := c.openFork(true, accessRead|accessWrite, "App")
+	c.call(errNoErr, fpSetForkParms, 0, ref, uint16(fileResourceLength), uint32(32768))
+	c.call(errNoErr, fpFlushFork, 0, ref)
+	c.writeFork(ref, 0, "resources")
+	c.call(errNoErr, fpSetForkParms, 0, ref, uint16(fileResourceLength), uint32(9))
+	c.call(errNoErr, fpCloseFork, 0, ref)
+
+	if n := newMetadataStore().resourceLength(filepath.Join(c.folder, "App")); n != 9 {
+		t.Errorf("the host keeps a resource fork of %v bytes, wanted 9", n)
+	}
+}
