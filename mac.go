@@ -39,6 +39,10 @@ type Mac struct {
 	// printer is nil when there is nothing on either serial port
 	printer *printer
 
+	// localTalk is the printer port joined to a LocalTalk network, nil
+	// with AppleTalk off
+	localTalk *localTalkPort
+
 	commandChannel chan command
 
 	cycles uint64
@@ -171,6 +175,7 @@ func newMac(config *Configuration, r *storage.Rom, disks []storage.BlockDisk,
 
 	v := newVideo(mm)
 	c := component.NewAppleRTC(config.PramFile, config.WallClock)
+	c.SetAppleTalk(config.AppleTalk != "")
 	k := newKeyboard()
 	mo := newMouse()
 	so := newSound(mm)
@@ -215,6 +220,10 @@ func newMac(config *Configuration, r *storage.Rom, disks []storage.BlockDisk,
 	if p != nil {
 		m.printer = p
 		mm.scc.AttachSink(p.channel, p)
+	}
+
+	if config.AppleTalk != "" {
+		m.localTalk = newLocalTalkPort(mm.scc)
 	}
 
 	m.cpu = iz68000.NewM68000(mm)

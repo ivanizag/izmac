@@ -66,18 +66,6 @@ Either no disk was given, or none of them has a System on it, or the hard disk
 image has no SCSI driver — a raw file of zeros is not a startup disk. See
 [Disks and diskettes](disks.md).
 
-## It stops on the *Welcome to Macintosh* or *Starting up* screen
-
-If the machine gets that far and stops, the usual cause is AppleTalk. Only the
-asynchronous side of the serial chip is emulated, the side a printer is on, so
-the LocalTalk driver programs the chip for a frame, waits for an interrupt that
-can never arrive, and never gives up. izmac starts the machine with both ports
-marked as in use so this does not happen, but an `izmac_pram.bin` saved by
-something else, or a System where AppleTalk was switched on, can get past that.
-
-Delete `izmac_pram.bin` and start again, or switch AppleTalk off in the Chooser
-before it is saved.
-
 ## The mouse or the keyboard does nothing
 
 **Click on the window first.** The keyboard reaches the machine only while the
@@ -138,8 +126,12 @@ last line of it prints, and when the machine is shut down.
 not the emulator: the screen is 72 dots to the inch and the printer prints them
 at 80. Every Macintosh page off an ImageWriter was a tenth narrow.
 
-**A LaserWriter does not appear.** It is on AppleTalk, which needs the side of
-the serial chip izmac does not emulate. The ImageWriter is the printer here.
+**A LaserWriter does not appear.** It is on AppleTalk, and there is no
+LaserWriter on izmac's network. The ImageWriter is the printer here.
+
+**With `-appletalk`, the ImageWriter prints nothing.** AppleTalk has the
+printer port, so the ImageWriter is on the modem port. Choose it again in the
+Chooser and pick the modem port icon.
 
 ## Disks
 

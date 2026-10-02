@@ -419,3 +419,117 @@ func TestACommandWithoutItsTailReachesNothing(t *testing.T) {
 		}
 	}
 }
+
+// The extended parameter RAM, as the ROM's ReadXPRam and WriteXPRam reach it:
+// the command with the top three bits of the address, the byte with the other
+// five, and the data of a write
+
+func extendedCommand(address int, read bool) (uint8, uint8) {
+	command := rtcExtendedCommand | uint8(address>>5)&0x07
+	if read {
+		command |= rtcCommandRead
+	}
+	return command, uint8(address&0x1f) << 2
+}
+
+func writeXpram(r *AppleRTC, address int, value uint8) {
+	command, low := extendedCommand(address, false)
+	startTransaction(r)
+	sendByte(r, command)
+	sendByte(r, low)
+	sendByte(r, value)
+	endTransaction(r)
+}
+
+func readXpram(r *AppleRTC, address int) uint8 {
+	command, low := extendedCommand(address, true)
+	startTransaction(r)
+	sendByte(r, command)
+	sendByte(r, low)
+	value := receiveByte(r)
+	endTransaction(r)
+	return value
+}
+
+func TestTheExtendedParameterRamHoldsWhatIsWritten(t *testing.T) {
+	r := NewAppleRTC("", false)
+
+	for _, address := range []int{0x00, 0x0c, 0x7c, 0xe0, 0xff} {
+		writeXpram(r, address, uint8(address)^0x5a)
+	}
+	for _, address := range []int{0x00, 0x0c, 0x7c, 0xe0, 0xff} {
+		if got := readXpram(r, address); got != uint8(address)^0x5a {
+			t.Errorf("the extended byte $%02x reads $%02x, wanted $%02x", address, got, uint8(address)^0x5a)
+		}
+	}
+}
+
+/*
+The classic twenty bytes are part of the extended parameter RAM, at $10 to $1f
+and $08 to $0b, and a write through either way is read back through the
+other: the ROM reads the AppleTalk configuration one way and System 7 can
+write it the other
+*/
+func TestTheClassicBytesAreInTheExtendedParameterRam(t *testing.T) {
+	r := NewAppleRTC("", false)
+
+	// SPConfig, the classic byte 3, is the extended $13
+	writeXpram(r, 0x13, 0x21)
+	if r.pram[3] != 0x21 {
+		t.Errorf("a write to the extended $13 did not reach SPConfig")
+	}
+
+	// The high group, the classic byte 16, is the extended $08
+	writeRtc(r, pramCommand(16, false), 0x77)
+	if got := readXpram(r, 0x08); got != 0x77 {
+		t.Errorf("the extended $08 reads $%02x, wanted the classic byte 16", got)
+	}
+}
+
+func TestTheExtendedParameterRamSurvivesARestart(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "pram.bin")
+
+	r := NewAppleRTC(file, false)
+	writeXpram(r, 0xe0, 0x42)
+	writeRtc(r, pramCommand(3, false), 0x21)
+
+	data, err := os.ReadFile(file)
+	if err != nil || len(data) != xpramSize {
+		t.Fatalf("the parameter RAM file is %v bytes (%v), wanted %v", len(data), err, xpramSize)
+	}
+
+	again := NewAppleRTC(file, false)
+	if readXpram(again, 0xe0) != 0x42 || again.pram[3] != 0x21 {
+		t.Errorf("the parameter RAM did not come back from the file")
+	}
+}
+
+// A file izmac wrote before it had the extended parameter RAM is twenty
+// bytes, and is still read for what it has
+func TestAnOldParameterRamFileIsStillRead(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "pram.bin")
+	old := defaultPram()
+	old[pramSPConfig] = 0x12
+	if err := os.WriteFile(file, old[:], 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	r := NewAppleRTC(file, false)
+	if r.pram[pramSPConfig] != 0x12 {
+		t.Errorf("a twenty byte file was not read")
+	}
+}
+
+func TestAppleTalkDecidesThePorts(t *testing.T) {
+	r := NewAppleRTC("", false)
+
+	r.SetAppleTalk(true)
+	if r.pram[pramSPConfig] != spConfigAppleTalk {
+		t.Errorf("with AppleTalk on SPConfig is $%02x, wanted the printer port for it", r.pram[pramSPConfig])
+	}
+
+	r.SetAppleTalk(false)
+	if r.pram[pramSPConfig] != spConfigBothSerial {
+		t.Errorf("with AppleTalk off SPConfig is $%02x, wanted both ports serial", r.pram[pramSPConfig])
+	}
+}

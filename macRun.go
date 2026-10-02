@@ -241,6 +241,12 @@ func (m *Mac) lineTick() {
 	// not, which is what makes the rate come out at 22254 a second
 	m.sound.tick(m.line)
 
+	// Frames that came in from the network go on the wire, a scan line at
+	// most after they arrived, which is 45µs
+	if m.localTalk != nil {
+		m.localTalk.poll()
+	}
+
 	/*
 		A pointer put where the host has its own is written into the low
 		memory the cursor task works from as the blanking starts, so that the

@@ -1,0 +1,178 @@
+package izmac
+
+import (
+	"os"
+	"testing"
+)
+
+/*
+AppleTalk end to end: the ROM's own .MPP driving the emulated SCC in SDLC mode.
+There is nothing on the network here but a recorder, and what the tests look
+at is what the driver does on its own: the frames it sends to take a node
+address, and where it keeps that address in low memory.
+*/
+
+const (
+	// portBUse says what has the printer port; its low nibble is 1 once
+	// AppleTalk does
+	portBUseAddress  = 0x0291
+	portUseAppleTalk = 0x01
+
+	// abusVarsAddress points at the driver's variables, its node address
+	// first
+	abusVarsAddress = 0x02d8
+)
+
+// addressTaker is a network on which the first address the machine probes is
+// already somebody else's, who answers its lapENQ with a lapACK
+type addressTaker struct {
+	networkRecorder
+	port  *localTalkPort
+	taken uint8
+}
+
+func (n *addressTaker) send(frame []uint8) {
+	n.networkRecorder.send(frame)
+	if frame[2] != lapEnq || n.port == nil {
+		return
+	}
+	if n.taken == 0 {
+		n.taken = frame[0]
+	}
+	if frame[0] == n.taken {
+		n.port.deliver([]uint8{frame[1], frame[0], lapAck})
+	}
+}
+
+// appleTalkMac is the e2e machine with AppleTalk on and a recorder on the
+// network
+func appleTalkMac(t *testing.T, disk string, ramKb int) (*Mac, *networkRecorder) {
+	t.Helper()
+
+	config := realConfig(t)
+	if _, err := os.Stat(disk); err != nil {
+		t.Skipf("%v is not here, this test needs it", disk)
+	}
+	config.DiskFiles = []string{disk}
+	config.RamSizeKb = ramKb
+	config.AppleTalk = appleTalkLocal
+	config.PrinterPort = ""
+	if err := config.Validate(); err != nil {
+		t.Fatal(err)
+	}
+
+	m, err := NewMac(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	recorder := &networkRecorder{}
+	m.localTalk.network = recorder
+	return m, recorder
+}
+
+// nodeAddress is the node the driver took, or zero while it has none
+func nodeAddress(m *Mac) uint8 {
+	vars := uint32(m.mm.Peek(abusVarsAddress+1))<<16 |
+		uint32(m.mm.Peek(abusVarsAddress+2))<<8 | uint32(m.mm.Peek(abusVarsAddress+3))
+	if vars == 0 || vars >= 0x400000 || m.mm.Peek(portBUseAddress)&0x0f != portUseAppleTalk {
+		return 0
+	}
+	return m.mm.Peek(vars)
+}
+
+// openChooser opens the Chooser from the Apple menu of System 6, which is what
+// opens AppleTalk there
+func openChooser(t *testing.T, m *Mac) {
+	t.Helper()
+	moveMouseTo(t, m, 16, 10)
+	m.SetMouseButton(true)
+	m.RunFrames(30)
+	moveMouseTo(t, m, 60, 91)
+	m.RunFrames(10)
+	m.SetMouseButton(false)
+	m.RunFrames(600)
+}
+
+// probes counts the lapENQ the machine sent for each address
+func probes(frames [][]uint8) map[uint8]int {
+	counts := make(map[uint8]int)
+	for _, f := range frames {
+		if f[2] == lapEnq {
+			counts[f[0]]++
+		}
+	}
+	return counts
+}
+
+func TestTheChooserOpensAppleTalkOnSystemSix(t *testing.T) {
+	m, recorder := appleTalkMac(t, "frontend/macebiten/HD20SC.vhd", 1024)
+	m.RunFrames(bootFrames)
+
+	if nodeAddress(m) != 0 {
+		t.Fatalf("AppleTalk is open before anything asked for it")
+	}
+	openChooser(t, m)
+
+	node := nodeAddress(m)
+	if node == 0 || node > 127 {
+		t.Fatalf("the driver has node %v after the Chooser opened, wanted one from 1 to 127", node)
+	}
+	if probes(recorder.frames)[node] == 0 {
+		t.Errorf("the driver took node %v without probing it", node)
+	}
+
+	// And then it asks the network for a router, with a DDP broadcast
+	broadcast := false
+	for _, f := range recorder.frames {
+		if f[0] == lapBroadcast && f[2] == 0x01 {
+			broadcast = true
+		}
+	}
+	if !broadcast {
+		t.Errorf("no DDP broadcast went out after the address was taken")
+	}
+}
+
+/*
+A node already using the address answers the probe with a lapACK, which has to
+come back in through the receiver, its interrupt and the driver's own polling,
+and the driver gives that address up for another
+*/
+func TestATakenAddressIsGivenUp(t *testing.T) {
+	m, _ := appleTalkMac(t, "frontend/macebiten/HD20SC.vhd", 1024)
+	taker := &addressTaker{port: m.localTalk}
+	m.localTalk.network = taker
+	m.RunFrames(bootFrames)
+	openChooser(t, m)
+
+	node := nodeAddress(m)
+	if taker.taken == 0 || node == 0 {
+		t.Fatalf("the driver never probed, or never took a node: probed %v, took %v", taker.taken, node)
+	}
+	if node == taker.taken {
+		t.Errorf("the driver kept node %v after it was answered as taken", node)
+	}
+	if probes(taker.frames)[taker.taken] != 1 {
+		t.Errorf("the taken address was probed %v times, wanted the one answered",
+			probes(taker.frames)[taker.taken])
+	}
+}
+
+/*
+System 7 opens AppleTalk as it starts. It keeps the connection to use in the
+extended parameter RAM, and with none to read it stops on a dialog saying the
+driver could not be found, before AppleTalk opens; with the extended parameter
+RAM there, the ROM sets it up on the first start and System 7 goes on.
+*/
+func TestSystemSevenOpensAppleTalkAsItStarts(t *testing.T) {
+	m, recorder := appleTalkMac(t, systemSevenDisk, 4096)
+	m.RunFrames(systemSevenBootFrames)
+
+	node := nodeAddress(m)
+	if node == 0 {
+		t.Fatalf("System 7 did not open AppleTalk as it started")
+	}
+	if probes(recorder.frames)[node] == 0 {
+		t.Errorf("System 7 took node %v without probing it", node)
+	}
+}

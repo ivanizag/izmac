@@ -15,6 +15,7 @@ read the first two and stop; the rest is there when you want it.
 | [Disks and diskettes](disks.md) | where the software comes from, and how to put it in |
 | [Keyboard, mouse and the menu](controls.md) | driving the machine and driving the emulator |
 | [Printing](printing.md) | the ImageWriter on the printer port, and where the pages go |
+| [AppleTalk](appletalk.md) | LocalTalk on the printer port |
 | [Command line options](options.md) | every option of both frontends |
 | [Speed, the clock and the tracers](advanced.md) | the emulator's own knobs, and the debugging tools |
 | [When something goes wrong](troubleshooting.md) | the failures worth recognising |
@@ -190,14 +191,15 @@ and the ROM overlay, the video, the sound, the VIA and the real time clock
 with its parameter RAM, the keyboard and the mouse, the SCSI bus with up to
 seven disks on it, and both diskette drives — reading, writing and formatting.
 
-The serial ports go one way. What the machine sends out of one of them arrives,
-which is what a printer needs: choose the ImageWriter in the Chooser and the
-pages come out as images beside the emulator. See [Printing](printing.md).
-Nothing arrives the other way, and nothing that has to be answered works: no
-LocalTalk network, no AppleTalk, no LaserWriter, no modem. izmac starts the
+The serial ports go one way for a serial device. What the machine sends out of
+one of them arrives, which is what a printer needs: choose the ImageWriter in
+the Chooser and the pages come out as images beside the emulator. See
+[Printing](printing.md). Nothing arrives the other way, so no modem.
+
+The printer port also speaks LocalTalk, both ways, when AppleTalk is turned on
+with `-appletalk`. See [AppleTalk](appletalk.md). Without it, izmac starts the
 machine with both ports marked as in use for a serial device, which is what a
-real Macintosh with AppleTalk turned off in the Chooser looks like, and is what
-keeps a System from taking a port for the network and waiting forever for it.
+real Macintosh with AppleTalk turned off in the Chooser looks like.
 
 ## Where izmac writes
 
