@@ -205,6 +205,17 @@ func (s *SCC8530) ReceiveFrame(channel int, frame []uint8) {
 	c.sdlc.rxQueue = append(c.sdlc.rxQueue, append([]uint8(nil), frame...))
 }
 
+// FramesWaiting is how many frames wait to go on the wire of a channel, the
+// one on it included
+func (s *SCC8530) FramesWaiting(channel int) int {
+	w := &s.channels[channel].sdlc
+	waiting := len(w.rxQueue)
+	if w.rxWire != nil {
+		waiting++
+	}
+	return waiting
+}
+
 /*
 AnswerFrame puts a frame on the wire of a channel ahead of everything waiting,
 and with no quiet before it: the answer to the frame the machine just sent,
