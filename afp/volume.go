@@ -76,8 +76,8 @@ func (v *volume) getVolParms(r *reader) ([]uint8, int32) {
 /*
 volumeParms is what the volume says of itself. The modification date is what
 the client watches to know that something changed and its windows need to be
-drawn again, so it is the last time anything of the machine changed the
-volume, or the root of the folder changed on the host.
+drawn again: the Finder asks for it every ten seconds or so, and reads the folders
+of its windows again when it moves. See modified.
 */
 func (v *volume) volumeParms(bitmap uint16) ([]uint8, int32) {
 	if bitmap&^volAllParameters != 0 {
@@ -118,11 +118,20 @@ func (v *volume) volumeParms(bitmap uint16) ([]uint8, int32) {
 	return append(reply, p.bytes()...), errNoErr
 }
 
-// modified is when the volume last changed
+/*
+modified is when the volume last changed: the last time the machine changed
+it, or anything it knows of changed on the host. That is every folder and file
+that has a number, which is every one it has listed or named in a call;
+something made, deleted or renamed in a folder changes the folder, and a file
+written to changes the file. One the machine never looked at it has no window
+open for, and no need to hear of.
+*/
 func (v *volume) modified() time.Time {
 	latest := v.changed
-	if info, err := os.Stat(v.host("")); err == nil && info.ModTime().After(latest) {
-		latest = info.ModTime()
+	for rel := range v.byPath {
+		if info, err := os.Stat(v.host(rel)); err == nil && info.ModTime().After(latest) {
+			latest = info.ModTime()
+		}
 	}
 	return latest
 }

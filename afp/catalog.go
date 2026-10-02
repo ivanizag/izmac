@@ -276,8 +276,21 @@ func (r *reader) path() ([]uint8, bool) {
 	return name, !r.failed && (kind == pathShort || kind == pathLong)
 }
 
-// resolve follows a path from a folder given by number
+/*
+resolve follows a path from a folder given by number. What it leads to is
+given a number if it has none: the machine knows of it now, and its changes on
+the host are watched, see modified.
+*/
 func (v *volume) resolve(dirID uint32, p []uint8) (place, int32) {
+	at, result := v.follow(dirID, p)
+	if result == errNoErr && at.exists {
+		v.id(at.rel())
+	}
+	return at, result
+}
+
+// follow follows a path from a folder given by number
+func (v *volume) follow(dirID uint32, p []uint8) (place, int32) {
 	var folder string
 	atParentOfRoot := false
 	switch dirID {

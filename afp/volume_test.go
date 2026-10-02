@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 /*
@@ -387,5 +388,40 @@ func TestAResourceForkThatShrinksIsKeptShort(t *testing.T) {
 
 	if n := newMetadataStore(c.folder).resourceLength(filepath.Join(c.folder, "App")); n != 9 {
 		t.Errorf("the host keeps a resource fork of %v bytes, wanted 9", n)
+	}
+}
+
+// volumeModified is the modification date the volume gives
+func (c *testClient) volumeModified() time.Time {
+	c.t.Helper()
+	reply := c.call(errNoErr, fpGetVolParms, 0, uint16(volumeID), uint16(volModified))
+	return fromAFPTime(binary.BigEndian.Uint32(reply[2:]))
+}
+
+/*
+What changes on the host in a folder the machine has listed changes the
+volume's date, which is what the Finder watches to read its windows again,
+however deep the folder is; and so does a file it knows of being written to
+*/
+func TestAChangeOnTheHostMovesTheVolumeDate(t *testing.T) {
+	c := newTestClient(t)
+	inner := filepath.Join(c.folder, "Folder", "Inner")
+	os.MkdirAll(inner, 0o755)
+	c.write("Folder/Inner/file", "data")
+	c.enumerate(rootID, longPath("Folder", "Inner"))
+	before := c.volumeModified()
+
+	// The dates of the host change by the second, which the test does not
+	// wait for: they are moved by hand, as making a file there would
+	later := before.Add(time.Hour)
+	os.Chtimes(inner, later, later)
+	if got := c.volumeModified(); !got.Equal(later) {
+		t.Errorf("after a change in a folder two deep the volume date is %v, wanted %v", got, later)
+	}
+
+	evenLater := later.Add(time.Hour)
+	os.Chtimes(filepath.Join(inner, "file"), evenLater, evenLater)
+	if got := c.volumeModified(); !got.Equal(evenLater) {
+		t.Errorf("after a file was written to the volume date is %v, wanted %v", got, evenLater)
 	}
 }
