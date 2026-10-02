@@ -97,7 +97,6 @@ func (g *game) switchedOff() bool {
 
 	if g.switchedOffAt.IsZero() {
 		g.switchedOffAt = time.Now()
-		g.menu.say("Shut down, closing")
 		return false
 	}
 	return time.Since(g.switchedOffAt) >= switchOffDelay
