@@ -96,9 +96,9 @@ period.
 
 ## What is not there
 
-- **The LaserWriter**, and anything else on AppleTalk. A LaserWriter is not on
-  a serial line but on a LocalTalk network, which needs the synchronous side of
-  the serial chip that izmac does not have.
+- **The LaserWriter**, and any other printer on AppleTalk. A LaserWriter is
+  not on a serial line but on a LocalTalk network. izmac has the network, with
+  `-appletalk` (see [AppleTalk](appletalk.md)), but no LaserWriter on it.
 - **The printer never answers.** The driver asks for its status at the start of
   every job and carries on when nothing comes back, which is what makes this
   work at all, but a program that waits for an answer waits forever.

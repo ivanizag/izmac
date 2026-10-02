@@ -71,8 +71,17 @@ type Configuration struct {
 	// imagewriter
 	Printer string
 
-	// PrinterPort is the port it hangs from, printer or modem
+	// PrinterPort is the port it hangs from, printer or modem. Empty is
+	// the printer port, or the modem port when AppleTalk has the other.
 	PrinterPort string
+
+	/*
+		AppleTalk turns AppleTalk on, on the printer port, and says what the
+		LocalTalk network on the other end of it is: appleTalkLocal for
+		none but what izmac itself puts there. Empty is AppleTalk off,
+		which is what izmac has always started the machine with.
+	*/
+	AppleTalk string
 
 	// PrinterFile is where the printer writes: the file the raw mode
 	// appends to, or the prefix of the pages the ImageWriter draws. Empty
@@ -187,7 +196,7 @@ func NewConfiguration() *Configuration {
 		Mouse:         mouseAbsolute,
 		Clipboard:     true,
 		Printer:       printerImageWriter,
-		PrinterPort:   printerPortPrinter,
+		PrinterPort:   "",
 		disketteFile:  defaultDisketteFile,
 		absoluteMouse: true,
 		messages:      os.Stdout,
@@ -439,7 +448,11 @@ func (c *Configuration) AddFlags(fs *flag.FlagSet) {
 			"would print")
 	fs.StringVar(&c.PrinterPort, "printerport", c.PrinterPort,
 		"the serial port the printer is on, '"+printerPortPrinter+
-			"' or '"+printerPortModem+"'")
+			"' or '"+printerPortModem+"'. The default is the printer "+
+			"port, or the modem port when AppleTalk is on")
+	fs.StringVar(&c.AppleTalk, "appletalk", c.AppleTalk,
+		"turn AppleTalk on, on the printer port: '"+appleTalkLocal+
+			"' for a LocalTalk network with nothing else on it")
 	fs.StringVar(&c.PrinterFile, "printerfile", c.PrinterFile,
 		"where the printer writes: the file the raw mode appends to, or "+
 			"the prefix of the page images. Each mode has its own default")
@@ -536,6 +549,29 @@ func (c *Configuration) validatePrinter() error {
 	default:
 		return fmt.Errorf("unknown serial port %q, use %v or %v",
 			c.PrinterPort, printerPortPrinter, printerPortModem)
+	}
+
+	switch c.AppleTalk {
+	case "", appleTalkLocal:
+	default:
+		return fmt.Errorf("unknown AppleTalk network %q, use %v", c.AppleTalk, appleTalkLocal)
+	}
+
+	/*
+		AppleTalk and a printer on a cable share nothing but the machine:
+		LocalTalk takes the printer port, and a printer with a cable goes
+		on the modem port, as it did on a Macintosh on a network.
+	*/
+	if c.PrinterPort == "" {
+		c.PrinterPort = printerPortPrinter
+		if c.AppleTalk != "" {
+			c.PrinterPort = printerPortModem
+		}
+	}
+	if c.AppleTalk != "" && c.PrinterPort == printerPortPrinter &&
+		c.Printer != printerNone && c.Printer != "" {
+		return fmt.Errorf("AppleTalk is on the printer port, so the printer " +
+			"has to go on the modem port: use -printerport modem, or none")
 	}
 
 	return nil

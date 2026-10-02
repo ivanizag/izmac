@@ -18,9 +18,11 @@ source on its bits 3 to 1: $0 and $8 for the transmitters of the channels B
 and A, $2 and $a for their external status, which is where the Y and the X
 axis of the mouse arrive.
 
-The receive side is not here. Nothing on the other end of the wire talks
-back: a printer is written to and says nothing, and the flow control it would
-answer with is not needed by something that never has to be waited for.
+The asynchronous receive side is not here. Nothing on the other end of the
+wire talks back: a printer is written to and says nothing, and the flow
+control it would answer with is not needed by something that never has to be
+waited for. The synchronous side, the SDLC mode LocalTalk runs in, is in
+scc8530Sdlc.go, receiver and all.
 */
 type SCC8530 struct {
 	channels [2]channel
@@ -76,6 +78,9 @@ type channel struct {
 	// cyclesPerSecond is how many of the cycles the chip is ticked with go
 	// by in a second, which is what turns a baud rate into a time
 	cyclesPerSecond uint64
+
+	// sdlc is the synchronous side, used when the channel is in SDLC mode
+	sdlc sdlc
 }
 
 const (
@@ -155,14 +160,20 @@ func NewSCC8530(cyclesPerSecond uint64) *SCC8530 {
 	s := &SCC8530{}
 	for i := range s.channels {
 		s.channels[i].cyclesPerSecond = cyclesPerSecond
+		s.channels[i].resetSdlc()
 	}
 	return s
 }
 
-// Tick advances both transmitters by the cycles the last instruction took
+// Tick advances both channels by the cycles the last instruction took
 func (s *SCC8530) Tick(cycles uint64) {
-	s.channels[ChannelA].tick(cycles)
-	s.channels[ChannelB].tick(cycles)
+	for i := range s.channels {
+		c := &s.channels[i]
+		c.tick(cycles)
+		if c.isSdlc() {
+			c.tickReceive(cycles)
+		}
+	}
 }
 
 /*
@@ -178,7 +189,10 @@ func (s *SCC8530) Read(channel int, control bool) uint8 {
 	c := &s.channels[channel]
 
 	if !control {
-		// The receive buffer, RR8, and nothing ever arrives in it
+		// The receive buffer, RR8. Only the synchronous side receives.
+		if c.isSdlc() {
+			return c.readReceived()
+		}
 		return 0
 	}
 
@@ -195,6 +209,11 @@ func (s *SCC8530) Read(channel int, control bool) uint8 {
 		if channel == ChannelB {
 			return s.vector()
 		}
+		return 0
+	case 10:
+		// The miscellaneous status, the DPLL's missing clocks. The
+		// LocalTalk driver takes one for a busy line, and the wire here
+		// never loses its clock.
 		return 0
 	}
 
@@ -226,6 +245,7 @@ func (s *SCC8530) Write(channel int, control bool, value uint8) {
 		case wr0ResetTxInterrupt:
 			c.txInterrupt = false
 		}
+		c.sdlcCommand(value)
 
 		c.pointer = value & 0x07
 		if command == wr0PointHigh {
@@ -234,12 +254,14 @@ func (s *SCC8530) Write(channel int, control bool, value uint8) {
 		return
 	}
 
+	previous := c.write[register&0x0f]
 	c.write[register&0x0f] = value
+	c.sdlcRegisterWritten(register&0x0f, previous)
 }
 
 // readStatus is RR0, which reports the pins as they were last latched
 func (c *channel) readStatus() uint8 {
-	var status uint8
+	status := c.sdlcStatus()
 	if c.dcdLatched {
 		status |= rr0Dcd
 	}
@@ -256,10 +278,11 @@ port off, and the error bits it shares the register with belong to the
 receiver.
 */
 func (c *channel) readTxStatus() uint8 {
-	if c.txCycles != 0 {
-		return 0
+	status := c.receiveStatus()
+	if c.txCycles == 0 {
+		status |= rr1AllSent
 	}
-	return rr1AllSent
+	return status
 }
 
 /*
@@ -274,6 +297,10 @@ the baud rate instead of at twice it. The driver asks whether the buffer is
 empty before every byte, so it never notices the difference.
 */
 func (c *channel) transmit(value uint8) {
+	if c.isSdlc() {
+		c.transmitSdlc(value)
+	}
+
 	if c.txCycles != 0 {
 		// The wire is busy, so the byte waits in the buffer. A byte
 		// already waiting there is written over, which is what the chip
@@ -294,6 +321,7 @@ func (c *channel) start(value uint8) {
 	// that does not care, sends the byte at once
 	if c.txCycles == 0 {
 		c.sent()
+		c.dry()
 	}
 }
 
@@ -315,12 +343,23 @@ func (c *channel) tick(cycles uint64) {
 	if c.txBuffered {
 		c.txBuffered = false
 		c.start(c.txBuffer)
+		return
+	}
+	c.dry()
+}
+
+// dry is the transmitter with nothing left to send, which ends a frame in
+// SDLC mode
+func (c *channel) dry() {
+	if c.isSdlc() {
+		c.transmitterDry()
 	}
 }
 
-// sent hands the byte over and asks for the next one
+// sent hands the byte over and asks for the next one. In SDLC mode the byte is
+// part of a frame, which goes to the network whole when it ends.
 func (c *channel) sent() {
-	if c.sink != nil {
+	if c.sink != nil && !c.isSdlc() {
 		c.sink.Transmit(c.txByte)
 	}
 
@@ -346,6 +385,9 @@ that has been looked at here actually asks for.
 func (c *channel) byteCycles() uint64 {
 	if c.cyclesPerSecond == 0 {
 		return 0
+	}
+	if c.isSdlc() {
+		return c.sdlcByteCycles()
 	}
 
 	baud := uint64(defaultBaudRate)
@@ -400,17 +442,25 @@ func stopBitHalves() [4]uint64 {
 /*
 vector is RR2 of channel B, the modified vector the level 2 handler reads to
 find out what happened. The order is the priority of the chip: channel A
-before channel B, and the transmitter before the external status within a
-channel.
+before channel B, and within a channel the receiver, then the transmitter,
+then the external status.
 */
 func (s *SCC8530) vector() uint8 {
-	if s.channels[ChannelA].txInterrupt {
+	a, b := &s.channels[ChannelA], &s.channels[ChannelB]
+	switch {
+	case a.sdlc.specialInterrupt:
+		return vectorASpecial
+	case a.sdlc.rxInterrupt:
+		return vectorARxAvailable
+	case a.txInterrupt:
 		return vectorATxEmpty
-	}
-	if s.channels[ChannelA].extInterrupt {
+	case a.extInterrupt:
 		return vectorAExternalStatus
-	}
-	if s.channels[ChannelB].txInterrupt {
+	case b.sdlc.specialInterrupt:
+		return vectorBSpecial
+	case b.sdlc.rxInterrupt:
+		return vectorBRxAvailable
+	case b.txInterrupt:
 		return vectorBTxEmpty
 	}
 	return vectorBExternalStatus
@@ -460,7 +510,8 @@ func (s *SCC8530) Pending(channel int) bool {
 // the processor
 func (s *SCC8530) InterruptAsserted() bool {
 	for i := range s.channels {
-		if s.channels[i].extInterrupt || s.channels[i].txInterrupt {
+		c := &s.channels[i]
+		if c.extInterrupt || c.txInterrupt || c.sdlc.rxInterrupt || c.sdlc.specialInterrupt {
 			return true
 		}
 	}
@@ -477,6 +528,8 @@ func (s *SCC8530) Reset() {
 		s.channels[i] = channel{
 			sink:            s.channels[i].sink,
 			cyclesPerSecond: s.channels[i].cyclesPerSecond,
+			sdlc:            sdlc{link: s.channels[i].sdlc.link},
 		}
+		s.channels[i].resetSdlc()
 	}
 }

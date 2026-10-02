@@ -65,17 +65,55 @@ type AppleRTC struct {
 	sending  bool
 	outBit   bool
 
+	/*
+		xpram is the extended parameter RAM, 256 bytes reached with a
+		command of their own. The twenty bytes of the classic parameter
+		RAM are part of it, at $10 to $1f and $08 to $0b, and are kept in
+		pram so that the two views can not disagree; the rest of it is
+		here. extendedStage is how far a command on it has got: waiting
+		for the address, then for the data of a write.
+	*/
+	xpram           [xpramSize]uint8
+	extendedStage   int
+	extendedAddress int
+
 	pramFile string
 }
 
 const (
-	// pramSize is the parameter RAM of the Macintosh Plus, twenty bytes
-	pramSize = 20
+	// pramSize is the classic parameter RAM, twenty bytes, and xpramSize
+	// the extended one of the Macintosh Plus around it
+	pramSize  = 20
+	xpramSize = 256
+
+	/*
+		An extended command is $38 on the bits 6 to 3, with the top three
+		bits of the address on the bits 2 to 0. The byte after it carries
+		the other five on its bits 6 to 2, and a write's data follows.
+		That is the protocol the ROM's ReadXPRam and WriteXPRam speak, in
+		plus/hw/rtc.s of the disassembly.
+	*/
+	rtcExtendedMask    uint8 = 0x78
+	rtcExtendedCommand uint8 = 0x38
+
+	extendedIdle    = 0
+	extendedAddress = 1
+	extendedData    = 2
+
+	// Where the classic bytes sit in the extended parameter RAM: the
+	// sixteen of the low block at $10, the four of the high group at $08
+	xpramLowBlock  = 0x10
+	xpramHighGroup = 0x08
 
 	// spConfigBothSerial is the SPConfig byte of the parameter RAM with both
 	// ports carrying a serial device, port A on the high nibble and port B
-	// on the low one
+	// on the low one, and spConfigAppleTalk the same with AppleTalk on the
+	// port B, the printer port
 	spConfigBothSerial uint8 = 0x22
+	spConfigAppleTalk  uint8 = 0x21
+
+	// pramSPConfig is where the byte is in the parameter RAM
+	pramSPConfig = 3
 
 	rtcCommandRead uint8 = 1 << 7
 
@@ -252,6 +290,7 @@ func (r *AppleRTC) beginTransaction() {
 	r.shiftIn = 0
 	r.bitCount = 0
 	r.hasCommand = false
+	r.extendedStage = extendedIdle
 	r.sending = false
 	r.outBit = true
 }
@@ -259,6 +298,7 @@ func (r *AppleRTC) beginTransaction() {
 func (r *AppleRTC) endTransaction() {
 	r.sending = false
 	r.hasCommand = false
+	r.extendedStage = extendedIdle
 	r.bitCount = 0
 }
 
@@ -282,7 +322,28 @@ func (r *AppleRTC) shiftInBit(bit bool) {
 	if !r.hasCommand {
 		r.command = value
 		r.hasCommand = true
+		if value&rtcExtendedMask == rtcExtendedCommand {
+			r.extendedStage = extendedAddress
+			return
+		}
 		r.startCommand()
+		return
+	}
+
+	switch r.extendedStage {
+	case extendedAddress:
+		r.extendedAddress = int(r.command&0x07)<<5 | int(value&0x7c)>>2
+		if r.command&rtcCommandRead != 0 {
+			r.extendedStage = extendedIdle
+			r.answer(r.readXpram(r.extendedAddress))
+			return
+		}
+		r.extendedStage = extendedData
+		return
+	case extendedData:
+		r.extendedStage = extendedIdle
+		r.hasCommand = false
+		r.writeXpram(r.extendedAddress, value)
 		return
 	}
 
@@ -315,10 +376,46 @@ func (r *AppleRTC) startCommand() {
 		return
 	}
 
-	r.shiftOut = r.readRegister()
+	r.answer(r.readRegister())
+}
+
+// answer starts shifting a byte out to the processor
+func (r *AppleRTC) answer(value uint8) {
+	r.shiftOut = value
 	r.sending = true
 	r.bitCount = 0
 	r.outBit = r.shiftOut&0x80 != 0
+}
+
+// xpramClassic says where an address of the extended parameter RAM is in the
+// classic twenty bytes, if it is one of them
+func xpramClassic(address int) (int, bool) {
+	switch {
+	case address >= xpramLowBlock && address < xpramLowBlock+16:
+		return address - xpramLowBlock, true
+	case address >= xpramHighGroup && address < xpramHighGroup+4:
+		return 16 + address - xpramHighGroup, true
+	}
+	return 0, false
+}
+
+func (r *AppleRTC) readXpram(address int) uint8 {
+	if index, ok := xpramClassic(address); ok {
+		return r.pram[index]
+	}
+	return r.xpram[address]
+}
+
+func (r *AppleRTC) writeXpram(address int, value uint8) {
+	if r.writeProtected || r.readXpram(address) == value {
+		return
+	}
+	if index, ok := xpramClassic(address); ok {
+		r.pram[index] = value
+	} else {
+		r.xpram[address] = value
+	}
+	r.savePram()
 }
 
 /*
@@ -420,12 +517,10 @@ invalid, with one difference: the two serial ports are marked as in use for a
 serial device instead of free.
 
 That difference keeps AppleTalk off. A System that finds a free port takes it
-for AppleTalk, and the LocalTalk driver then programs the SCC for a frame and
-waits, without a timeout, for the interrupt that says the frame went out. The
-SCC here is the asynchronous side of the chip and no more, so that interrupt
-never comes and the startup hangs: System 7.5 stops on its Starting up
-screen. Leaving the ports spoken for is what a Macintosh with AppleTalk
-turned off in the Chooser looks like, and it boots.
+for AppleTalk, and whether it does is the -appletalk option's to decide, not
+the parameter RAM's: SetAppleTalk puts the ports the option wants in place as
+the machine starts. Leaving the ports spoken for is what a Macintosh with
+AppleTalk turned off in the Chooser looks like.
 
 Marking them for a serial device rather than free is also what lets a printer
 work: the serial driver takes a port already spoken for as one it may open,
@@ -457,20 +552,58 @@ func defaultPram() [pramSize]uint8 {
 	}
 }
 
-// loadPram reads the parameter RAM saved by a previous run, leaving the
-// defaults in place when there is nothing to read. A missing or unusable file
-// is not an error: it is a machine that has not run before, or one whose
-// battery went flat.
+/*
+SetAppleTalk says whether the printer port carries AppleTalk, whatever the
+parameter RAM says. The option is what decides it, not what the Chooser left
+saved in the parameter RAM by an earlier run: with AppleTalk on the printer
+port is AppleTalk's and the modem port a serial device's, and with it off
+both are serial devices, as defaultPram explains.
+*/
+func (r *AppleRTC) SetAppleTalk(on bool) {
+	r.pram[pramSPConfig] = spConfigBothSerial
+	if on {
+		r.pram[pramSPConfig] = spConfigAppleTalk
+	}
+}
+
+/*
+loadPram reads the parameter RAM saved by a previous run, leaving the defaults
+in place when there is nothing to read. A missing or unusable file is not an
+error: it is a machine that has not run before, or one whose battery went
+flat. The file is the 256 bytes of the extended parameter RAM, the classic
+twenty in their places in it; a file of twenty bytes, as izmac wrote them
+before it had the rest, is read as the classic ones alone.
+*/
 func (r *AppleRTC) loadPram() {
 	if r.pramFile == "" {
 		return
 	}
 
 	data, err := os.ReadFile(r.pramFile)
-	if err != nil || len(data) != pramSize {
+	if err != nil {
 		return
 	}
-	copy(r.pram[:], data)
+	switch len(data) {
+	case pramSize:
+		copy(r.pram[:], data)
+	case xpramSize:
+		for address, value := range data {
+			if index, ok := xpramClassic(address); ok {
+				r.pram[index] = value
+			} else {
+				r.xpram[address] = value
+			}
+		}
+	}
+}
+
+// pramImage is the whole extended parameter RAM, as it is saved
+func (r *AppleRTC) pramImage() []uint8 {
+	image := make([]uint8, xpramSize)
+	for address := range image {
+		image[address] = r.readXpram(address)
+	}
+	return image
 }
 
 func (r *AppleRTC) savePram() {
@@ -478,7 +611,7 @@ func (r *AppleRTC) savePram() {
 		return
 	}
 
-	err := os.WriteFile(r.pramFile, r.pram[:], 0o600)
+	err := os.WriteFile(r.pramFile, r.pramImage(), 0o600)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: can not save the parameter RAM: %v\n", err)
 		r.pramFile = ""

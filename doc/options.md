@@ -33,6 +33,7 @@ Both frontends take all of these.
 | `-rom <file>` | `izmac_default.rom` | the Macintosh Plus ROM image, 128Kb. If the option is not given and the file is not there, it is downloaded once |
 | `-hd <file>` | | a hard disk image for the SCSI bus, or an archive holding one. Repeat it for more than one, up to seven |
 | `-floppy <file>` | | a 400K or 800K diskette image, plain or DiskCopy 4.2, or an archive holding one, to put in a drive. Repeat it for the external drive as well |
+| `-appletalk <network>` | off | turn AppleTalk on, on the printer port: `local` for a LocalTalk network with nothing else on it. The printer moves to the modem port. See [AppleTalk](appletalk.md) |
 | `-persist` | off | keep the disk images unpacked out of an archive, mended, or made for loose files and folders, as `izmac_` files on the working directory, writable and found again on the next run. Without it they are held in memory, and lost with whatever was written to them when izmac stops. See [Disks and diskettes](disks.md) |
 | `-scsidriver <file>` | `izmac_hddriver.rom` | a disk image to borrow a SCSI driver from, for hard disk images that carry none of their own. If the option is not given and the file is not there, one is downloaded the first time a disk needs it. See [Disks and diskettes](disks.md) |
 | `-ram <kb>` | `1024` | the memory size in Kb, `1024` or `4096`. Those are the two the real machine could be built with |
@@ -41,7 +42,7 @@ Both frontends take all of these.
 | `-pram <file>` | `izmac_pram.bin` | where the parameter RAM is kept between runs |
 | `-clipboard` | on | share the clipboard with your system, both ways. `-clipboard=false` keeps them apart. See [Keyboard, mouse and the menu](controls.md) |
 | `-printer <what>` | `imagewriter` | what is on the serial port: `imagewriter` for pages as images, `raw` to keep the bytes as they come, `none` for nothing. See [Printing](printing.md) |
-| `-printerport <port>` | `printer` | the port the printer is on, `printer` or `modem` |
+| `-printerport <port>` | `printer`, or `modem` with AppleTalk on | the port the printer is on, `printer` or `modem` |
 | `-printerfile <name>` | | where the printer writes: the file the raw mode appends to, or the prefix the page images are named after. Each mode has its own default |
 | `-wallclock` | off | read the clock from the host every time, instead of starting from it and counting the machine's own seconds |
 | `-trace <list>` | | tracers to turn on, comma separated: `cpu`, `toolbox`, `sadmac`, `scsi`, `floppy` |
