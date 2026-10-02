@@ -82,8 +82,6 @@ type Server struct {
 // sessionState is what a session has done
 type sessionState struct {
 	loggedIn bool
-	forks    map[uint16]*openFork
-	nextFork uint16
 }
 
 /*
@@ -132,15 +130,13 @@ func (s *Server) Status() []uint8 {
 
 // OpenSession and CloseSession keep track of the sessions
 func (s *Server) OpenSession(session int) {
-	s.sessions[session] = &sessionState{forks: make(map[uint16]*openFork)}
+	s.sessions[session] = &sessionState{}
 }
 
+// CloseSession closes the forks a session left open, which writes back what
+// was written to them
 func (s *Server) CloseSession(session int) {
-	if state, ok := s.sessions[session]; ok {
-		for _, f := range state.forks {
-			f.close()
-		}
-	}
+	s.volume.closeForks(session)
 	delete(s.sessions, session)
 }
 
@@ -169,16 +165,19 @@ func (s *Server) Command(session int, request []uint8) ([]uint8, int32) {
 	case fpGetSrvrParms:
 		return s.serverParms(), errNoErr
 	}
-	return s.volumeCommand(state, call, request)
+	return s.volumeCommand(state, session, call, request)
 }
 
-// Write runs a call that came with data: FPWrite
+// Write runs a call that came with data
 func (s *Server) Write(session int, request []uint8, data []uint8) ([]uint8, int32) {
 	state, ok := s.sessions[session]
-	if !ok || !state.loggedIn || len(request) < 1 || request[0] != fpWrite {
+	if !ok || len(request) < 1 {
 		return nil, errParamErr
 	}
-	return s.write(state, request, data)
+	if !state.loggedIn {
+		return nil, errAccessDenied
+	}
+	return s.write(state, session, request, data)
 }
 
 /*

@@ -251,10 +251,6 @@ func (s *atpSocket) response(d Datagram, control uint8, sequence uint8, tid uint
 	}
 
 	delete(s.pending, tid)
-	if p.header[0]&atpXO != 0 {
-		release := [atpHeaderLength]uint8{atpRelease, 0, uint8(tid >> 8), uint8(tid)}
-		s.node.send(p.node, p.socket, p.from, ddpTypeATP, release[:])
-	}
 
 	var packets []atpPacket
 	for _, g := range p.got {
@@ -263,6 +259,18 @@ func (s *atpSocket) response(d Datagram, control uint8, sequence uint8, tid uint
 		}
 	}
 	p.done(packets, true)
+
+	/*
+		The release goes after whatever done sent. ASP answers a write once
+		its WriteContinue is answered, and a Macintosh that gets the release
+		of the WriteContinue first is still busy with it when the answer to
+		the write comes, and loses that, to wait for a retry; the other way
+		round it takes both.
+	*/
+	if p.header[0]&atpXO != 0 {
+		release := [atpHeaderLength]uint8{atpRelease, 0, uint8(tid >> 8), uint8(tid)}
+		s.node.send(p.node, p.socket, p.from, ddpTypeATP, release[:])
+	}
 }
 
 // tick retries the requests still waiting and forgets the kept responses

@@ -279,3 +279,52 @@ func TestAResetKeepsTheNetwork(t *testing.T) {
 		t.Errorf("the network was unplugged by a reset of the chip")
 	}
 }
+
+/*
+A frame of another station does not follow the machine's own at once: there
+is the quiet a real station keeps, and the driver is still finishing with what
+it sent. It arrives after that.
+*/
+func TestAFrameFromAnotherStationWaitsForTheQuiet(t *testing.T) {
+	s, _ := localTalkChip(cyclesPerSecondForTest)
+	byteCycles := s.channels[ChannelB].sdlcByteCycles()
+
+	sendFrame(t, s, []uint8{0x20, 0x09, 0x84})
+	s.ReceiveFrame(ChannelB, []uint8{0x09, 0x20, 0x01, 0x00, 0x05, 0x02, 0x02, 0x04})
+
+	for i := uint64(0); i < quietBytes-2; i++ {
+		s.Tick(byteCycles)
+		if s.Read(ChannelB, control)&rr0RxCharAvailable != 0 {
+			t.Fatalf("a frame arrived %v byte times after the machine's own", i)
+		}
+	}
+	if values, _ := receive(t, s, byteCycles); len(values) == 0 {
+		t.Errorf("the frame never arrived after the quiet")
+	}
+}
+
+/*
+The answer to the machine's lapRTS, the lapCTS, comes at once and before
+anything that was waiting, which is what the driver takes in the 200µs it
+waits for it
+*/
+func TestTheAnswerToAnRtsComesFirstAndAtOnce(t *testing.T) {
+	s, _ := localTalkChip(cyclesPerSecondForTest)
+	byteCycles := s.channels[ChannelB].sdlcByteCycles()
+
+	sendFrame(t, s, []uint8{0x20, 0x09, 0x84})
+	s.ReceiveFrame(ChannelB, []uint8{0x09, 0x20, 0x01, 0x00, 0x05, 0x02, 0x02, 0x04})
+	s.AnswerFrame(ChannelB, []uint8{0x09, 0x20, 0x85})
+
+	// Its first byte within the 200µs, which is under six byte times
+	for i := 0; s.Read(ChannelB, control)&rr0RxCharAvailable == 0; i++ {
+		if i >= 5 {
+			t.Fatalf("the lapCTS had not started after %v byte times", i)
+		}
+		s.Tick(byteCycles)
+	}
+	values, _ := receive(t, s, byteCycles)
+	if len(values) != 3+crcLength || values[2] != 0x85 {
+		t.Fatalf("the first frame after the lapRTS was %x, wanted the lapCTS", values)
+	}
+}

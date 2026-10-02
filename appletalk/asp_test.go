@@ -313,3 +313,56 @@ func TestAWrongVersionIsRefused(t *testing.T) {
 		t.Errorf("ASP 2.0 was answered with %v, wanted the bad version error", code)
 	}
 }
+
+// frameLog is a station that keeps every frame on the network
+type frameLog struct {
+	mutex  sync.Mutex
+	frames [][]uint8
+}
+
+func (l *frameLog) Receive(frame []uint8) {
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+	l.frames = append(l.frames, append([]uint8(nil), frame...))
+}
+
+/*
+The answer to a write goes before the release of the WriteContinue that got
+its data. A Macintosh that gets the release first is still busy with it when
+the answer comes, and loses that, to wait seconds for a retry.
+*/
+func TestAWriteIsAnsweredBeforeItsDataIsReleased(t *testing.T) {
+	network := localtalk.NewNetwork()
+	server := &fakeServer{status: []uint8("status")}
+	l := Listen(network, []uint8("izmac"), server)
+	t.Cleanup(l.Stop)
+	c := newClient(t, network)
+	log := &frameLog{}
+	network.Attach(log)
+
+	socket, id := openSession(t, l, c)
+	c.writes = []uint8("data")
+	if _, ok := c.call(l.Node().Address(), socket, UserBytes{aspWrite, id, 0, 2}, []uint8("FPWrite"), true); !ok {
+		t.Fatalf("the write failed")
+	}
+	time.Sleep(50 * time.Millisecond)
+
+	answer, release := -1, -1
+	log.mutex.Lock()
+	defer log.mutex.Unlock()
+	for i, f := range log.frames {
+		if f[1] != l.Node().Address() || f[2] != lapShortDDP || len(f) < 3+shortHeaderLength+atpHeaderLength {
+			continue
+		}
+		destinationSocket, control := f[5], f[8]
+		switch {
+		case destinationSocket == clientSocket && control&atpFunctionMask == atpResponse:
+			answer = i
+		case destinationSocket == clientWSS && control&atpFunctionMask == atpRelease:
+			release = i
+		}
+	}
+	if answer < 0 || release < 0 || answer > release {
+		t.Errorf("the answer to the write is frame %v and the release frame %v, wanted the answer first", answer, release)
+	}
+}

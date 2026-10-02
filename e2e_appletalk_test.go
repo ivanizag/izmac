@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/ivanizag/izmac/afp"
 	"github.com/ivanizag/izmac/component"
 	"github.com/ivanizag/izmac/localtalk"
 )
@@ -262,14 +263,10 @@ func TestTwoMachinesShareTheNetwork(t *testing.T) {
 	}
 }
 
-/*
-The file server, from a Macintosh: System 6.0.8 from the Utilities 1 diskette,
-the one with AppleShare in its System Folder. The Chooser finds the server by
-NBP, gets its status by ASP to ask how to log in, and logs in as a guest, which
-opens a session and asks the server for its volumes; Quit in that dialog
-closes the session again.
-*/
-func TestTheChooserLogsInToTheFileServer(t *testing.T) {
+// fileServerMac is System 6.0.8 from the Utilities 1 diskette, the one with
+// AppleShare in its System Folder, sharing a folder
+func fileServerMac(t *testing.T, share string) *Mac {
+	t.Helper()
 	const utilities = "izmac_sys608 - Utilities 1.dsk"
 	if _, err := os.Stat(utilities); err != nil {
 		t.Skipf("%v is not here, this test needs it", utilities)
@@ -278,7 +275,7 @@ func TestTheChooserLogsInToTheFileServer(t *testing.T) {
 	config.DiskFiles = nil
 	config.Diskettes = []string{copyFile(t, utilities)}
 	config.RamSizeKb = 4096
-	config.Share = t.TempDir()
+	config.Share = share
 	config.PrinterPort = ""
 	if err := config.Validate(); err != nil {
 		t.Fatal(err)
@@ -289,8 +286,13 @@ func TestTheChooserLogsInToTheFileServer(t *testing.T) {
 	}
 	t.Cleanup(m.fileServer.Stop)
 	m.RunFrames(3000)
+	return m
+}
 
-	// The Chooser, then AppleShare in it
+// chooseFileServer goes to the server in the Chooser, as far as the dialog
+// asking how to log in
+func chooseFileServer(t *testing.T, m *Mac) {
+	t.Helper()
 	moveMouseTo(t, m, 16, 10)
 	m.SetMouseButton(true)
 	m.RunFrames(30)
@@ -302,21 +304,38 @@ func TestTheChooserLogsInToTheFileServer(t *testing.T) {
 	clickMouse(m)
 	m.RunFrames(1200)
 
-	// The server, the one in the list, and OK, which asks how to log in
+	// The server, the one in the list, and OK
 	moveMouseTo(t, m, 300, 88)
 	clickMouse(m)
 	m.RunFrames(60)
 	moveMouseTo(t, m, 330, 177)
 	clickMouse(m)
 	m.RunFrames(900)
+}
+
+// logInAsGuest presses OK in the dialog asking how to log in, as a guest,
+// which lists the volumes
+func logInAsGuest(t *testing.T, m *Mac) {
+	t.Helper()
+	moveMouseTo(t, m, 390, 258)
+	clickMouse(m)
+	m.RunFrames(900)
+}
+
+/*
+The file server, from a Macintosh. The Chooser finds the server by NBP, gets
+its status by ASP to ask how to log in, and logs in as a guest, which opens a
+session and asks the server for its volumes; Quit in that dialog closes the
+session again.
+*/
+func TestTheChooserLogsInToTheFileServer(t *testing.T) {
+	m := fileServerMac(t, t.TempDir())
+	chooseFileServer(t, m)
 	if n := m.fileServer.Sessions(); n != 0 {
 		t.Fatalf("%v sessions are open before logging in", n)
 	}
 
-	// OK again, as a guest, which logs in and lists the volumes
-	moveMouseTo(t, m, 390, 258)
-	clickMouse(m)
-	m.RunFrames(900)
+	logInAsGuest(t, m)
 	if n := m.fileServer.Sessions(); n != 1 {
 		t.Fatalf("%v sessions are open after logging in, wanted one", n)
 	}
@@ -327,5 +346,66 @@ func TestTheChooserLogsInToTheFileServer(t *testing.T) {
 	m.RunFrames(600)
 	if n := m.fileServer.Sessions(); n != 0 {
 		t.Errorf("%v sessions are still open after quitting", n)
+	}
+}
+
+/*
+The shared folder as a volume of the Finder: mounted from the Chooser, opened,
+and a file in it duplicated, which the Finder does by making a file and
+copying both forks and the Finder information into it, all through the
+server, and all ending up on the host
+*/
+func TestTheFinderDuplicatesAFileOnTheSharedFolder(t *testing.T) {
+	share := t.TempDir()
+	const text = "hello from the host\n"
+	if err := os.WriteFile(filepath.Join(share, "readme.txt"), []uint8(text), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(share, "Folder"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	m := fileServerMac(t, share)
+	chooseFileServer(t, m)
+	logInAsGuest(t, m)
+
+	// The volume, OK, and the Chooser closed
+	moveMouseTo(t, m, 200, 111)
+	clickMouse(m)
+	m.RunFrames(60)
+	moveMouseTo(t, m, 336, 258)
+	clickMouse(m)
+	m.RunFrames(1200)
+	moveMouseTo(t, m, 71, 47)
+	clickMouse(m)
+	m.RunFrames(1200)
+
+	// The volume opened, under the disk on the desktop
+	moveMouseTo(t, m, 472, 104)
+	clickMouse(m)
+	m.RunFrames(8)
+	clickMouse(m)
+	m.RunFrames(1500)
+
+	// The file selected, and Duplicate from the File menu
+	moveMouseTo(t, m, 173, 110)
+	clickMouse(m)
+	m.RunFrames(60)
+	moveMouseTo(t, m, 55, 10)
+	m.SetMouseButton(true)
+	m.RunFrames(30)
+	moveMouseTo(t, m, 78, 139)
+	m.RunFrames(10)
+	m.SetMouseButton(false)
+	m.RunFrames(1500)
+
+	copied := filepath.Join(share, "Copy of readme.txt")
+	data, err := os.ReadFile(copied)
+	if err != nil || string(data) != text {
+		t.Fatalf("the copy has %q, %v", data, err)
+	}
+	finder, _ := afp.FinderInfo(copied)
+	if string(finder[0:8]) != "TEXTttxt" {
+		t.Errorf("the copy's Finder information is %q", finder[0:8])
 	}
 }

@@ -52,6 +52,41 @@ The LocalTalk handshake, the RTS and CTS before every frame to one node, never
 crosses the network. It has to be answered within 200µs, which no network
 does, so each machine answers it for itself, as Mini vMac does.
 
+## Sharing files between machines
+
+Two machines on the same network can share files the way Macintoshes did, with
+the File Sharing of System 7: one shares a folder, the other mounts it with
+AppleShare. Nothing of izmac's own is involved but the network.
+
+The machine that shares needs System 7 with File Sharing installed, which the
+installer does with its File Sharing option: File Sharing Extension, Network
+Extension and AppleShare in the Extensions folder, Sharing Setup and Users &
+Groups in the Control Panels. The one that mounts needs only AppleShare, which
+System 6 has too, on the *Utilities 1* diskette of 6.0.8. Give them 4 MB, each
+its own disk image and its own parameter RAM file, and the same network:
+
+```bash
+izmac -appletalk host -ram 4096 -pram server_pram.bin Server.img
+izmac -appletalk host -ram 4096 -pram client_pram.bin Client.img
+```
+
+On the machine that shares:
+
+1. In **Sharing Setup**, give an owner name, a password and a name for the
+   machine, and press **Start** under File Sharing.
+2. In **Users & Groups**, open `<Guest>` and allow guests to connect.
+3. Select a folder in the Finder, choose **Sharing…** in the File menu, tick
+   *Share this item and its contents*, and let everyone see folders, see
+   files and make changes.
+
+On the other, in the Chooser, choose AppleShare, the machine by its name, log
+in as a guest and choose the folder. It appears on the desktop like a disk.
+
+The machine that shares does the work of a file server, so it has to keep
+running while the other uses its folder, and a Plus doing it at its own speed
+over LocalTalk at its real 230 kbit/s is no fast server. `udp` does the same
+between machines on different computers.
+
 ## Sharing a folder
 
 `-share` puts a folder of your computer on the network, served by an AppleShare
@@ -73,8 +108,33 @@ The Macintosh needs the AppleShare client, the `AppleShare` file in the System
 Folder that puts the AppleShare icon in the Chooser. System 6.0.8 has it on
 the *Utilities 1* diskette, and System 7 in the Extensions folder.
 
-For now the server lets the machine log in and lists the volume, but does not
-open it yet.
+Once logged in, choose the volume and it appears on the desktop like a disk,
+to read and write. A file the machine makes, a folder, a rename, a move, are
+the same on your computer at once.
+
+What makes a Macintosh file more than its data, its resource fork and its type
+and creator, is kept in a second file next to each, named with `._` in front:
+the AppleDouble files netatalk writes, and macOS on disks that cannot hold
+more than data. It is the same on macOS, Linux and Windows, and nothing is
+hidden in the files themselves: `ls -a` shows them, and they go wherever the
+files are copied with them. The shared folder keeps its own in a `._.` inside
+it. A file from the host that has none is a plain document, or a text file for
+TeachText when its name ends in `.txt`.
+
+On macOS, a file that already carries a resource fork and a type the way macOS
+keeps them, as extended attributes, an application unpacked by unar or copied
+from a real Macintosh, is read from there, so applications put in the folder
+run. izmac never writes them: what the machine changes of such a file goes to
+its `._` file, along with what the file had.
+
+Names the machine cannot have as they are, longer than 31 characters or with
+characters Mac OS Roman does not have, are shortened with a `#` and a number
+in them. Files and folders whose names start with a dot are not shown.
+
+The icons and the applications that open each kind of document, which the
+Finder keeps in the Desktop file of a disk, are found by looking in the
+applications on the folder the first time the volume opens, and kept until
+izmac stops; so are the comments of Get Info.
 
 ## What changes
 

@@ -1,36 +1,164 @@
 package afp
 
+import (
+	"encoding/binary"
+	"os"
+	"time"
+)
+
 /*
-The volume: the folder of the host the server shares. Opening it and what is
-in it are the volume and file calls, which come in their own change; until
-then every one of them is answered as not supported, which an AppleShare
-client takes for a server it can log in to and not use.
+The volume itself: opening it and what it says of itself. There is one, number
+1, and it is open to everyone logged in, with no password.
 */
 
-// fpWrite is the call that sends data, the one that comes through ASP's write
-const fpWrite = 33
+const (
+	volumeID = 1
 
-// volume is the shared folder
-type volume struct {
-	name   []uint8
-	folder string
+	// signatureFixed says that the directory IDs of the volume do not
+	// change, which is what an HFS volume has
+	signatureFixed = 2
+
+	// neverBackedUp is the date of a backup that never happened
+	neverBackedUp = 0x80000000
+
+	// mostBytes is what the volume says it has at most, free or in total:
+	// two gigabytes, which is the most the clients of AFP 2.0 can take
+	// without taking it for a negative number
+	mostBytes = 0x7fffffff
+)
+
+// The volume parameters, by bit
+const (
+	volAttributes = 1 << iota
+	volSignature
+	volCreated
+	volModified
+	volBackedUp
+	volID
+	volBytesFree
+	volBytesTotal
+	volName
+)
+
+const volAllParameters = volName<<1 - 1
+
+// readVolume reads the volume ID of a call, which has to be the one volume
+func (r *reader) volume() bool {
+	return r.uint16() == volumeID
 }
 
-func newVolume(name []uint8, folder string) *volume {
-	return &volume{name: name, folder: folder}
+// openVol opens the volume by its name
+func (v *volume) openVol(r *reader) ([]uint8, int32) {
+	r.byte()
+	bitmap := r.uint16()
+	name := r.pascal()
+	if r.failed {
+		return nil, errParamErr
+	}
+	if !sameName(name, v.name) {
+		return nil, errObjectNotFound
+	}
+	return v.volumeParms(bitmap)
 }
 
-// openFork is a fork a session has open
-type openFork struct{}
-
-func (f *openFork) close() {}
-
-// volumeCommand runs the calls on the volume and what is in it
-func (s *Server) volumeCommand(state *sessionState, call uint8, request []uint8) ([]uint8, int32) {
-	return nil, errCallNotSupported
+func (v *volume) getVolParms(r *reader) ([]uint8, int32) {
+	r.byte()
+	if !r.volume() {
+		return nil, errParamErr
+	}
+	bitmap := r.uint16()
+	if r.failed {
+		return nil, errParamErr
+	}
+	return v.volumeParms(bitmap)
 }
 
-// write runs FPWrite
-func (s *Server) write(state *sessionState, request []uint8, data []uint8) ([]uint8, int32) {
-	return nil, errCallNotSupported
+/*
+volumeParms is what the volume says of itself. The modification date is what
+the client watches to know that something changed and its windows need to be
+drawn again, so it is the last time anything of the machine changed the
+volume, or the root of the folder changed on the host.
+*/
+func (v *volume) volumeParms(bitmap uint16) ([]uint8, int32) {
+	if bitmap&^volAllParameters != 0 {
+		return nil, errBitmapErr
+	}
+
+	reply := binary.BigEndian.AppendUint16(nil, bitmap)
+	p := &parameters{}
+	free, total := freeSpace(v.root)
+
+	if bitmap&volAttributes != 0 {
+		p.uint16(0)
+	}
+	if bitmap&volSignature != 0 {
+		p.uint16(signatureFixed)
+	}
+	if bitmap&volCreated != 0 {
+		p.uint32(afpTime(v.created))
+	}
+	if bitmap&volModified != 0 {
+		p.uint32(afpTime(v.modified()))
+	}
+	if bitmap&volBackedUp != 0 {
+		p.uint32(neverBackedUp)
+	}
+	if bitmap&volID != 0 {
+		p.uint16(volumeID)
+	}
+	if bitmap&volBytesFree != 0 {
+		p.uint32(uint32(min(free, mostBytes)))
+	}
+	if bitmap&volBytesTotal != 0 {
+		p.uint32(uint32(min(total, mostBytes)))
+	}
+	if bitmap&volName != 0 {
+		p.name(v.name)
+	}
+	return append(reply, p.bytes()...), errNoErr
+}
+
+// modified is when the volume last changed
+func (v *volume) modified() time.Time {
+	latest := v.changed
+	if info, err := os.Stat(v.host("")); err == nil && info.ModTime().After(latest) {
+		latest = info.ModTime()
+	}
+	return latest
+}
+
+// touch says the volume changed
+func (v *volume) touch() {
+	v.changed = time.Now()
+}
+
+/*
+parameters is a block of parameters: the fixed part, in the order of the bits
+of the bitmap, and after it the names, each where an offset in the fixed part
+says, counted from the start of the block
+*/
+type parameters struct {
+	fixed   []uint8
+	names   [][]uint8
+	offsets []int
+}
+
+func (p *parameters) uint16(n uint16) { p.fixed = binary.BigEndian.AppendUint16(p.fixed, n) }
+func (p *parameters) uint32(n uint32) { p.fixed = binary.BigEndian.AppendUint32(p.fixed, n) }
+func (p *parameters) raw(b []uint8)   { p.fixed = append(p.fixed, b...) }
+
+// name leaves room for the offset of a name
+func (p *parameters) name(name []uint8) {
+	p.offsets = append(p.offsets, len(p.fixed))
+	p.names = append(p.names, name)
+	p.uint16(0)
+}
+
+func (p *parameters) bytes() []uint8 {
+	out := append([]uint8{}, p.fixed...)
+	for i, name := range p.names {
+		binary.BigEndian.PutUint16(out[p.offsets[i]:], uint16(len(out)))
+		out = appendPascal(out, name)
+	}
+	return out
 }
