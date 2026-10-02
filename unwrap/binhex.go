@@ -103,21 +103,40 @@ func (d *binhexDecoder) decode(text []uint8) (File, error) {
 		return File{}, fmt.Errorf("the BinHex header fails its CRC")
 	}
 
-	name := macRoman(data[1 : 1+nameLength])
-	lengths := header[1+nameLength+1+4+4+2:]
-	dataLength := int(binary.BigEndian.Uint32(lengths[0:4]))
+	file := File{Name: macRoman(data[1 : 1+nameLength])}
+	info := header[1+nameLength+1:]
+	copy(file.Type[:], info[0:4])
+	copy(file.Creator[:], info[4:8])
+	file.Flags = binary.BigEndian.Uint16(info[8:10])
+	dataLength := int(binary.BigEndian.Uint32(info[10:14]))
+	resourceLength := int(binary.BigEndian.Uint32(info[14:18]))
 
 	from := headerLength + 2
-	if dataLength < 0 || len(data) < from+dataLength+2 {
-		return File{}, fmt.Errorf("%v ends inside its data fork", name)
+	file.Data, err = binhexFork(data, from, dataLength)
+	if err != nil {
+		return File{}, fmt.Errorf("the data fork of %v %w", file.Name, err)
 	}
 
-	fork := data[from : from+dataLength]
-	if crc16(fork) != binary.BigEndian.Uint16(data[from+dataLength:]) {
-		return File{}, fmt.Errorf("the data fork of %v fails its CRC", name)
+	from += dataLength + 2
+	file.Resource, err = binhexFork(data, from, resourceLength)
+	if err != nil {
+		return File{}, fmt.Errorf("the resource fork of %v %w", file.Name, err)
 	}
 
-	return File{Name: name, Data: fork}, nil
+	return file, nil
+}
+
+// binhexFork takes a fork out of the decoded data, checking its CRC
+func binhexFork(data []uint8, from int, length int) ([]uint8, error) {
+	if length < 0 || len(data) < from+length+2 {
+		return nil, fmt.Errorf("is cut short")
+	}
+
+	fork := data[from : from+length]
+	if crc16(fork) != binary.BigEndian.Uint16(data[from+length:]) {
+		return nil, fmt.Errorf("fails its CRC")
+	}
+	return fork, nil
 }
 
 // sixBits undoes the alphabet, from the colon after the marker to the one

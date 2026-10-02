@@ -25,8 +25,10 @@ izmac system.img work.img games.dsk
 A Macintosh hard disk that has been through Apple's formatter starts with a
 driver descriptor map, which no diskette carries. A DiskCopy image says what
 it is in its own header. Failing both, a file of exactly 400K or 800K is a
-diskette, because those are the only sizes these drives make, and anything
-else is a hard disk.
+diskette, because those are the only sizes these drives make. A file of zeros
+is a blank hard disk waiting to be formatted. Anything else is no disk image at
+all, and goes on a new volume of its own: see
+[Files and folders](#files-and-folders).
 
 If you would rather be explicit, or if a file is unusual enough that the guess
 goes wrong, say so:
@@ -150,9 +152,22 @@ which archive needed it.
 
 The disk images in an archive go where they belong as any other image does,
 diskettes in the drives and hard disks on the bus. When there are more than fit
-the rest are left out, with a line saying so. The files that are not disk
-images, read me files and loose applications, are left out too: izmac does not
-build a volume to put them on.
+the rest are left out, with a line saying so.
+
+What else is in the archive goes on a new volume, as described in
+[Files and folders](#files-and-folders) below. An archive with no disk image
+in it, an application or a game the way most of them were published, becomes a
+volume of its own:
+
+```
+Unpacking boot-editor-104.hqx, a BinHex file
+  Packing 2 files on a new volume, boot-editor-104
+  + boot-editor-104, an 800Kb diskette, in memory
+```
+
+An archive that has disk images in it as well puts only its Macintosh files on
+the new volume, the ones with a resource fork or a type and creator, and leaves
+out the rest: those are the read me and the checksums meant for the host.
 
 The same goes for a file dropped on the window: the first diskette in it goes
 in the drive.
@@ -169,15 +184,61 @@ izmac -persist "Mac System Software 6.0.8.7z"
 They are then written to the working directory, named after the archive, and
 used from there like any other image: `izmac_Game.dsk` for an archive with one
 image in it, `izmac_Mac System Software 6.0.8 - System Tools.dsk` for one of
-several. The next run with `-persist` finds them there and uses them as they
-are, so what the Macintosh saved on them is kept rather than unpacked over.
-Delete them to start again from the archive, or name them directly to leave
-the archive out of it.
+several. The next run with `-persist` goes straight to them, without unpacking
+the archive at all, so what the Macintosh saved on them is kept rather than
+unpacked over. Delete them to start again from the archive, or name them
+directly to leave the archive out of it.
+
+izmac remembers which kept image came from which archive in
+`izmac_kept.json`, next to them. That is how it knows to skip the unpacking,
+and how two archives of the same name in different places are kept apart: the
+second one's images are numbered, `izmac_Game 2.dsk`. An archive is known by
+where it is, so one that is moved is unpacked again, under a numbered name of
+its own; the images of the old place stay where they are until deleted.
 
 A diskette image that has picked up some padding on its travels, 401K or 807K
 rather than 400K or 800K, is mended on the way in: the volume inside is checked
 to end where the diskette would, and the rest is dropped. That happens in
 memory too, and is kept the same way with `-persist`.
+
+### Files and folders
+
+A folder of the host, or a file that is neither a disk image nor an archive,
+goes on a new volume made for it, named after it:
+
+```bash
+izmac System.img ~/Documents/Letters
+```
+
+The new volume is an 800K diskette when everything fits on one, so that it can
+be swapped in and out while the machine runs, and a hard disk with a megabyte
+or so to spare when it does not. A hard disk made this way goes on the bus with
+a SCSI driver made up in front of it, the way a bare volume does. Neither kind
+is a startup disk: that takes boot blocks, which come with a System and not
+with the files.
+
+Whatever made the files Macintosh files is kept: the resource fork, where an
+application keeps most of itself, the type and creator that give a document
+its icon and its application, and the folders they were in. Out of an archive
+those come from the archive. On the host they come from wherever the host keeps
+them: macOS keeps them with the file, and any system keeps them in the `._`
+files macOS leaves beside the others on a USB stick. A file with none of them
+arrives as a plain document with no type, which TeachText can still open if it
+is text.
+
+A folder or a file dropped on the window goes the same way, into a drive when
+it fits on a diskette.
+
+The Finder sees the files as new ones, the way it sees files copied from
+another disk: it places their icons in the windows itself and reads the icons
+of the applications out of them.
+
+Like an unpacked image, the volume lives in memory and is gone when izmac
+stops, unless it is kept with `-persist`. Either way it is a copy: what the
+Macintosh writes to it does not reach the files it was made from. With
+`-persist` the folder is read once, on the first run, and the next runs use the
+kept volume without looking at the folder again, so a change to the folder
+shows only once the kept volume is deleted.
 
 ### When you name nothing at all
 

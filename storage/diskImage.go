@@ -46,20 +46,28 @@ IsDiskImage tells whether something taken out of an archive is a disk image,
 as opposed to a file that was meant to be copied onto one
 */
 func IsDiskImage(data []uint8) bool {
-	if _, ok := parseDiskCopyHeader(data); ok {
+	return LooksLikeDiskImage(data, int64(len(data)))
+}
+
+/*
+LooksLikeDiskImage says the same of a file from its first blocks and its size,
+so that a file on the host can be looked at without being read whole
+*/
+func LooksLikeDiskImage(head []uint8, size int64) bool {
+	if _, ok := parseDiskCopyHeader(head); ok {
 		return true
 	}
 
-	if len(data) >= 2 && binary.BigEndian.Uint16(data) == driverDescriptorSignature {
+	if len(head) >= 2 && binary.BigEndian.Uint16(head) == driverDescriptorSignature {
 		return true
 	}
 
-	switch len(data) {
+	switch size {
 	case floppySize400K, floppySize800K, floppySize720K, floppySize1440K:
 		return true
 	}
 
-	_, ok := volumeSignature(data)
+	_, ok := volumeSignature(head)
 	return ok
 }
 

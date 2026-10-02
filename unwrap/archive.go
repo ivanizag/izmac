@@ -21,10 +21,10 @@ func isGzip(head []uint8) bool {
 }
 
 /*
-openZip takes out every file in a zip. A zip made on a Macintosh carries a
-second entry for each file, under __MACOSX and with the name prefixed, holding
-the resource fork and the Finder information. Those are no use here and are
-stepped over.
+openZip takes out every file in a zip, in the folders the zip has them in. A
+zip made on a Macintosh carries a second entry for each file, under __MACOSX
+and with the name prefixed, holding the resource fork and the Finder
+information, which go back with the file they belong to.
 */
 func openZip(data []uint8) ([]File, error) {
 	reader, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
@@ -32,9 +32,9 @@ func openZip(data []uint8) ([]File, error) {
 		return nil, err
 	}
 
-	var files []File
+	var loose []looseFile
 	for _, entry := range reader.File {
-		if entry.FileInfo().IsDir() || isMacMetadata(entry.Name) {
+		if entry.FileInfo().IsDir() {
 			continue
 		}
 
@@ -42,9 +42,13 @@ func openZip(data []uint8) ([]File, error) {
 		if err != nil {
 			return nil, fmt.Errorf("can not read %v: %w", entry.Name, err)
 		}
-		files = append(files, File{Name: path.Base(entry.Name), Data: content})
+		loose = append(loose, looseFile{
+			path:     entry.Name,
+			data:     content,
+			modified: entry.Modified,
+		})
 	}
-	return files, nil
+	return assemble(loose), nil
 }
 
 func readEntry(entry *zip.File) ([]uint8, error) {

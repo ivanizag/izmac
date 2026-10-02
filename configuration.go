@@ -40,7 +40,8 @@ type Configuration struct {
 
 	/*
 		Persist keeps the disk images that had to be unpacked out of an
-		archive, or mended, as izmac_ files on the working directory, where
+		archive, mended, or made for files that are not disk images, as
+		izmac_ files on the working directory, where
 		they are writable and found again on the next run. Without it they
 		are held in memory, and lost with what was written to them when
 		izmac stops.
@@ -405,7 +406,8 @@ func (c *Configuration) AddFlags(fs *flag.FlagSet) {
 			"holding one, to put in a drive. Repeat for the external drive "+
 			"as well")
 	fs.BoolVar(&c.Persist, "persist", c.Persist,
-		"keep the disk images unpacked out of an archive, or mended, as "+
+		"keep the disk images unpacked out of an archive, mended, or made "+
+			"for loose files and folders, as "+
 			"izmac_ files on the working directory, writable and found "+
 			"again on the next run. Without it they are held in memory, "+
 			"and lost with what was written to them when izmac stops")
