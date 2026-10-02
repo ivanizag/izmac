@@ -52,8 +52,7 @@ func (v *volume) createFile(r *reader) ([]uint8, int32) {
 		if err := os.Truncate(host, 0); err != nil {
 			return nil, hostError(err)
 		}
-		v.meta.setResource(host, nil)
-		v.meta.setFinderInfo(host, [32]uint8{})
+		v.meta.write(host, metadata{})
 		v.touch()
 		return nil, errNoErr
 	}

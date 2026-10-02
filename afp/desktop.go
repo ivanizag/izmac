@@ -364,10 +364,8 @@ func (d *desktop) scan(v *volume) {
 			var creator [4]uint8
 			copy(creator[:], finder[4:8])
 			d.putApplication(application{creator: creator, rel: child})
-			if fork, err := v.meta.resource(v.host(child)); err == nil {
-				for _, i := range bundleIcons(parseResources(fork)) {
-					d.putIcon(i)
-				}
+			for _, i := range bundleIcons(parseResources(v.meta.resource(v.host(child)))) {
+				d.putIcon(i)
 			}
 		}
 	}

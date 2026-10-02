@@ -72,7 +72,7 @@ func newVolume(name []uint8, folder string) *volume {
 		byID:      map[uint32]string{rootID: ""},
 		byPath:    map[string]uint32{"": rootID},
 		nextID:    firstFreeID,
-		meta:      newMetadataStore(),
+		meta:      newMetadataStore(folder),
 		desktop:   newDesktop(),
 		forks:     make(map[uint16]*openFork),
 		resources: make(map[string]*resourceFork),

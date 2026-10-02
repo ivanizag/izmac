@@ -7,10 +7,10 @@ import (
 	"time"
 )
 
-// newMetadataStore keeps everything in AppleDouble files, which is all a host
-// that is not macOS has
-func newMetadataStore() metadataStore {
-	return appleDoubleStore{}
+// readHostMetadata is what the host keeps of a Macintosh file itself, which
+// on a host that is not macOS is nothing
+func readHostMetadata(host string, withResource bool) metadata {
+	return metadata{}
 }
 
 // createdTime is when a file was made, which the host does not say, and is

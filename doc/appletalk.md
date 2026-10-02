@@ -113,13 +113,19 @@ to read and write. A file the machine makes, a folder, a rename, a move, are
 the same on your computer at once.
 
 What makes a Macintosh file more than its data, its resource fork and its type
-and creator, is kept where the host keeps it. On macOS that is with the file
-itself, where the Finder of the Mac copies it along, so applications can be
-put in the folder and run from there. On Linux and Windows it is in a second
-file next to each, named with `._` in front, the AppleDouble files netatalk
-and macOS write on disks of other kinds. A file from the host that has none
-is a plain document, or a text file for TeachText when its name ends in
-`.txt`.
+and creator, is kept in a second file next to each, named with `._` in front:
+the AppleDouble files netatalk writes, and macOS on disks that cannot hold
+more than data. It is the same on macOS, Linux and Windows, and nothing is
+hidden in the files themselves: `ls -a` shows them, and they go wherever the
+files are copied with them. The shared folder keeps its own in a `._.` inside
+it. A file from the host that has none is a plain document, or a text file for
+TeachText when its name ends in `.txt`.
+
+On macOS, a file that already carries a resource fork and a type the way macOS
+keeps them, as extended attributes, an application unpacked by unar or copied
+from a real Macintosh, is read from there, so applications put in the folder
+run. izmac never writes them: what the machine changes of such a file goes to
+its `._` file, along with what the file had.
 
 Names the machine cannot have as they are, longer than 31 characters or with
 characters Mac OS Roman does not have, are shortened with a `#` and a number

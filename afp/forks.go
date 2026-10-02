@@ -163,11 +163,7 @@ func (v *volume) openFork(r *reader, session int) ([]uint8, int32) {
 	if resource {
 		shared, ok := v.resources[rel]
 		if !ok {
-			data, err := v.meta.resource(v.host(rel))
-			if err != nil {
-				return nil, hostError(err)
-			}
-			shared = &resourceFork{rel: rel, data: data}
+			shared = &resourceFork{rel: rel, data: v.meta.resource(v.host(rel))}
 			v.resources[rel] = shared
 		}
 		shared.users++

@@ -317,9 +317,10 @@ func resourceFork_(res map[string]map[int16][]uint8) []uint8 {
 }
 
 func TestAppleDoubleFilesKeepWhatTheHostCannot(t *testing.T) {
-	file := filepath.Join(t.TempDir(), "file")
+	folder := t.TempDir()
+	file := filepath.Join(folder, "file")
 	os.WriteFile(file, nil, 0o644)
-	store := appleDoubleStore{}
+	store := newMetadataStore(folder)
 
 	var finder [32]uint8
 	copy(finder[:], "TEXTttxt")
@@ -330,19 +331,40 @@ func TestAppleDoubleFilesKeepWhatTheHostCannot(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, ok := store.finderInfo(file)
-	resource, _ := store.resource(file)
-	if !ok || got != finder || string(resource) != "fork" {
-		t.Errorf("the AppleDouble file has %q and %q", got[:8], resource)
+	if !ok || got != finder || string(store.resource(file)) != "fork" || store.resourceLength(file) != 4 {
+		t.Errorf("the AppleDouble file has %q and %q", got[:8], store.resource(file))
+	}
+	if _, err := os.Stat(filepath.Join(folder, "._file")); err != nil {
+		t.Errorf("there is no ._file next to the file: %v", err)
 	}
 
 	store.renamed(file, file+"2")
-	if !hasSidecar(file + "2") {
+	if _, err := os.Stat(filepath.Join(folder, "._file2")); err != nil {
 		t.Errorf("the AppleDouble file did not follow the rename")
 	}
 	store.setFinderInfo(file+"2", [32]uint8{})
 	store.setResource(file+"2", nil)
-	if hasSidecar(file + "2") {
+	if entries, _ := os.ReadDir(folder); len(entries) != 1 {
 		t.Errorf("an empty AppleDouble file was kept")
+	}
+}
+
+// The shared folder keeps its Finder information inside it, not next to it
+func TestTheSharedFolderKeepsItsOwnInside(t *testing.T) {
+	c := newTestClient(t)
+	finder := make([]uint8, 32)
+	copy(finder[10:], "window")
+	c.call(errNoErr, fpSetDirParms, 0, uint16(volumeID), uint32(rootID), uint16(paramFinderInfo),
+		longPath(), finder)
+
+	if _, err := os.Stat(filepath.Join(c.folder, rootSidecar)); err != nil {
+		t.Errorf("the shared folder has no %v inside: %v", rootSidecar, err)
+	}
+	if _, err := os.Stat(filepath.Join(filepath.Dir(c.folder), "._"+filepath.Base(c.folder))); err == nil {
+		t.Errorf("the shared folder's Finder information went outside it")
+	}
+	if found := c.enumerate(rootID, longPath()); len(found) != 0 {
+		t.Errorf("the AppleDouble file of the folder is listed: %v", found)
 	}
 }
 
@@ -363,7 +385,7 @@ func TestAResourceForkThatShrinksIsKeptShort(t *testing.T) {
 	c.call(errNoErr, fpSetForkParms, 0, ref, uint16(fileResourceLength), uint32(9))
 	c.call(errNoErr, fpCloseFork, 0, ref)
 
-	if n := newMetadataStore().resourceLength(filepath.Join(c.folder, "App")); n != 9 {
+	if n := newMetadataStore(c.folder).resourceLength(filepath.Join(c.folder, "App")); n != 9 {
 		t.Errorf("the host keeps a resource fork of %v bytes, wanted 9", n)
 	}
 }
