@@ -63,7 +63,7 @@ type memoryManager struct {
 
 	// resetAsserted is set when the RESET instruction asserts the reset
 	// line, for the run loop to act on once the instruction has returned.
-	// See softwareReset.go.
+	// See softwareReset in mac.go.
 	resetAsserted bool
 
 	/*

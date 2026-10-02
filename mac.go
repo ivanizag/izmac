@@ -373,6 +373,37 @@ func (m *Mac) FlushDiskettes() error {
 	return m.iwm.flush()
 }
 
+/*
+softwareReset restarts the machine when the RESET instruction asserts the reset
+line, which is how the Finder of the first Systems restarts it, and how Shut
+Down ends on them.
+
+The Finder of System 2.0 has no Shut Down Manager to call. Its Shut Down puts
+the disks away, ejects the diskettes from both drives and executes RESET, and
+on a real Macintosh Plus that is the end of it: the machine starts again, finds
+no disk, and waits for one with the flashing question mark. That code was read
+off the Finder of the MacPaint diskette, in memory after it had run. The
+machine waiting for a disk is not taken for it switched off: the window stays
+up, for a disk to be put in or for it to be closed by hand.
+
+On a 68000 the RESET instruction only asserts the reset line, for the chips on
+the board, and carries on with the next instruction; the processor itself is
+not reset. That the Macintosh restarts all the same is something of the board,
+and Mini vMac makes the same call in the same place: on the machines up to the
+Plus, a RESET instruction resets the whole machine. Without that the Finder
+carries on after its Shut Down as though nothing had happened, and the first
+thing it reads is on the diskette it has just ejected. The ROM never executes
+RESET itself, so a machine starting up does not come back here.
+
+iz68000 tells the board through the ResetLine interface the memory manager
+implements. That call comes from inside the instruction, and starting the
+machine again resets the processor as well, so the memory manager only takes
+note and the run loop calls this once the instruction has returned.
+*/
+func (m *Mac) softwareReset() {
+	m.reset()
+}
+
 // PutKey queues a key transition for the keyboard. The code is the raw one
 // the hardware sends, from KeyCodes().
 func (m *Mac) PutKey(code uint8, down bool) {

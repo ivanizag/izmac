@@ -25,7 +25,7 @@ call behind it.
 The first Systems have no such alert. Their Finder ejects the diskettes and
 restarts the machine, which then waits for a disk with the flashing question
 mark, and izmac leaves it there: a machine waiting for a disk is a machine
-that can be given one. See softwareReset.go.
+that can be given one. See softwareReset in mac.go.
 */
 
 const (

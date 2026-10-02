@@ -158,7 +158,7 @@ func (m *Mac) step() {
 
 	// The RESET instruction asserted the reset line. The machine starts
 	// again now that the instruction has returned, since that resets the
-	// processor too. See softwareReset.go.
+	// processor too.
 	if m.mm.resetAsserted {
 		m.mm.resetAsserted = false
 		m.softwareReset()
