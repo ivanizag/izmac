@@ -281,7 +281,9 @@ func (v *volume) enumerate(r *reader) ([]uint8, int32) {
 	listed := 0
 	for i := start - 1; i < len(shown) && listed < count; i++ {
 		e := shown[i]
-		parms, result := v.parms(folderJoin(folder, e.host), e, fileBitmap, dirBitmap)
+		rel := folderJoin(folder, e.host)
+		v.id(rel)
+		parms, result := v.parms(rel, e, fileBitmap, dirBitmap)
 		if result != errNoErr {
 			return nil, result
 		}
