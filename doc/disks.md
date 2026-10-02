@@ -237,11 +237,8 @@ Macintosh diskette that lives in `blank.dsk`.
 A diskette is held whole in memory and the file on the host is rewritten
 complete when the drive motor stops, which the driver does a few seconds after
 it has finished. So the file follows what the Macintosh believes it has saved,
-a moment behind. Ejecting writes it back there and then.
-
-That moment is worth knowing about: closing the window while the drive is
-still turning loses whatever has not been written back yet. Give it the couple
-of seconds it takes the motor to stop, or eject the diskette, before you quit.
+a moment behind. Ejecting writes it back there and then, and so does closing
+the window, for a diskette whose drive was still turning.
 
 If the file is read only on the host, the machine sees a locked diskette, with
 the little tab pushed across. It mounts and reads fine, and the Finder refuses

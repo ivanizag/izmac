@@ -208,8 +208,21 @@ func ebitenRun(m *izmac.Mac) error {
 
 	sound.start()
 
-	go m.Run()
-	defer m.SendCommand(izmac.CommandKill)
+	/*
+		Closing the window ends the program as soon as this returns, so the
+		machine is told to stop and then waited for. Stopping is when it
+		writes back what is left for the diskettes and finishes a page in
+		the printer, and a program that has already gone does neither.
+	*/
+	stopped := make(chan struct{})
+	go func() {
+		m.Run()
+		close(stopped)
+	}()
+	defer func() {
+		m.SendCommand(izmac.CommandKill)
+		<-stopped
+	}()
 
 	return ebiten.RunGame(g)
 }

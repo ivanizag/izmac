@@ -77,6 +77,12 @@ func run(name string, args []string) error {
 
 	m.RunFrames(*frames)
 
+	// What the machine wrote to a diskette whose motor is still turning
+	// has not reached the file yet
+	if err := m.FlushDiskettes(); err != nil {
+		return err
+	}
+
 	fmt.Printf("Ran %v frames, %v cycles, stopped at $%06x\n",
 		m.GetFrames(), m.GetCycles(), m.GetPC())
 
