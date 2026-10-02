@@ -52,6 +52,41 @@ The LocalTalk handshake, the RTS and CTS before every frame to one node, never
 crosses the network. It has to be answered within 200µs, which no network
 does, so each machine answers it for itself, as Mini vMac does.
 
+## Sharing files between machines
+
+Two machines on the same network can share files the way Macintoshes did, with
+the File Sharing of System 7: one shares a folder, the other mounts it with
+AppleShare. Nothing of izmac's own is involved but the network.
+
+The machine that shares needs System 7 with File Sharing installed, which the
+installer does with its File Sharing option: File Sharing Extension, Network
+Extension and AppleShare in the Extensions folder, Sharing Setup and Users &
+Groups in the Control Panels. The one that mounts needs only AppleShare, which
+System 6 has too, on the *Utilities 1* diskette of 6.0.8. Give them 4 MB, each
+its own disk image and its own parameter RAM file, and the same network:
+
+```bash
+izmac -appletalk host -ram 4096 -pram server_pram.bin Server.img
+izmac -appletalk host -ram 4096 -pram client_pram.bin Client.img
+```
+
+On the machine that shares:
+
+1. In **Sharing Setup**, give an owner name, a password and a name for the
+   machine, and press **Start** under File Sharing.
+2. In **Users & Groups**, open `<Guest>` and allow guests to connect.
+3. Select a folder in the Finder, choose **Sharing…** in the File menu, tick
+   *Share this item and its contents*, and let everyone see folders, see
+   files and make changes.
+
+On the other, in the Chooser, choose AppleShare, the machine by its name, log
+in as a guest and choose the folder. It appears on the desktop like a disk.
+
+The machine that shares does the work of a file server, so it has to keep
+running while the other uses its folder, and a Plus doing it at its own speed
+over LocalTalk at its real 230 kbit/s is no fast server. `udp` does the same
+between machines on different computers.
+
 ## Sharing a folder
 
 `-share` puts a folder of your computer on the network, served by an AppleShare
