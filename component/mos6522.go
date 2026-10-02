@@ -49,6 +49,11 @@ type MOS6522 struct {
 	// shiftedOut is set when the processor has written a byte to the shift
 	// register, for the owner of the other end to pick up
 	shiftedOut bool
+
+	// shiftInArmed is set when the processor has read the shift register
+	// in the mode that shifts in on an external clock, which is what starts
+	// it listening for the next byte
+	shiftInArmed bool
 }
 
 const (
@@ -70,6 +75,11 @@ const (
 		switched on and off at the rate of the timer.
 	*/
 	mos6522AcrT1OnPortB uint8 = 1 << 7
+
+	// The shift register modes, in the bits 2 to 4 of the ACR, and the one
+	// that shifts in under an external clock on CB1
+	mos6522AcrShiftMode         uint8 = 7 << 2
+	mos6522AcrShiftInExternally uint8 = 3 << 2
 
 	mos6522PortB7 uint8 = 1 << 7
 
@@ -119,6 +129,7 @@ func (v *MOS6522) Read(reg uint8) uint8 {
 		return uint8(uint16(v.t2counter) >> 8)
 	case 10:
 		v.ifr &^= mos6522IntSR
+		v.shiftInArmed = v.acr&mos6522AcrShiftMode == mos6522AcrShiftInExternally
 		return v.sr
 	case 11:
 		return v.acr
@@ -174,6 +185,9 @@ func (v *MOS6522) Write(reg uint8, value uint8) {
 		v.shiftedOut = true
 	case 11:
 		v.acr = value
+		if value&mos6522AcrShiftMode != mos6522AcrShiftInExternally {
+			v.shiftInArmed = false
+		}
 	case 12:
 		v.pcr = value
 	case 13:
@@ -241,6 +255,7 @@ func (v *MOS6522) Reset() {
 	v.ddra, v.ddrb = 0, 0
 	v.acr, v.pcr = 0, 0
 	v.ifr, v.ier = 0, 0
+	v.shiftInArmed = false
 }
 
 // GetPortA returns the values on the port A pins
@@ -293,6 +308,17 @@ func (v *MOS6522) TakeShiftedOut() (uint8, bool) {
 func (v *MOS6522) ShiftIn(value uint8) {
 	v.sr = value
 	v.ifr |= mos6522IntSR
+	v.shiftInArmed = false
+}
+
+/*
+ReadyToShiftIn tells whether the shift register is listening for a byte: set
+to shift in on an external clock, and read since, which is what starts it. A
+device that clocks a byte in before that has it overwritten, or taken for the
+end of what was shifted out.
+*/
+func (v *MOS6522) ReadyToShiftIn() bool {
+	return v.shiftInArmed
 }
 
 // ShiftOutDone raises the shift register interrupt without touching the
