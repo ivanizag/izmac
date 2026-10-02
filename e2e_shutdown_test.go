@@ -2,6 +2,7 @@ package izmac
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -77,4 +78,49 @@ func TestShutDownOnSystemSeven(t *testing.T) {
 	// System 7 has a Label menu before Special
 	shutDownFromTheFinder(t, m, 215, 240, 139)
 	waitForSwitchOff(t, m)
+}
+
+/*
+The MacPaint diskette, with the System 2.0 of 1985 on it, where Shut Down is the
+Finder ejecting the diskette and executing RESET. The machine starts again with
+no disk and waits for one, and that is it shut down. The diskette is the one
+izmac fetches when nothing is named, which the ebiten frontend keeps on its own
+directory.
+*/
+func TestShutDownOnSystemTwo(t *testing.T) {
+	const paintDisk = "frontend/macebiten/" + defaultDisketteFile
+	data, err := os.ReadFile(paintDisk)
+	if err != nil {
+		t.Skipf("%v is not here, this test needs it", paintDisk)
+	}
+	if _, err := os.Stat(defaultRomFile); err != nil {
+		t.Skipf("%v is not here, this test needs it", defaultRomFile)
+	}
+
+	// A copy, since the Finder writes to the diskette
+	diskette := filepath.Join(t.TempDir(), "paint.dsk")
+	if err := os.WriteFile(diskette, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	config, _ := quietConfiguration()
+	config.RomFile = defaultRomFile
+	config.Diskettes = []string{diskette}
+	config.PramFile = filepath.Join(t.TempDir(), "pram.bin")
+	if err := config.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	m, err := NewMac(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.RunFrames(bootFrames)
+
+	// Special is where it is on System 6, and Shut Down its last item
+	shutDownFromTheFinder(t, m, 185, 200, 123)
+	waitForSwitchOff(t, m)
+
+	if drive := m.GetDiskette(DriveInternal); drive.Image != "" {
+		t.Errorf("the diskette is still in the drive after Shut Down")
+	}
 }

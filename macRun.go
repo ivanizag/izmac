@@ -155,6 +155,16 @@ func (m *Mac) step() {
 
 	startCycles := m.cpu.GetCycles()
 	m.cpu.ExecuteInstruction()
+
+	// The RESET instruction asserted the reset line. The machine starts
+	// again now that the instruction has returned, since that resets the
+	// processor too. See softwareReset.go.
+	if m.mm.resetAsserted {
+		m.mm.resetAsserted = false
+		m.softwareReset()
+		return
+	}
+
 	m.tick(m.cpu.GetCycles() - startCycles)
 }
 
@@ -281,6 +291,7 @@ func (m *Mac) Reset() {
 
 func (m *Mac) reset() {
 	m.started = true
+	m.shutDownByReset = false
 	m.via.reset()
 	m.iwm.reset()
 	m.scc.Reset()

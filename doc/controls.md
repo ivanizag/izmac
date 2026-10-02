@@ -129,6 +129,13 @@ the real machine. The Macintosh puts its disks away and then says you may
 switch it off; izmac takes that as the power switch, and closes the window two
 seconds later. Click **Restart** within those two seconds to stay.
 
+The Systems of 1985 and 1986, such as the one on the MacPaint diskette izmac
+starts with when nothing is named, have no such message. Their Shut Down
+ejects the diskettes and starts the machine again, which with no disk left
+shows the flashing question mark, and that was when the machine was switched
+off. izmac closes two seconds after that too. Put a diskette in within those
+two seconds, or drop one on the window, and it starts from it instead.
+
 Closing the window yourself works too, and loses nothing that has been saved:
 what is still waiting to be written to a diskette is written as it closes. Shut
 Down is still the tidier way out, as it was on the real machine, since it is

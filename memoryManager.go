@@ -61,6 +61,11 @@ type memoryManager struct {
 	// overlay is the reset time address map, the ROM over the address zero
 	overlay bool
 
+	// resetAsserted is set when the RESET instruction asserts the reset
+	// line, for the run loop to act on once the instruction has returned.
+	// See softwareReset.go.
+	resetAsserted bool
+
 	/*
 		The chips on the map. Each is at one place and there is never a
 		second one of its kind, so they are held as what they are.
@@ -257,4 +262,10 @@ func sccPort(address uint32) (channel int, control bool) {
 	default:
 		return component.ChannelA, false
 	}
+}
+
+// ResetDevices is the reset line of the board, which iz68000 asserts when it
+// executes the RESET instruction
+func (m *memoryManager) ResetDevices() {
+	m.resetAsserted = true
 }

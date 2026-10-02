@@ -122,7 +122,9 @@ func moveMouseTo(t *testing.T, m *Mac, wantH int16, wantV int16) {
 		return h, v
 	}
 
-	for try := 0; try < 60; try++ {
+	// The System of 1985 moves the pointer more slowly than later ones, so
+	// there are tries enough for it too; the pointer gets there long before
+	for try := 0; try < 400; try++ {
 		h, v := at()
 		if h == wantH && v == wantV {
 			return

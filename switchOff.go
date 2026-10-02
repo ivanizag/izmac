@@ -21,6 +21,11 @@ over within a fraction of a second.
 Nothing here asks which System is running. System 6.0.8 and System 7.0 were
 both watched shutting down, with different words on the alert and the same
 call behind it.
+
+The first Systems have no such alert. Their Finder ejects the diskettes and
+restarts the machine, which then waits for a disk with the flashing question
+mark, and that is the moment to switch off. softwareReset.go notices it, and
+it lasts until a disk goes in, which the machine would start from.
 */
 
 const (
@@ -31,10 +36,15 @@ const (
 	shutDownAlert = 42
 )
 
-// watchSwitchOff looks at the last system error once a frame
+// watchSwitchOff looks at the last system error once a frame, and at whether
+// a machine shut down by its Finder has been given a disk since
 func (m *Mac) watchSwitchOff() {
+	if m.shutDownByReset && m.hasStartupDisk() {
+		m.shutDownByReset = false
+	}
+
 	code := uint16(m.mm.Peek(dsErrCodeAddress))<<8 | uint16(m.mm.Peek(dsErrCodeAddress+1))
-	m.readyToSwitchOff.Store(code == shutDownAlert)
+	m.readyToSwitchOff.Store(code == shutDownAlert || m.shutDownByReset)
 }
 
 /*

@@ -79,6 +79,11 @@ type Mac struct {
 	// waits for the power to go, for a frontend to read. See switchOff.go.
 	readyToSwitchOff atomic.Bool
 
+	// shutDownByReset is set when a RESET instruction left the machine
+	// with nothing to start from, which is how the first Systems shut down.
+	// See softwareReset.go.
+	shutDownByReset bool
+
 	// pastePending guards the clipboard hook in the instruction loop, which
 	// has nothing to do until there is a paste waiting to be delivered
 	pastePending bool
