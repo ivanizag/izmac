@@ -229,6 +229,14 @@ is text.
 A folder or a file dropped on the window goes the same way, into a drive when
 it fits on a diskette.
 
+A diskette like this has no boot blocks, and the machine looks in the drives
+first when it starts, ejecting any diskette it cannot start from. So a
+diskette named on the command line that does not start the machine, a new
+volume or any other diskette of documents and applications, goes in its drive
+once the Finder is running instead, as though you had put it in then. The
+machine starts from the hard disk, or from a startup diskette in the other
+drive, and the diskette appears on the desktop a moment later.
+
 The Finder sees the files as new ones, the way it sees files copied from
 another disk: it places their icons in the windows itself and reads the icons
 of the applications out of them.

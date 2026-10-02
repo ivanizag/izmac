@@ -574,3 +574,35 @@ func TestTheWallClockReachesTheMachine(t *testing.T) {
 		t.Errorf("the machine says it is %v, the host says %v", machine, now)
 	}
 }
+
+/*
+A diskette of applications named next to the hard disk, which is what a volume
+izmac packs is: no boot blocks, so the ROM would eject it on the way to the
+hard disk. It goes in once the Finder is running instead, and stays.
+*/
+func TestADisketteOfApplicationsIsThereOnceTheMachineHasStarted(t *testing.T) {
+	config := realConfig(t)
+	config.messages = io.Discard
+
+	folder := filepath.Join(t.TempDir(), "Documents")
+	if err := os.MkdirAll(folder, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(folder, "Note"), []uint8("Hi."), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := config.AddFiles([]string{folder}); err != nil {
+		t.Fatal(err)
+	}
+
+	m, err := NewMac(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.RunFrames(bootFrames)
+
+	if drive := m.GetDiskette(DriveInternal); drive.Image != folder {
+		t.Errorf("the internal drive holds %q after starting, wanted the packed folder",
+			drive.Image)
+	}
+}

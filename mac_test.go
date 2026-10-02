@@ -2,6 +2,7 @@ package izmac
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -24,7 +25,14 @@ func ensureNewMac(t *testing.T, config *Configuration, r *storage.Rom,
 // A file named on the command line that turns out to be a diskette goes in a
 // drive, the internal one first, and not on the SCSI bus
 func TestADisketteGoesInTheInternalDrive(t *testing.T) {
-	floppy := writeImage(t, "floppy.img", 400*1024, false)
+	// A startup diskette, which goes in at once: one without boot blocks
+	// waits for the machine to have started
+	data := make([]uint8, 400*1024)
+	data[0], data[1] = 'L', 'K'
+	floppy := filepath.Join(t.TempDir(), "floppy.img")
+	if err := os.WriteFile(floppy, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
 
 	config := NewConfiguration()
 	config.RomFile = "<test>"
@@ -205,5 +213,55 @@ func TestAResetWithADiskIsARestart(t *testing.T) {
 	}
 	if m.IsReadyToSwitchOff() {
 		t.Errorf("a RESET with a hard disk on the bus was taken for a Shut Down")
+	}
+}
+
+/*
+A diskette with no boot blocks, named at startup, waits for the machine to have
+started before it goes in its drive, since the ROM would eject it as it looked
+for something to start from. A startup diskette goes in at once.
+*/
+func TestADisketteThatDoesNotStartTheMachineWaitsForIt(t *testing.T) {
+	documents, err := storage.NewFloppyDiskData("documents", make([]uint8, 800*1024))
+	if err != nil {
+		t.Fatal(err)
+	}
+	startup := make([]uint8, 800*1024)
+	startup[0], startup[1] = 'L', 'K'
+	system, err := storage.NewFloppyDiskData("system", startup)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	config, _ := quietConfiguration()
+	config.RomFile = "<test>"
+	m := ensureNewMac(t, config, storage.RomFromData(make([]uint8, storage.RomSize)),
+		nil, []*storage.FloppyDisk{system, documents})
+
+	if m.GetDiskette(DriveInternal).Image != "system" {
+		t.Errorf("the startup diskette is not in its drive from the start")
+	}
+	if m.GetDiskette(DriveExternal).Image != "" {
+		t.Fatalf("the diskette of documents is in its drive before the machine has started")
+	}
+
+	// Something that is not an event trap leaves it waiting
+	m.mm.setOverlay(false)
+	m.mm.Poke(0x1000, 0x4e)
+	m.mm.Poke(0x1001, 0x71) // NOP
+	m.insertHeldDiskettes(0x1000)
+	if m.GetDiskette(DriveExternal).Image != "" {
+		t.Errorf("the diskette went in before an application asked for an event")
+	}
+
+	// And the first event asked for puts it in
+	m.mm.Poke(0x1000, 0xa9)
+	m.mm.Poke(0x1001, 0x70) // _GetNextEvent
+	m.insertHeldDiskettes(0x1000)
+	if m.GetDiskette(DriveExternal).Image != "documents" {
+		t.Errorf("the diskette did not go in when the Finder asked for its first event")
+	}
+	if m.disketteHeld {
+		t.Errorf("the hook in the instruction loop is still on with nothing to put in")
 	}
 }
