@@ -597,6 +597,12 @@ func (r *AppleRTC) loadPram() {
 	}
 }
 
+// Image is the whole extended parameter RAM, the classic bytes in their
+// places, as it is saved
+func (r *AppleRTC) Image() []uint8 {
+	return r.pramImage()
+}
+
 // pramImage is the whole extended parameter RAM, as it is saved
 func (r *AppleRTC) pramImage() []uint8 {
 	image := make([]uint8, xpramSize)

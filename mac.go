@@ -10,6 +10,7 @@ import (
 
 	"github.com/ivanizag/iz68000"
 	"github.com/ivanizag/izmac/component"
+	"github.com/ivanizag/izmac/localtalk"
 	"github.com/ivanizag/izmac/scsi"
 	"github.com/ivanizag/izmac/storage"
 )
@@ -40,8 +41,10 @@ type Mac struct {
 	printer *printer
 
 	// localTalk is the printer port joined to a LocalTalk network, nil
-	// with AppleTalk off
+	// with AppleTalk off, and udp the transport to the LocalTalk of the
+	// local network when that is the network
 	localTalk *localTalkPort
+	udp       *localtalk.UDP
 
 	commandChannel chan command
 
@@ -224,6 +227,15 @@ func newMac(config *Configuration, r *storage.Rom, disks []storage.BlockDisk,
 
 	if config.AppleTalk != "" {
 		m.localTalk = newLocalTalkPort(mm.scc)
+
+		network := config.localTalkNetwork
+		if network == nil {
+			network = localtalk.NewNetwork()
+		}
+		m.udp, err = m.localTalk.joinNetwork(network, config.AppleTalk)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	m.cpu = iz68000.NewM68000(mm)

@@ -138,6 +138,10 @@ func (m *Mac) executeCommands() bool {
 						fmt.Println(err)
 					}
 				}
+				// The machine leaves the LocalTalk of the local network
+				if m.udp != nil {
+					m.udp.Close()
+				}
 				// And so is what the machine wrote to a diskette whose
 				// motor had not stopped yet, which is when it is written
 				// back otherwise

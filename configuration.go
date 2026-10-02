@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/ivanizag/izmac/localtalk"
 	"github.com/ivanizag/izmac/scsi"
 	"github.com/ivanizag/izmac/storage"
 )
@@ -78,10 +79,16 @@ type Configuration struct {
 	/*
 		AppleTalk turns AppleTalk on, on the printer port, and says what the
 		LocalTalk network on the other end of it is: appleTalkLocal for
-		none but what izmac itself puts there. Empty is AppleTalk off,
-		which is what izmac has always started the machine with.
+		none but what izmac itself puts there, appleTalkHost for the other
+		izmacs on this computer, appleTalkUDP for the local network. Empty
+		is AppleTalk off, which is what izmac has always started the
+		machine with.
 	*/
 	AppleTalk string
+
+	// localTalkNetwork is the network the printer port goes on, made for
+	// the machine when nil. It is how a test puts two machines on one.
+	localTalkNetwork *localtalk.Network
 
 	// PrinterFile is where the printer writes: the file the raw mode
 	// appends to, or the prefix of the pages the ImageWriter draws. Empty
@@ -452,7 +459,10 @@ func (c *Configuration) AddFlags(fs *flag.FlagSet) {
 			"port, or the modem port when AppleTalk is on")
 	fs.StringVar(&c.AppleTalk, "appletalk", c.AppleTalk,
 		"turn AppleTalk on, on the printer port: '"+appleTalkLocal+
-			"' for a LocalTalk network with nothing else on it")
+			"' for a LocalTalk network with nothing else on it, '"+
+			appleTalkHost+"' for one with the other izmacs on this "+
+			"computer, '"+appleTalkUDP+"' for the LocalTalk over UDP of "+
+			"the local network, where other izmacs and Mini vMacs are")
 	fs.StringVar(&c.PrinterFile, "printerfile", c.PrinterFile,
 		"where the printer writes: the file the raw mode appends to, or "+
 			"the prefix of the page images. Each mode has its own default")
@@ -552,9 +562,10 @@ func (c *Configuration) validatePrinter() error {
 	}
 
 	switch c.AppleTalk {
-	case "", appleTalkLocal:
+	case "", appleTalkLocal, appleTalkHost, appleTalkUDP:
 	default:
-		return fmt.Errorf("unknown AppleTalk network %q, use %v", c.AppleTalk, appleTalkLocal)
+		return fmt.Errorf("unknown AppleTalk network %q, use %v, %v or %v",
+			c.AppleTalk, appleTalkLocal, appleTalkHost, appleTalkUDP)
 	}
 
 	/*

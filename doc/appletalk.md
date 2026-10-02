@@ -14,8 +14,43 @@ AppleTalk is off unless you ask for it:
 izmac -appletalk local System.img
 ```
 
-`local` is a LocalTalk network with nothing on it but this machine. It is what
-lets AppleTalk be turned on at all, and the base the rest is built on.
+`local` is a LocalTalk network with nothing on it but this machine. `host`
+puts it on a LocalTalk with the other izmacs on this computer, and `udp` on
+the LocalTalk of your local network:
+
+```bash
+izmac -appletalk host System.img
+izmac -appletalk udp System.img
+```
+
+## Other machines
+
+With `udp` the machine is on LocalTalk over UDP, the way Mini vMac 37 and later
+do it: every frame goes to the multicast group `239.192.76.84`, port `1954`,
+and everything listening there is on the same LocalTalk. That is other izmacs,
+on this computer or another one on the same network, and Mini vMacs. Through a
+bridge such as [MultiTalk](https://github.com/sfiera/multitalk) or TashRouter
+it is also EtherTalk, a netatalk file server, and real Macintoshes on real
+LocalTalk.
+
+Two izmacs on one computer need a disk image each: two machines writing to the
+same file corrupt it.
+
+The first time, macOS asks whether izmac may accept incoming network
+connections. Say yes: the frames of the other machines come in that way, and
+without them each machine is alone on its network. Some networks do not carry
+multicast between computers at all, a guest Wi-Fi among them, and a firewall
+managed by someone else may keep it from leaving the computer. When frames do
+not get out, izmac says so once, and the machine goes on alone.
+
+`host` is the same LocalTalk over UDP kept inside the computer, on its
+loopback interface. It reaches every izmac started with `host` on the same
+computer and nothing else, and works where `udp` cannot: no firewall stands
+between a computer and itself.
+
+The LocalTalk handshake, the RTS and CTS before every frame to one node, never
+crosses the network. It has to be answered within 200µs, which no network
+does, so each machine answers it for itself, as Mini vMac does.
 
 ## What changes
 
