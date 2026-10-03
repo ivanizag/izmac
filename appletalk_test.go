@@ -121,6 +121,88 @@ func TestAFrameFromTheNetworkReachesTheWireOnPoll(t *testing.T) {
 	}
 }
 
+// countRts counts the lapRTS frames in what reached the FIFO, each followed by
+// its two bytes of CRC
+func countRts(bytes []uint8) int {
+	n := 0
+	for i := 0; i+2 < len(bytes); i++ {
+		if bytes[i] == 9 && bytes[i+1] == 0x20 && bytes[i+2] == lapRts {
+			n++
+		}
+	}
+	return n
+}
+
+/*
+A frame for the machine is offered first, with the lapRTS of the station that
+sent it, and only goes on the wire once the machine answers with its lapCTS:
+a machine still busy with the last frame is not given the next one
+*/
+func TestAFrameForTheMachineWaitsForItsCts(t *testing.T) {
+	port, scc, recorder := localTalkTestPort()
+	frame := []uint8{9, 0x20, 0x01, 0x00, 0x05, 0x02, 0x02, 0x04}
+
+	port.deliver(frame)
+	port.poll()
+	if got := received(scc); len(got) < 3 || !bytes.Equal(got[:3], []uint8{9, 0x20, lapRts}) {
+		t.Fatalf("the machine got %x, wanted the lapRTS of node $20", got)
+	}
+
+	port.SendFrame([]uint8{0x20, 9, lapCts})
+	if got := received(scc); len(got) < len(frame) || !bytes.Equal(got[:len(frame)], frame) {
+		t.Errorf("after its lapCTS the machine got %x, wanted the frame", got)
+	}
+	if len(recorder.frames) != 0 {
+		t.Errorf("the lapCTS went on the network: %x", recorder.frames)
+	}
+}
+
+/*
+A lapRTS that is not answered is sent again, as a station whose lapRTS met no
+lapCTS backs off and tries again; but only once the last one has gone by, so
+that lapRTS frames do not pile up for a machine to answer later
+*/
+func TestAnUnansweredOfferIsMadeAgain(t *testing.T) {
+	port, scc, _ := localTalkTestPort()
+	port.deliver([]uint8{9, 0x20, 0x01, 0x00, 0x05, 0x02, 0x02, 0x04})
+
+	// The receiver off, as while the machine transmits: the lapRTS waits
+	writeSccRegister(scc, 3, 0xd0)
+	for i := 0; i < 3*offerLines; i++ {
+		port.poll()
+	}
+	writeSccRegister(scc, 3, 0xdd)
+	if n := countRts(received(scc)); n != 1 {
+		t.Fatalf("%v lapRTS reached the machine for one frame waiting to go, wanted one", n)
+	}
+
+	// It went by unanswered, so a while later there is another
+	for i := 0; i < offerLines; i++ {
+		port.poll()
+	}
+	if n := countRts(received(scc)); n != 1 {
+		t.Errorf("an unanswered lapRTS was followed by %v more, wanted one", n)
+	}
+}
+
+// What is for every station goes on the wire as it comes, with no handshake
+func TestABroadcastIsNotOffered(t *testing.T) {
+	port, scc, _ := localTalkTestPort()
+	frame := []uint8{lapBroadcast, 0x20, 0x01, 0x00, 0x05, 0x02, 0x02, 0x04}
+
+	port.deliver(frame)
+	port.poll()
+	if got := received(scc); len(got) < len(frame) || !bytes.Equal(got[:len(frame)], frame) {
+		t.Errorf("the machine got %x, wanted the broadcast as it is", got)
+	}
+}
+
+// writeSccRegister sets a register of channel B
+func writeSccRegister(scc *component.SCC8530, register uint8, value uint8) {
+	scc.Write(component.ChannelB, true, register)
+	scc.Write(component.ChannelB, true, value)
+}
+
 func TestAppleTalkMovesThePrinterToTheModemPort(t *testing.T) {
 	c := NewConfiguration()
 	if err := c.ParseFlags("izmac", []string{"-rom", "rom.bin", "-appletalk", "local"}, io.Discard); err != nil {

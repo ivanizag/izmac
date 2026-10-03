@@ -193,6 +193,7 @@ func TestTheKeyboardReachesTheShiftRegister(t *testing.T) {
 	}
 
 	v.tick(keyboardSendCycles)
+	listenForTheKeyboard(v)
 	v.tick(keyboardAnswerCycles)
 
 	if v.mos.Read(13)&viaIntShiftRegister == 0 {
@@ -205,5 +206,68 @@ func TestTheKeyboardReachesTheShiftRegister(t *testing.T) {
 	// Reading it clears the flag
 	if v.mos.Read(13)&viaIntShiftRegister != 0 {
 		t.Error("reading the shift register did not clear its interrupt")
+	}
+}
+
+// listenForTheKeyboard does what the ROM does once the command has gone out:
+// the shift register turned around to shift in on the keyboard's clock, and
+// read, which starts it listening
+func listenForTheKeyboard(v *via) {
+	const viaRegAuxControl, shiftInExternally = 11, 0x0c
+	v.poke(viaAddress(viaRegAuxControl), shiftInExternally)
+	v.peek(viaAddress(viaRegShift))
+}
+
+/*
+A Macintosh busy at a higher interrupt level, with AppleTalk most of all,
+turns the shift register around late. The keyboard waits for it, as it waits
+for the data line: an answer clocked in before would be read as the end of
+the command and thrown away, and the key with it.
+*/
+func TestTheKeyboardWaitsForTheMacintoshToListen(t *testing.T) {
+	v, _, _ := newTestVia(t)
+	const a = 0x01
+
+	v.keyboard.putKey(a, true)
+	v.poke(viaAddress(viaRegShift), keyboardCmdInquiry)
+	v.tick(keyboardSendCycles)
+
+	// Long past when the answer was due, with nobody listening
+	for i := 0; i < 10; i++ {
+		v.tick(keyboardAnswerCycles)
+	}
+	if got := v.peek(viaAddress(viaRegShift)); got != keyboardCmdInquiry {
+		t.Fatalf("the shift register holds $%02x before the Macintosh listens, wanted the command", got)
+	}
+
+	listenForTheKeyboard(v)
+	v.tick(1)
+	if v.mos.Read(13)&viaIntShiftRegister == 0 {
+		t.Fatal("the answer did not arrive once the Macintosh listened")
+	}
+	if got := v.peek(viaAddress(viaRegShift)); got != a {
+		t.Errorf("the shift register holds $%02x, wanted the key $%02x", got, a)
+	}
+}
+
+// A command sent while an answer waits gives the key in it back to the
+// keyboard, which reports it again
+func TestAKeyWaitingWhenACommandComesIsNotLost(t *testing.T) {
+	v, _, _ := newTestVia(t)
+	const a = 0x01
+
+	v.keyboard.putKey(a, true)
+	v.poke(viaAddress(viaRegShift), keyboardCmdInquiry)
+	v.tick(keyboardSendCycles)
+	v.tick(keyboardAnswerCycles)
+
+	// The Macintosh gives up on that inquiry and sends another
+	v.poke(viaAddress(viaRegShift), keyboardCmdInquiry)
+	v.tick(keyboardSendCycles)
+	listenForTheKeyboard(v)
+	v.tick(keyboardAnswerCycles)
+
+	if got := v.peek(viaAddress(viaRegShift)); got != a {
+		t.Errorf("the second inquiry got $%02x, wanted the key $%02x", got, a)
 	}
 }

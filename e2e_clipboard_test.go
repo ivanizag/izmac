@@ -1,7 +1,6 @@
 package izmac
 
 import (
-	"os"
 	"testing"
 
 	"github.com/ivanizag/izmac/scrap"
@@ -17,19 +16,25 @@ application will read.
 */
 
 /*
-systemSevenDisk is a second image, of a System 7 rather than the System 6 the
-other end to end tests boot. Nothing in the clipboard asks which System it is
-talking to, and this is what says so.
-
-It takes about twice as long to reach the Finder, and a paste delivered before
+systemSevenBootFrames is how long System 7 takes to reach the Finder from the
+System 7 test disk, about twice what System 6 takes. A paste delivered before
 it gets there goes to whatever asked for an event on the way and is lost when
 the Finder starts. That is not a bug to fix: a paste can only go to the
 application that is running, and during a boot there is not one yet.
 */
-const (
-	systemSevenDisk       = "frontend/macebiten/HD20SC_7.0.vhd"
-	systemSevenBootFrames = 6000
-)
+const systemSevenBootFrames = 6000
+
+// systemSevenMac is the machine on a copy of the System 7 test disk, with the
+// memory System 7 wants, booted to the Finder
+func systemSevenMac(t *testing.T) *Mac {
+	t.Helper()
+	config := testConfig(t)
+	config.DiskFiles = []string{testImage(t, testSystemSevenDisk)}
+	config.RamSizeKb = 4096
+	m := buildTestMac(t, config)
+	m.RunFrames(systemSevenBootFrames)
+	return m
+}
 
 /*
 pasteFrames is how long the machine is given to take a paste. An application
@@ -73,27 +78,12 @@ func TestAPasteReachesTheScrapOfTheSystem(t *testing.T) {
 
 /*
 The same paste on System 7, where an application asks for its events with a
-different trap and the Finder is always running behind whatever else is. The
-image is not in the repository and neither is the other one, so this skips the
-way the rest of the end to end tests do.
+different trap and the Finder is always running behind whatever else is.
+Nothing in the clipboard asks which System it is talking to, and this is what
+says so.
 */
 func TestAPasteReachesTheScrapOfSystemSeven(t *testing.T) {
-	config := realConfig(t)
-	if _, err := os.Stat(systemSevenDisk); err != nil {
-		t.Skipf("%v is not here, this test needs it", systemSevenDisk)
-	}
-
-	config.DiskFiles = []string{systemSevenDisk}
-	config.RamSizeKb = 4096
-	if err := config.Validate(); err != nil {
-		t.Fatal(err)
-	}
-
-	m, err := NewMac(config)
-	if err != nil {
-		t.Fatal(err)
-	}
-	m.RunFrames(systemSevenBootFrames)
+	m := systemSevenMac(t)
 
 	const text = "Pasted from the host"
 	if onTheScrap := pasteOnTheMachine(t, m, text); onTheScrap != text {

@@ -27,6 +27,15 @@ itself with the lapCTS the other node would have sent, and neither RTS nor CTS
 goes on the network, which is what Mini vMac does and what LocalTalk over UDP
 expects. Everything else, the data and the ENQ and ACK of the address
 acquisition, goes on the network as it is.
+
+The other way, the port does the handshake of the station that sent the
+frame. A frame for the machine is offered with a lapRTS, and goes on the wire
+when the machine answers with its lapCTS. That is how LocalTalk keeps a sender
+from going faster than the receiver: a machine still busy with the last frame
+does not answer, and is offered the next one again a little later, as a real
+sender backs off and tries again. Without it a server answering with eight
+packets at once finds the machine with no time for some of them, and ATP takes
+seconds to ask for them again.
 */
 
 const (
@@ -64,10 +73,28 @@ type localTalkPort struct {
 	scc      *component.SCC8530
 	network  localTalkNetwork
 	incoming chan []uint8
+
+	// offered is the frame for the machine waiting for its lapCTS, for
+	// offeredLines scan lines since its lapRTS, the offers-th one
+	offered      []uint8
+	offeredLines int
+	offers       int
 }
 
-// localTalkIncoming is how many frames can wait for the run loop
-const localTalkIncoming = 64
+const (
+	// localTalkIncoming is how many frames can wait for the run loop
+	localTalkIncoming = 64
+
+	/*
+		offerLines is how long the machine has to answer a lapRTS, in scan
+		lines of 45µs: the quiet of the wire before the lapRTS, the lapRTS
+		itself and the 200µs a station waits for the lapCTS, with room to
+		spare. A frame not answered in maxOffers tries is dropped, which is
+		a quarter of a second of a machine with no time for it.
+	*/
+	offerLines = 100
+	maxOffers  = 64
+)
 
 func newLocalTalkPort(scc *component.SCC8530) *localTalkPort {
 	p := &localTalkPort{
@@ -95,6 +122,11 @@ func (p *localTalkPort) SendFrame(frame []uint8) {
 		}
 		return
 	case lapCts:
+		// The machine is ready for the frame it was offered
+		if o := p.offered; o != nil && destination == o[1] && source == o[0] {
+			p.scc.AnswerFrame(component.ChannelB, o)
+			p.offered = nil
+		}
 		return
 	}
 
@@ -148,24 +180,57 @@ func (p *localTalkPort) deliver(frame []uint8) {
 }
 
 /*
-poll puts the frames that arrived on the wire of the chip, from the run loop.
-A lapACK is the answer to the lapENQ the machine sent, in the same dialog, and
-comes at once, as the lapCTS does; everything else after the quiet of the
-wire.
+poll puts the frames that arrived on the wire of the chip, from the run loop,
+once a scan line. A frame for the machine alone is offered with a lapRTS and
+waits for the machine to take it, see offer. A lapACK is the answer to the
+lapENQ the machine sent, in the same dialog, and comes at once, as a lapCTS
+does; broadcasts and the lapENQ of others after the quiet of the wire.
 */
 func (p *localTalkPort) poll() {
+	if p.offered != nil {
+		p.offeredLines++
+		if p.offeredLines < offerLines {
+			return
+		}
+		// Still on its way to the machine, behind other frames
+		if p.scc.FramesWaiting(component.ChannelB) > 0 {
+			p.offeredLines = 0
+			return
+		}
+		// Not answered: the machine is busy, and is asked again
+		if p.offers < maxOffers {
+			p.offer()
+			return
+		}
+		p.offered = nil
+	}
+
 	for {
 		select {
 		case frame := <-p.incoming:
-			if len(frame) >= lapHeaderLength && frame[2] == lapAck {
+			switch {
+			case len(frame) < lapHeaderLength:
+			case frame[2] == lapAck:
 				p.scc.AnswerFrame(component.ChannelB, frame)
-			} else {
+			case frame[0] != lapBroadcast && frame[2] < lapEnq:
+				p.offered, p.offers = frame, 0
+				p.offer()
+				return
+			default:
 				p.scc.ReceiveFrame(component.ChannelB, frame)
 			}
 		default:
 			return
 		}
 	}
+}
+
+// offer puts the lapRTS of the frame being offered on the wire, as its sender
+// would
+func (p *localTalkPort) offer() {
+	p.offers++
+	p.offeredLines = 0
+	p.scc.ReceiveFrame(component.ChannelB, []uint8{p.offered[0], p.offered[1], lapRts})
 }
 
 /*

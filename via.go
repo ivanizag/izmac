@@ -35,6 +35,11 @@ type via struct {
 	mouse    *mouse
 	sound    *sound
 
+	// keyboardAnswer is an answer of the keyboard waiting for the shift
+	// register to listen for it, see tick
+	keyboardAnswer        uint8
+	keyboardAnswerWaiting bool
+
 	// eClockRemainder accumulates the processor cycles not yet passed to
 	// the chip, which is clocked at a tenth of the processor
 	eClockRemainder uint64
@@ -142,8 +147,14 @@ func (v *via) poke(address uint32, value uint8) {
 	case 0, 2:
 		v.applyPortB()
 	case 10:
-		// A byte shifted out is a command for the keyboard
+		// A byte shifted out is a command for the keyboard. An answer
+		// still waiting for the last one goes back to the keyboard first,
+		// so that a key it reported is not lost
 		if command, sent := v.mos.TakeShiftedOut(); sent {
+			if v.keyboardAnswerWaiting {
+				v.keyboardAnswerWaiting = false
+				v.keyboard.giveBack(v.keyboardAnswer)
+			}
 			v.keyboard.command(command)
 		}
 	}
@@ -224,6 +235,13 @@ func (v *via) setMouseQuadrature(x2 bool, y2 bool) {
 tick advances the timers, converting the processor cycles to the E clock the
 chip runs on, and lets the keyboard answer when its byte is due.
 
+The answer waits for the Macintosh to be listening, as the keyboard waits for
+the data line before it clocks a byte in. The interrupt that says the command
+went out is answered by turning the shift register around and reading it,
+and a Macintosh busy at a higher level, with AppleTalk most of all, gets to
+that late: an answer clocked in before would be taken for the command having
+gone out, and the key in it lost.
+
 The port B is read back afterwards because the timer can invert its top bit
 by itself, which is how the machine makes a tone, and that bit is the one
 that enables the sound.
@@ -236,7 +254,11 @@ func (v *via) tick(cycles uint64) {
 		// Macintosh to turn the shift register around and listen
 		v.mos.ShiftOutDone()
 	case answered:
-		v.mos.ShiftIn(answer)
+		v.keyboardAnswer, v.keyboardAnswerWaiting = answer, true
+	}
+	if v.keyboardAnswerWaiting && v.mos.ReadyToShiftIn() {
+		v.keyboardAnswerWaiting = false
+		v.mos.ShiftIn(v.keyboardAnswer)
 	}
 
 	v.eClockRemainder += cycles

@@ -117,37 +117,15 @@ func TestTheMouseMovesThePointer(t *testing.T) {
 }
 
 /*
-realConfig points a configuration at the real ROM and disk image, which are
-not part of the repository, and skips when either is missing. A test that
-wants to change a setting starts here and builds the machine itself.
+realConfig is the machine most end to end tests run: the Plus with a copy of
+the System 6 test disk on the bus, see testImages_test.go. A test that wants
+to change a setting starts here and builds the machine itself.
 */
 func realConfig(t *testing.T) *Configuration {
 	t.Helper()
 
-	const (
-		diskFile = "frontend/macebiten/HD20SC.vhd"
-		romFile  = defaultRomFile
-	)
-
-	for _, name := range []string{diskFile, romFile} {
-		if _, err := os.Stat(name); err != nil {
-			t.Skipf("%v is not here, this test needs it", name)
-		}
-	}
-
-	config := NewConfiguration()
-	config.RomFile = romFile
-	config.DiskFiles = []string{diskFile}
-
-	/*
-		The parameter RAM goes somewhere of this test's own. The default is a
-		file on the working directory that outlives the run, and the clock
-		starts from what it holds: a machine booted from a parameter RAM left
-		by a run an hour ago believes it is an hour ago, which is a test that
-		passes on a clean checkout and fails the second time it is run.
-	*/
-	config.PramFile = filepath.Join(t.TempDir(), "pram.bin")
-
+	config := testConfig(t)
+	config.DiskFiles = []string{testImage(t, testSystemSixDisk)}
 	if err := config.Validate(); err != nil {
 		t.Fatal(err)
 	}
@@ -232,7 +210,7 @@ func TestAKeyPressReachesTheKeyMap(t *testing.T) {
 A menu accelerator, which is the keyboard reaching the Event Manager and not
 only the key map. Command and A together are Select All, and the Finder
 answers by highlighting every icon on the desktop; A on its own moves the
-selection to an icon whose name starts with it, which on a desktop of one
+selection to an icon whose name starts with it, and on a desktop with no such
 icon changes nothing.
 
 The two have to arrive as a chord and not as two keystrokes. The modifiers of
@@ -282,6 +260,12 @@ func TestAMenuAcceleratorReachesTheFinder(t *testing.T) {
 		m.RunFrames(60)
 	}
 
+	// Nothing selected to start with: the Finder comes up with the startup
+	// disk selected, and Select All would have little left to highlight
+	moveMouseTo(t, m, 250, 200)
+	clickMouse(m)
+	m.RunFrames(30)
+
 	before := screen()
 	press("A", false)
 	if plain := changed(before); plain > 100 {
@@ -291,7 +275,9 @@ func TestAMenuAcceleratorReachesTheFinder(t *testing.T) {
 
 	before = screen()
 	press("A", true)
-	if accelerated := changed(before); accelerated < 500 {
+	// Two icons highlighted, the disk and the Trash, each some 128 bytes
+	// of the screen and a name
+	if accelerated := changed(before); accelerated < 200 {
 		t.Errorf("command and A changed %v bytes of the screen, "+
 			"so the Finder never saw the accelerator", accelerated)
 	}
@@ -395,27 +381,10 @@ func TestTwoDisksBothMount(t *testing.T) {
 		qLink    = 0
 	)
 
-	first := "frontend/macebiten/HD20SC.vhd"
-	if _, err := os.Stat(first); err != nil {
-		t.Skipf("%v is not here, this test needs it", first)
-	}
-	if _, err := os.Stat(defaultRomFile); err != nil {
-		t.Skipf("%v is not here, this test needs it", defaultRomFile)
-	}
-
-	second := copyFile(t, first)
-
-	config := NewConfiguration()
-	config.RomFile = defaultRomFile
-	config.DiskFiles = []string{first, second}
-	if err := config.Validate(); err != nil {
-		t.Fatal(err)
-	}
-
-	m, err := NewMac(config)
-	if err != nil {
-		t.Fatal(err)
-	}
+	// The System 6 disk, a bare volume, and the System 7 one, partitioned
+	config := testConfig(t)
+	config.DiskFiles = []string{testImage(t, testSystemSixDisk), testImage(t, testSystemSevenDisk)}
+	m := buildTestMac(t, config)
 	if len(m.GetDisks()) != 2 {
 		t.Fatalf("%v disks reached the bus, wanted 2", len(m.GetDisks()))
 	}

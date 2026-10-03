@@ -109,6 +109,15 @@ func (k *keyboard) putKey(code uint8, down bool) {
 	k.queue = append(k.queue, transition)
 }
 
+// giveBack puts a transition the Macintosh never got back at the head of the
+// queue, to be reported again
+func (k *keyboard) giveBack(transition uint8) {
+	if transition == keyboardNull || transition == keyboardModel || transition == keyboardAck {
+		return
+	}
+	k.queue = append([]uint8{transition}, k.queue...)
+}
+
 // command takes a byte the Macintosh shifted out and works out the answer
 func (k *keyboard) command(value uint8) {
 	switch value {

@@ -1,8 +1,6 @@
 package izmac
 
 import (
-	"os"
-	"path/filepath"
 	"testing"
 )
 
@@ -59,21 +57,7 @@ func TestShutDownOnSystemSix(t *testing.T) {
 }
 
 func TestShutDownOnSystemSeven(t *testing.T) {
-	config := realConfig(t)
-	if _, err := os.Stat(systemSevenDisk); err != nil {
-		t.Skipf("%v is not here, this test needs it", systemSevenDisk)
-	}
-	config.DiskFiles = []string{systemSevenDisk}
-	config.RamSizeKb = 4096
-	if err := config.Validate(); err != nil {
-		t.Fatal(err)
-	}
-
-	m, err := NewMac(config)
-	if err != nil {
-		t.Fatal(err)
-	}
-	m.RunFrames(systemSevenBootFrames)
+	m := systemSevenMac(t)
 
 	// System 7 has a Label menu before Special
 	shutDownFromTheFinder(t, m, 215, 240, 139)
@@ -85,36 +69,12 @@ The MacPaint diskette, with the System 2.0 of 1985 on it, where Shut Down is the
 Finder ejecting the diskette and executing RESET. The machine starts again with
 no disk and waits for one with the flashing question mark, and stays there:
 there is no alert to say it can be switched off, and izmac does not close. The
-diskette is the one izmac fetches when nothing is named, which the ebiten
-frontend keeps on its own directory.
+diskette is the one izmac fetches when nothing is named.
 */
 func TestShutDownOnSystemTwo(t *testing.T) {
-	const paintDisk = "frontend/macebiten/" + defaultDisketteFile
-	data, err := os.ReadFile(paintDisk)
-	if err != nil {
-		t.Skipf("%v is not here, this test needs it", paintDisk)
-	}
-	if _, err := os.Stat(defaultRomFile); err != nil {
-		t.Skipf("%v is not here, this test needs it", defaultRomFile)
-	}
-
-	// A copy, since the Finder writes to the diskette
-	diskette := filepath.Join(t.TempDir(), "paint.dsk")
-	if err := os.WriteFile(diskette, data, 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	config, _ := quietConfiguration()
-	config.RomFile = defaultRomFile
-	config.Diskettes = []string{diskette}
-	config.PramFile = filepath.Join(t.TempDir(), "pram.bin")
-	if err := config.Validate(); err != nil {
-		t.Fatal(err)
-	}
-	m, err := NewMac(config)
-	if err != nil {
-		t.Fatal(err)
-	}
+	config := testConfig(t)
+	config.Diskettes = []string{testImage(t, testPaintDiskette)}
+	m := buildTestMac(t, config)
 	m.RunFrames(bootFrames)
 
 	// Special is where it is on System 6, and Shut Down its last item
