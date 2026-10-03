@@ -1,21 +1,28 @@
 #!/bin/sh
 #
-# Builds the test images from the disks they are taken from, with hfsutils.
-# The images are in the repository, and this is only needed to make them
-# again or change them; see README.md for what is on each.
+# Builds the test images from the disks they are taken from, with hfsutils,
+# python3 and unzip. The images are in the repository, and this is only needed
+# to make them again or change them; see README.md for what is on each.
 #
-# The sources, which are not in the repository, are named by these, with the
-# defaults the images were first built from:
+# The disks they are taken from are downloaded from the Internet Archive, once:
+# they are kept in IZMAC_TEST_IMAGES_CACHE, ~/.cache/izmac-test-images unless
+# it says otherwise, and checked against the SHA-256 they had when the images
+# were first built from them. About 370 MB in all, most of it the supplement
+# disk of the MacPack, which is the one place the File Sharing of System 7.1.2
+# was found ready to copy.
 #
-#   UTILITIES   the Utilities 1 diskette of System 6.0.8, a startup diskette
-#               with AppleShare installed
-#   MACPACK     a MacPack hard disk image with System 6.0.8 and System 7.1.2
-#               folders, TeachText at its root, and the Apple driver
-#   SUPPLEMENT  the MacPack supplement disk, with the System Extras folder
-#   DRIVER      a blank disk formatted by Apple's HD SC Setup
-#   ROM         the Macintosh Plus ROM v3, checksum 4D1F8172
-#   MACPAINT    the MacPaint 1.5 diskette, with System 2.0
-#   PRINTING    the Printing Tools diskette of System 6.0.8
+#   macplus.rom     the Macintosh Plus ROM v3, from the Macintosh ROM archive,
+#                   the same izmac downloads when it is not given one
+#   macpaint.dsk    MacPaint 1.5 with System 2.0, the diskette izmac starts
+#                   when nothing is named
+#   HD20SC.vhd      the hard disk of the MacPack, a pack of software for the
+#                   Macintosh Plus core of MiSTer: System 6.0.8 and System
+#                   7.1.2 folders, and Apple's partition map and driver
+#   Supplement.vhd  the supplement disk of the MacPack, with the System Extras
+#                   of each System, File Sharing among them
+#   DSK.zip         the diskettes of the MacPack, the 800K set of System 6.0.8
+#                   among them: Utilities 1, with AppleShare installed, and
+#                   Printing Tools, with the ImageWriter driver and TeachText
 #
 # After building, boot each once so the Finder makes its desktop file:
 #
@@ -23,17 +30,56 @@
 #
 set -e
 
-UTILITIES=${UTILITIES:-"izmac_sys608 - Utilities 1.dsk"}
-MACPACK=${MACPACK:-frontend/macebiten/HD20SC_7.0.vhd}
-SUPPLEMENT=${SUPPLEMENT:-frontend/macebiten/Supplement.vhd}
-DRIVER=${DRIVER:-izmac_hddriver.rom}
-ROM=${ROM:-izmac_default.rom}
-MACPAINT=${MACPAINT:-frontend/macebiten/izmac_macpaint.dsk}
-PRINTING=${PRINTING:-"izmac_sys608 - Printing Tools.dsk"}
+ARCHIVE=https://archive.org/download
+MACPACK_ZIP=$ARCHIVE/macpack/MacPack-20240308.zip
+CACHE=${IZMAC_TEST_IMAGES_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/izmac-test-images}
 
 OUT=$(cd "$(dirname "$0")" && pwd)
 WORK=$(mktemp -d)
 trap 'humount >/dev/null 2>&1 || true; rm -rf "$WORK"' EXIT
+mkdir -p "$CACHE"
+
+sha256() {
+	if command -v sha256sum >/dev/null; then
+		sha256sum "$1" | cut -d' ' -f1
+	else
+		shasum -a 256 "$1" | cut -d' ' -f1
+	fi
+}
+
+# fetch <name> <url> <sha256>: a source, downloaded into the cache the first
+# time and checked every time, and a copy of it in the work directory, since
+# hfsutils writes to a disk it mounts
+fetch() {
+	if [ ! -f "$CACHE/$1" ]; then
+		echo "Downloading $1 from $2"
+		curl -fL --retry 5 --retry-all-errors --retry-delay 5 -o "$CACHE/$1.part" "$2"
+		mv "$CACHE/$1.part" "$CACHE/$1"
+	fi
+	if [ "$(sha256 "$CACHE/$1")" != "$3" ]; then
+		echo "$CACHE/$1 is not the file the images were built from; delete it to download it again" >&2
+		exit 1
+	fi
+	cp "$CACHE/$1" "$WORK/$1"
+}
+
+fetch macplus.rom "$ARCHIVE/mac_rom_archive_-_as_of_8-19-2011/mac_rom_archive_-_as_of_8-19-2011.zip/4D1F8172%20-%20MacPlus%20v3.ROM" \
+	dd908e2b65772a6b1f0c859c24e9a0d3dcde17b1c6a24f4abd8955846d7895e7
+fetch macpaint.dsk "$ARCHIVE/mac_Paint_2/Paint_2.dsk" \
+	735b0f5c557937f7177ef64b94d85b702074ef59d71f67c6a0c95c099d99e483
+fetch HD20SC.vhd "$MACPACK_ZIP/HD20SC.vhd" \
+	d4b3d697bf36d1fdb5cc1b529ae9bb67ffd34bd8dbd175bac8cdabc6fa2b71ad
+fetch Supplement.vhd "$MACPACK_ZIP/Supplement.vhd" \
+	b42502933e869d68f4a28ec30d2fef1571025f1523bac6d13715b9b5fe4ff2e5
+fetch DSK.zip "$MACPACK_ZIP/DSK.zip" \
+	ff5eca49dd9c3f63bf5e72ba35a897c560cc86e0bb4b93944bb0f5f42f6b2152
+
+MACPACK="$WORK/HD20SC.vhd"
+SUPPLEMENT="$WORK/Supplement.vhd"
+UTILITIES="$WORK/utilities1.dsk"
+PRINTING="$WORK/printing.dsk"
+unzip -p "$WORK/DSK.zip" "800K/System608/Utilities 1.dsk" >"$UTILITIES"
+unzip -p "$WORK/DSK.zip" "800K/System608/Printing Tools.dsk" >"$PRINTING"
 
 # The MacPack disk has its HFS volume after the partition map and the driver,
 # 96 blocks in; the first two blocks of a volume are its boot blocks
@@ -70,7 +116,7 @@ get "$UTILITIES" ":System Folder:Finder" u1-finder
 get "$UTILITIES" ":System Folder:AppleShare" u1-appleshare
 get "$UTILITIES" ":System Folder:DA Handler" u1-dahandler
 get "$UTILITIES" ":System Folder:Multifinder" u1-multifinder
-get "$MACPACK" ":TeachText" teachtext
+get "$PRINTING" ":Apple Color:TeachText" teachtext
 get "$PRINTING" ":ImageWriter" imagewriter
 for f in System Finder MultiFinder General "Startup Device" "Scrapbook File" Backgrounder; do
 	get "$MACPACK" ":System 6.0.8:$f" "s6-$f"
@@ -159,34 +205,32 @@ hmkdir ":Shared"
 hattrib -b "$F"
 humount >/dev/null
 
-# The partition map and the driver of the blank disk, before the volume, with
-# the sizes in the map made the volume's, and its last 32 blocks free
-python3 - "$DRIVER" "$WORK/system7.hfs" "$WORK/system7.img" <<'EOF'
+# The partition map and the driver of the MacPack disk, before the volume, with
+# the sizes in the map made the volume's
+python3 - "$MACPACK" "$WORK/system7.hfs" "$WORK/system7.img" <<'PYTHON'
 import struct, sys
-driver = open(sys.argv[1], 'rb').read()
+macpack = open(sys.argv[1], 'rb').read()
 volume = open(sys.argv[2], 'rb').read()
-start, blocks, free = 96, len(volume) // 512, 32
-disk = bytearray(driver[:start * 512])
-struct.pack_into('>I', disk, 4, start + blocks + free)
+start, blocks = 96, len(volume) // 512
+disk = bytearray(macpack[:start * 512])
+struct.pack_into('>I', disk, 4, start + blocks)
 for i in range(1, 8):
     entry = i * 512
     if disk[entry:entry + 2] != b'PM':
         break
-    kind = bytes(disk[entry + 48:entry + 80]).split(b'\0')[0]
-    if kind == b'Apple_HFS':
+    if bytes(disk[entry + 48:entry + 80]).split(b'\0')[0] == b'Apple_HFS':
         assert struct.unpack('>I', disk[entry + 8:entry + 12])[0] == start
         struct.pack_into('>I', disk, entry + 12, blocks)
         struct.pack_into('>I', disk, entry + 84, blocks)
-    elif kind == b'Apple_Free':
-        struct.pack_into('>I', disk, entry + 8, start + blocks)
-open(sys.argv[3], 'wb').write(disk + volume + bytes(free * 512))
-EOF
+open(sys.argv[3], 'wb').write(disk + volume)
+PYTHON
 
 echo "The rest as they are"
-cp "$ROM" "$WORK/macplus.rom"
-cp "$DRIVER" "$WORK/hddriver.img"
-cp "$MACPAINT" "$WORK/macpaint.dsk"
 cp "$WORK/teachtext" "$WORK/teachtext.bin"
+
+# The partition map and the driver of the MacPack disk, cut short, is what a
+# bare volume borrows its SCSI driver from
+head -c 65536 "$CACHE/HD20SC.vhd" >"$WORK/hddriver.img"
 
 for f in system6.dsk system6.img system7.img macplus.rom hddriver.img macpaint.dsk teachtext.bin; do
 	cp "$WORK/$f" "$OUT/$f"
