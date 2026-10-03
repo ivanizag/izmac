@@ -18,6 +18,7 @@ wrong place, since the task reads the difference between the two as the
 movement of the frame and is free to double it.
 */
 func TestThePointerGoesWhereItIsPut(t *testing.T) {
+	t.Parallel()
 	const (
 		rawMouseV = 0x082c
 		rawMouseH = 0x082e
@@ -89,6 +90,7 @@ written, and the machine puts up a Sad Mac 03FFFF and stops, which is exactly
 what it did.
 */
 func TestPlacingThePointerDoesNotDisturbTheBoot(t *testing.T) {
+	t.Parallel()
 	const rawMouseV = 0x082c
 
 	config := realConfig(t)
@@ -132,6 +134,7 @@ around each are counted before and after. The arrow arriving adds black to the
 box it lands in, and leaving takes it away again, back to what was under it.
 */
 func TestTheCursorIsDrawnWhereThePointerIsPut(t *testing.T) {
+	t.Parallel()
 	// The box is the size of the arrow, which is drawn to the right and
 	// below the position it points at
 	const box = 16
@@ -198,6 +201,7 @@ pull the cursor off it, and the position is written again only when the two
 disagree.
 */
 func TestAPlacedPointerStaysWhereItIs(t *testing.T) {
+	t.Parallel()
 	const rawMouseV = 0x082c
 
 	m := bootedMac(t)
@@ -221,6 +225,7 @@ on reporting are then ignored, and the movement it reports is what moves the
 pointer.
 */
 func TestAMachineSwitchedToAPushedMouseIgnoresPositions(t *testing.T) {
+	t.Parallel()
 	const rawMouseV = 0x082c
 
 	m := bootedMac(t)

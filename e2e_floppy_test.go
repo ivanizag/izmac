@@ -26,6 +26,7 @@ It needs the ROM and the disk image the other end to end tests need, and skips
 without them.
 */
 func TestTheMachineInitializesADiskette(t *testing.T) {
+	t.Parallel()
 	m := bootedMac(t)
 
 	blank := filepath.Join(t.TempDir(), "blank.dsk")

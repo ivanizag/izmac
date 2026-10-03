@@ -25,6 +25,7 @@ of a document's life on the server, a fork opened to read and write, read,
 written, its length set, and closed, from a real application.
 */
 func TestTeachTextSavesToTheSharedFolder(t *testing.T) {
+	t.Parallel()
 	share := t.TempDir()
 	const text = "hello from the host\n"
 	if err := os.WriteFile(filepath.Join(share, "readme.txt"), []uint8(text), 0o644); err != nil {
@@ -135,6 +136,7 @@ it takes them loses some of and asks for again seconds later: the copy is
 waited for for a time a working one takes a fraction of.
 */
 func TestSystemSevenDuplicatesAFileWithAResourceFork(t *testing.T) {
+	t.Parallel()
 	share := t.TempDir()
 	const data = "the data fork"
 	resource := bytes.Repeat([]uint8("resource"), 2381)
@@ -182,6 +184,7 @@ windows again when the volume's date moves, and the host changing a folder
 has to move it, however deep the folder is.
 */
 func TestAFileMadeOnTheHostShowsInTheMachinesWindow(t *testing.T) {
+	t.Parallel()
 	share := t.TempDir()
 	if err := os.WriteFile(filepath.Join(share, "readme.txt"), []uint8("hello\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -252,6 +255,7 @@ The machine that shares runs on a goroutine of its own while the other is
 driven, the two going about as fast, as two machines on one network do.
 */
 func TestTwoMachinesShareADiskWithFileSharing(t *testing.T) {
+	t.Parallel()
 	network := localtalk.NewNetwork()
 
 	config := testConfig(t)
@@ -356,6 +360,7 @@ modifiers going down before the key and up after it, and the keyboard
 layout of the System, all at once.
 */
 func TestWhatIsTypedReachesTheFileAsTheMacintoshWritesIt(t *testing.T) {
+	t.Parallel()
 	const text = "\n"
 	m, file := openOnTheSharedFolder(t, text)
 
@@ -395,6 +400,7 @@ the Finder makes its own way, which the tests of the server one call at a time
 do not show.
 */
 func TestTheFinderWorksOnTheSharedFolder(t *testing.T) {
+	t.Parallel()
 	share := t.TempDir()
 	if err := os.WriteFile(filepath.Join(share, "readme.txt"), []uint8("hello\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -474,6 +480,7 @@ resource fork, read over the network as it runs, from an AppleDouble file on
 the host
 */
 func TestAnApplicationRunsFromTheSharedFolder(t *testing.T) {
+	t.Parallel()
 	share := t.TempDir()
 	unpackMacBinary(t, testImages+"/teachtext.bin", share)
 

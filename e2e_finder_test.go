@@ -22,6 +22,7 @@ the Finder draws its menu bar. That tells the two apart without depending on
 any particular System version or set of icons.
 */
 func TestBootsToTheFinder(t *testing.T) {
+	t.Parallel()
 	m := bootedMac(t)
 
 	if black := blackRatio(m, 2, 16); black > 0.2 {
@@ -67,6 +68,7 @@ Getting the phase backwards still moves the pointer, just the wrong way, and
 nothing short of watching where it goes catches that.
 */
 func TestTheMouseMovesThePointer(t *testing.T) {
+	t.Parallel()
 	const (
 		rawMouseV = 0x082c
 		rawMouseH = 0x082e
@@ -168,6 +170,7 @@ and shifts the rest one place right, so an off by one in the table would
 still register a key press, just the wrong key.
 */
 func TestAKeyPressReachesTheKeyMap(t *testing.T) {
+	t.Parallel()
 	const keyMap = 0x0174
 
 	m := bootedMac(t)
@@ -220,6 +223,7 @@ modifier that is never released turns every letter after it into a command.
 Neither shows up in the key map, which is why this looks at the screen.
 */
 func TestAMenuAcceleratorReachesTheFinder(t *testing.T) {
+	t.Parallel()
 	m := bootedMac(t)
 
 	screen := func() []uint8 {
@@ -295,6 +299,7 @@ how fast it is going, only that each push moves the pointer the way it was
 pushed and by a distance of the right order.
 */
 func TestSmallMouseMovementsTrack(t *testing.T) {
+	t.Parallel()
 	const (
 		rawMouseV = 0x082c
 		rawMouseH = 0x082e
@@ -376,6 +381,7 @@ The queue is walked rather than the screen looked at, because counting icons
 would depend on the System and on where it decided to put them.
 */
 func TestTwoDisksBothMount(t *testing.T) {
+	t.Parallel()
 	const (
 		drvQHead = 0x030a
 		qLink    = 0
@@ -441,6 +447,7 @@ the right bits of the VIA. Any one of them wrong gives silence, which is what
 no sound at all sounds like.
 */
 func TestTheMachineMakesASoundAsItStarts(t *testing.T) {
+	t.Parallel()
 	m := realMac(t)
 
 	sink := &countingSink{}
@@ -492,6 +499,7 @@ What matters is that the year is right and not 1904, which is what a clock
 the ROM failed to read looks like.
 */
 func TestTheMachineKnowsTheTime(t *testing.T) {
+	t.Parallel()
 	const timeGlobal = 0x020c
 
 	m := bootedMac(t)
@@ -521,6 +529,7 @@ The window is tight in both directions here, which is the point of the
 option: forty emulated seconds of booting move this clock not at all.
 */
 func TestTheWallClockReachesTheMachine(t *testing.T) {
+	t.Parallel()
 	const timeGlobal = 0x020c
 
 	config := realConfig(t)
@@ -550,6 +559,7 @@ izmac packs is: no boot blocks, so the ROM would eject it on the way to the
 hard disk. It goes in once the Finder is running instead, and stays.
 */
 func TestADisketteOfApplicationsIsThereOnceTheMachineHasStarted(t *testing.T) {
+	t.Parallel()
 	config := realConfig(t)
 	config.messages = io.Discard
 

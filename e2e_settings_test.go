@@ -11,6 +11,7 @@ the clock, and izmac in the file it is given for it. The ROM puts it in
 SPVolCtl, $0208, as it starts, the volume in the bits 0 to 2.
 */
 func TestASettingIsThereTheNextTime(t *testing.T) {
+	t.Parallel()
 	const spVolCtl, wanted = 0x0208, 6
 	volume := func(m *Mac) uint8 { return m.mm.Peek(spVolCtl) & 7 }
 

@@ -68,6 +68,7 @@ func pasteOnTheMachine(t *testing.T, m *Mac, text string) string {
 
 // A paste on the System the other end to end tests boot
 func TestAPasteReachesTheScrapOfTheSystem(t *testing.T) {
+	t.Parallel()
 	m := bootedMac(t)
 
 	const text = "Pasted from the host"
@@ -83,6 +84,7 @@ Nothing in the clipboard asks which System it is talking to, and this is what
 says so.
 */
 func TestAPasteReachesTheScrapOfSystemSeven(t *testing.T) {
+	t.Parallel()
 	m := systemSevenMac(t)
 
 	const text = "Pasted from the host"
@@ -98,6 +100,7 @@ MacWrite, and the accents are where the Macintosh had them and not where
 Unicode later put them.
 */
 func TestAPasteArrivesAsTheMacintoshWritesText(t *testing.T) {
+	t.Parallel()
 	m := bootedMac(t)
 
 	onTheScrap := pasteOnTheMachine(t, m, "one\ntwo\r\ncafé")
@@ -124,6 +127,7 @@ there rather than an application copying it, which is enough to exercise the
 reading: the Scrap Manager built the block either way.
 */
 func TestTheScrapOfTheSystemReachesTheHost(t *testing.T) {
+	t.Parallel()
 	m := bootedMac(t)
 
 	// Whatever the boot left on the scrap is taken as the starting point,
@@ -204,6 +208,7 @@ that once it is back, a word is typed after it, and the whole of it, copied,
 is the host's when the Finder is in front again.
 */
 func TestTheClipboardCrossesApplicationsBothWays(t *testing.T) {
+	t.Parallel()
 	const finder, teachText = 92, 110
 	m := systemSevenFinder(t)
 	doubleClickAt(t, m, 38, 92)

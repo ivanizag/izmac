@@ -38,6 +38,7 @@ func waitForSwitchOff(t *testing.T, m *Mac) {
 }
 
 func TestShutDownOnSystemSix(t *testing.T) {
+	t.Parallel()
 	m := bootedMac(t)
 	if m.IsReadyToSwitchOff() {
 		t.Fatalf("the machine is ready to be switched off before anyone asked")
@@ -57,6 +58,7 @@ func TestShutDownOnSystemSix(t *testing.T) {
 }
 
 func TestShutDownOnSystemSeven(t *testing.T) {
+	t.Parallel()
 	m := systemSevenMac(t)
 
 	// System 7 has a Label menu before Special
@@ -72,6 +74,7 @@ there is no alert to say it can be switched off, and izmac does not close. The
 diskette is the one izmac fetches when nothing is named.
 */
 func TestShutDownOnSystemTwo(t *testing.T) {
+	t.Parallel()
 	config := testConfig(t)
 	config.Diskettes = []string{testImage(t, testPaintDiskette)}
 	m := buildTestMac(t, config)

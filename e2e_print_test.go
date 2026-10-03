@@ -17,6 +17,7 @@ the line the text of the document is on, and the rest of it as blank as the
 document is.
 */
 func TestTeachTextPrintsAPage(t *testing.T) {
+	t.Parallel()
 	config := realConfig(t)
 	config.Printer = printerImageWriter
 	config.PrinterFile = filepath.Join(t.TempDir(), "page")

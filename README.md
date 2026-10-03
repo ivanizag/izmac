@@ -70,6 +70,19 @@ go run ./frontend/macebiten mydisk.img
 has the rest of it, and `doc/plan.md` has the hardware notes and the design
 decisions behind the emulator.
 
+## Testing it
+
+```bash
+go test ./...          # all of it
+go test -short ./...   # without the end to end tests, in seconds
+```
+
+The end to end tests start a Macintosh Plus on the ROM and the disks in
+[`test_images`](test_images) and take it through what a user does: the Finder,
+the Chooser, printing, AppleShare, two machines on LocalTalk. They run in
+parallel, and take a few minutes. [`test_images/README.md`](test_images/README.md)
+says what is on each disk and how they are made.
+
 ## References
 
 - Inside Macintosh*, volume III, chapter 2, "The Macintosh Hardware",

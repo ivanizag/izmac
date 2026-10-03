@@ -107,6 +107,7 @@ func probes(frames [][]uint8) map[uint8]int {
 }
 
 func TestTheChooserOpensAppleTalkOnSystemSix(t *testing.T) {
+	t.Parallel()
 	m, recorder := appleTalkMac(t, testSystemSixDisk, 1024)
 	m.RunFrames(bootFrames)
 
@@ -141,6 +142,7 @@ come back in through the receiver, its interrupt and the driver's own polling,
 and the driver gives that address up for another
 */
 func TestATakenAddressIsGivenUp(t *testing.T) {
+	t.Parallel()
 	m, _ := appleTalkMac(t, testSystemSixDisk, 1024)
 	taker := &addressTaker{port: m.localTalk}
 	m.localTalk.network = taker
@@ -167,6 +169,7 @@ driver could not be found, before AppleTalk opens; with the extended parameter
 RAM there, the ROM sets it up on the first start and System 7 goes on.
 */
 func TestSystemSevenOpensAppleTalkAsItStarts(t *testing.T) {
+	t.Parallel()
 	m, recorder := appleTalkMac(t, testSystemSevenDisk, 4096)
 	m.RunFrames(systemSevenBootFrames)
 
@@ -241,6 +244,7 @@ machine's own ROM that answers with the lapACK, across the network, which
 makes the second take another: two Macintoshes talking to each other.
 */
 func TestTwoMachinesShareTheNetwork(t *testing.T) {
+	t.Parallel()
 	const hint = 0x33
 	network := localtalk.NewNetwork()
 	a := networkedMac(t, network, hint)
@@ -407,6 +411,7 @@ session and asks the server for its volumes; Quit in that dialog closes the
 session again.
 */
 func TestTheChooserLogsInToTheFileServer(t *testing.T) {
+	t.Parallel()
 	m := fileServerMac(t, t.TempDir())
 	chooseFileServer(t, m)
 	if n := m.fileServer.Sessions(); n != 0 {
@@ -434,6 +439,7 @@ copying both forks and the Finder information into it, all through the
 server, and all ending up on the host
 */
 func TestTheFinderDuplicatesAFileOnTheSharedFolder(t *testing.T) {
+	t.Parallel()
 	share := t.TempDir()
 	const text = "hello from the host\n"
 	if err := os.WriteFile(filepath.Join(share, "readme.txt"), []uint8(text), 0o644); err != nil {
