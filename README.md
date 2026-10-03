@@ -78,10 +78,10 @@ go test -short ./...   # without the end to end tests, in seconds
 ```
 
 The end to end tests start a Macintosh Plus on the ROM and the disks in
-`test_images` and take it through what a user does: the Finder, the Chooser,
-printing, AppleShare, two machines on LocalTalk. They run in parallel, and
-take a few minutes. `test_images/README.md` says what is on each disk and how
-they are made.
+[`test_images`](test_images) and take it through what a user does: the Finder,
+the Chooser, printing, AppleShare, two machines on LocalTalk. They run in
+parallel, and take a few minutes. [`test_images/README.md`](test_images/README.md)
+says what is on each disk and how they are made.
 
 ## References
 
