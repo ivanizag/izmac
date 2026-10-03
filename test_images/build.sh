@@ -15,6 +15,7 @@
 #   DRIVER      a blank disk formatted by Apple's HD SC Setup
 #   ROM         the Macintosh Plus ROM v3, checksum 4D1F8172
 #   MACPAINT    the MacPaint 1.5 diskette, with System 2.0
+#   PRINTING    the Printing Tools diskette of System 6.0.8
 #
 # After building, boot each once so the Finder makes its desktop file:
 #
@@ -28,6 +29,7 @@ SUPPLEMENT=${SUPPLEMENT:-frontend/macebiten/Supplement.vhd}
 DRIVER=${DRIVER:-izmac_hddriver.rom}
 ROM=${ROM:-izmac_default.rom}
 MACPAINT=${MACPAINT:-frontend/macebiten/izmac_macpaint.dsk}
+PRINTING=${PRINTING:-"izmac_sys608 - Printing Tools.dsk"}
 
 OUT=$(cd "$(dirname "$0")" && pwd)
 WORK=$(mktemp -d)
@@ -69,6 +71,7 @@ get "$UTILITIES" ":System Folder:AppleShare" u1-appleshare
 get "$UTILITIES" ":System Folder:DA Handler" u1-dahandler
 get "$UTILITIES" ":System Folder:Multifinder" u1-multifinder
 get "$MACPACK" ":TeachText" teachtext
+get "$PRINTING" ":ImageWriter" imagewriter
 for f in System Finder MultiFinder General "Startup Device" "Scrapbook File" Backgrounder; do
 	get "$MACPACK" ":System 6.0.8:$f" "s6-$f"
 done
@@ -119,6 +122,7 @@ hmkdir ":System Folder"
 for f in System Finder MultiFinder General "Startup Device" "Scrapbook File" Backgrounder; do
 	put ":System Folder:$f" "s6-$f"
 done
+put ":System Folder:ImageWriter" imagewriter
 put ":TeachText" teachtext
 text ":Read Me" "This is a text file on the System 6 test disk."
 hmkdir ":Empty Folder"
@@ -182,8 +186,9 @@ echo "The rest as they are"
 cp "$ROM" "$WORK/macplus.rom"
 cp "$DRIVER" "$WORK/hddriver.img"
 cp "$MACPAINT" "$WORK/macpaint.dsk"
+cp "$WORK/teachtext" "$WORK/teachtext.bin"
 
-for f in system6.dsk system6.img system7.img macplus.rom hddriver.img macpaint.dsk; do
+for f in system6.dsk system6.img system7.img macplus.rom hddriver.img macpaint.dsk teachtext.bin; do
 	cp "$WORK/$f" "$OUT/$f"
 	chmod 644 "$OUT/$f"
 done
