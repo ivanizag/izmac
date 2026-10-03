@@ -16,6 +16,12 @@ were made.
 A test never runs a machine on one of them as it is: the Finder writes to its
 disks as it starts, and a run would change the files the next run starts from.
 testImage hands out a copy of the test's own.
+
+The end to end tests take most of the time of the tests, a machine started and
+taken through what it does each: go test -short leaves them out. They run in
+parallel, each machine being of its own, but for what shares something of the
+host: the test of LocalTalk over UDP, whose multicast group the others would
+be heard on, and the one that makes the images.
 */
 const (
 	testImages = "test_images"
@@ -68,7 +74,7 @@ func testImage(t testing.TB, name string) string {
 
 /*
 testConfig is a configuration for a machine on the test images, with nothing
-in its drives yet: the test ROM, the SCSI driver for bare volumes, and the
+in its drives yet, for an end to end test, which -short skips: the test ROM, the SCSI driver for bare volumes, and the
 parameter RAM in a file of the test's own. The default is a file on the
 working directory that outlives the run, and the clock starts from what it
 holds: a machine booted from a parameter RAM left by a run an hour ago
@@ -76,6 +82,9 @@ believes it is an hour ago.
 */
 func testConfig(t testing.TB) *Configuration {
 	t.Helper()
+	if testing.Short() {
+		t.Skip("an end to end test, which -short leaves out")
+	}
 
 	config := NewConfiguration()
 	config.RomFile = testRom

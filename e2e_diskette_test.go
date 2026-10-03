@@ -36,6 +36,7 @@ on the other, the external drive included, and the mouse dragging. What says
 it worked is the image of the diskette it went to, on the host.
 */
 func TestTheFinderCopiesBetweenDiskettes(t *testing.T) {
+	t.Parallel()
 	const text = "copied between diskettes"
 	m := bootedMac(t)
 	source := buildDiskette(t, "Source", &hfs.File{
@@ -93,6 +94,7 @@ own, which goes in once the Finder runs, and the application runs from there,
 which says both of its forks came through.
 */
 func TestAnArchivedApplicationRuns(t *testing.T) {
+	t.Parallel()
 	config := realConfig(t)
 	if err := config.AddFiles([]string{testImage(t, testImages+"/teachtext.bin")}); err != nil {
 		t.Fatal(err)
