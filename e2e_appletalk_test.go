@@ -199,8 +199,19 @@ func pramWithNodeHint(t *testing.T, hint uint8) string {
 // network given
 func networkedMac(t *testing.T, network *localtalk.Network, hint uint8) *Mac {
 	t.Helper()
+	m, err := newNetworkedMac(t, network, hint, appleTalkLocal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return m
+}
+
+// newNetworkedMac is the same on the AppleTalk network asked for, which can
+// fail to be joined
+func newNetworkedMac(t *testing.T, network *localtalk.Network, hint uint8, appleTalk string) (*Mac, error) {
+	t.Helper()
 	config := realConfig(t)
-	config.AppleTalk = appleTalkLocal
+	config.AppleTalk = appleTalk
 	config.PrinterPort = ""
 	config.PramFile = pramWithNodeHint(t, hint)
 	config.localTalkNetwork = network
@@ -208,10 +219,10 @@ func networkedMac(t *testing.T, network *localtalk.Network, hint uint8) *Mac {
 		t.Fatal(err)
 	}
 	m, err := NewMac(config)
-	if err != nil {
-		t.Fatal(err)
+	if err == nil && m.udp != nil {
+		t.Cleanup(func() { m.udp.Close() })
 	}
-	return m
+	return m, err
 }
 
 // runBoth runs two machines side by side, a frame at a time, so that each
@@ -234,7 +245,50 @@ func TestTwoMachinesShareTheNetwork(t *testing.T) {
 	network := localtalk.NewNetwork()
 	a := networkedMac(t, network, hint)
 	b := networkedMac(t, network, hint)
+	if node := secondNode(t, a, b, hint); node == hint {
+		t.Errorf("both machines took node %v: the first did not answer the second's probe", hint)
+	}
+}
 
+/*
+The same, with each machine on a network of its own, as two izmacs started
+with -appletalk host are: what joins them is LocalTalk over UDP on the
+loopback interface, through the sockets of the host. A host that cannot join
+multicast on its loopback skips it.
+
+The answer to a probe is due at once, and through the sockets it comes in the
+time of the host, while the machines run many times faster: now and then it
+arrives after the second machine has done probing. Each try is a new pair of
+machines, and three in a row missing it is a network that does not carry it.
+*/
+func TestTwoMachinesMeetOverTheLoopback(t *testing.T) {
+	const hint = 0x34
+	for try := 0; try < 3; try++ {
+		a, err := newNetworkedMac(t, localtalk.NewNetwork(), hint, appleTalkHost)
+		if err != nil {
+			t.Skipf("LocalTalk over UDP is not available here: %v", err)
+		}
+		b, err := newNetworkedMac(t, localtalk.NewNetwork(), hint, appleTalkHost)
+		if err != nil {
+			t.Skipf("LocalTalk over UDP is not available here: %v", err)
+		}
+		node := secondNode(t, a, b, hint)
+		a.udp.Close()
+		b.udp.Close()
+		if node != hint {
+			return
+		}
+	}
+	t.Errorf("in three tries both machines took node %v: the first never answered the second's probe", hint)
+}
+
+/*
+secondNode boots two machines told to try the same node first, opens the
+Chooser of the first, which takes it, and then the one of the second, which
+probes it and, answered by the first, takes another: the node it takes
+*/
+func secondNode(t *testing.T, a *Mac, b *Mac, hint uint8) uint8 {
+	t.Helper()
 	runBoth(a, b, int(bootFrames))
 	openChooser(t, a)
 	if node := nodeAddress(a); node != hint {
@@ -254,9 +308,7 @@ func TestTwoMachinesShareTheNetwork(t *testing.T) {
 	if node == 0 {
 		t.Fatalf("the second machine took no node")
 	}
-	if node == hint {
-		t.Errorf("both machines took node %v: the first did not answer the second's probe", hint)
-	}
+	return node
 }
 
 // fileServerMac is System 6.0.8 from the test diskette, the one with

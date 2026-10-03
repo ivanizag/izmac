@@ -3,6 +3,7 @@ package izmac
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -245,4 +246,49 @@ func startupVolume(m *Mac) string {
 		return volumes[0]
 	}
 	return ""
+}
+
+/*
+typeKeys types keys by their names, each with the modifiers before it held
+down, as "Shift+1" or "Option+E", one after the other as a hand would
+*/
+func typeKeys(m *Mac, keys ...string) {
+	codes := KeyCodes()
+	for _, key := range keys {
+		parts := strings.Split(key, "+")
+		modifiers, name := parts[:len(parts)-1], parts[len(parts)-1]
+		for _, modifier := range modifiers {
+			m.PutKey(codes[modifier], true)
+			m.RunFrames(6)
+		}
+		pressKey(m, name)
+		for _, modifier := range modifiers {
+			m.PutKey(codes[modifier], false)
+			m.RunFrames(6)
+		}
+	}
+}
+
+/*
+applicationVolume is the name of the volume the application running was
+started from: CurApRefNum at $0900 is the reference number of its resource
+file, which is the offset of its file control block in the table at FCBSPtr,
+$034E, whose field at 20 is the control block of its volume
+*/
+func applicationVolume(m *Mac) string {
+	const curApRefNum, fcbsPtr, fcbVPtr, vcbName = 0x0900, 0x034e, 20, 44
+	readLong := func(address uint32) uint32 {
+		return uint32(m.mm.Peek(address))<<24 | uint32(m.mm.Peek(address+1))<<16 |
+			uint32(m.mm.Peek(address+2))<<8 | uint32(m.mm.Peek(address+3))
+	}
+	ref := uint32(m.mm.Peek(curApRefNum))<<8 | uint32(m.mm.Peek(curApRefNum+1))
+	if ref == 0 {
+		return ""
+	}
+	vcb := readLong(readLong(fcbsPtr) + ref + fcbVPtr)
+	name := make([]uint8, min(int(m.mm.Peek(vcb+vcbName)), 27))
+	for i := range name {
+		name[i] = m.mm.Peek(vcb + vcbName + 1 + uint32(i))
+	}
+	return string(name)
 }

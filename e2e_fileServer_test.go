@@ -310,3 +310,181 @@ func TestTwoMachinesShareADiskWithFileSharing(t *testing.T) {
 		t.Errorf("the machine has %q mounted, wanted its diskette and the other's disk", volumes)
 	}
 }
+
+/*
+openOnTheSharedFolder shares a folder with a text file in it, readme.txt,
+holding the text given, mounts it on System 6 from the test diskette and opens
+the file in TeachText, ready to type at its start
+*/
+func openOnTheSharedFolder(t *testing.T, text string) (*Mac, string) {
+	t.Helper()
+	share := t.TempDir()
+	if err := os.WriteFile(filepath.Join(share, "readme.txt"), []uint8(text), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(share, "Folder"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	m := fileServerMac(t, share)
+	openSharedFolder(t, m)
+	doubleClickAt(t, m, 178, 125)
+	waitForApplication(t, m, "TeachText", 20)
+	m.RunFrames(600)
+	return m, filepath.Join(share, "readme.txt")
+}
+
+// saveAndQuit saves the document TeachText has open and quits it, waiting for
+// the save to reach the host
+func saveAndQuit(t *testing.T, m *Mac, file string, before string) {
+	t.Helper()
+	pressCommand(m, "S")
+	waitUntil(m, 120, func() bool {
+		data, _ := os.ReadFile(file)
+		return string(data) != before
+	})
+	pressCommand(m, "Q")
+	waitForApplication(t, m, "Finder", 60)
+}
+
+/*
+What a hand types with the shift and the option keys, and the punctuation,
+reaches the file as the Macintosh writes text: capitals and symbols from the
+shift, and an e acute from the option and the e, which is a dead key and the
+letter after it, and is $8E in Mac OS Roman. That is the key codes, the
+modifiers going down before the key and up after it, and the keyboard
+layout of the System, all at once.
+*/
+func TestWhatIsTypedReachesTheFileAsTheMacintoshWritesIt(t *testing.T) {
+	const text = "\n"
+	m, file := openOnTheSharedFolder(t, text)
+
+	typeKeys(m, "Shift+H", "I", "Comma", "Space", "C", "A", "F", "Option+E", "E", "Space",
+		"1", "Shift+Equal", "1", "Equal", "2", "Shift+1")
+	saveAndQuit(t, m, file, text)
+
+	const want = "Hi, caf\x8e 1+1=2!" + text
+	if data, _ := os.ReadFile(file); string(data) != want {
+		t.Errorf("the file has %q, wanted %q", data, want)
+	}
+}
+
+// exists tells whether there is a file or a folder on the host
+func exists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+// dragTo drags what is at a place on the screen to another, as a hand does
+func dragTo(t *testing.T, m *Mac, fromH, fromV, toH, toV int16) {
+	t.Helper()
+	moveMouseTo(t, m, fromH, fromV)
+	m.SetMouseButton(true)
+	m.RunFrames(20)
+	moveMouseTo(t, m, (fromH+toH)/2, (fromV+toV)/2)
+	moveMouseTo(t, m, toH, toV)
+	m.RunFrames(20)
+	m.SetMouseButton(false)
+}
+
+/*
+What the Finder does to the files of a volume, done on the shared folder and
+seen on the host: a folder made and named, a file dragged into it, and a
+folder dragged to the Trash and the Trash emptied. Each is a sequence of calls
+the Finder makes its own way, which the tests of the server one call at a time
+do not show.
+*/
+func TestTheFinderWorksOnTheSharedFolder(t *testing.T) {
+	share := t.TempDir()
+	if err := os.WriteFile(filepath.Join(share, "readme.txt"), []uint8("hello\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(share, "Folder"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	m := fileServerMac(t, share)
+	openSharedFolder(t, m)
+
+	// New Folder, and its name typed over the one it comes with
+	pressCommand(m, "N")
+	if !waitUntil(m, 60, func() bool { return exists(filepath.Join(share, "Empty Folder")) }) {
+		t.Fatalf("New Folder made no folder on the host")
+	}
+	m.RunFrames(300)
+	typeText(m, "made")
+	pressKey(m, "Return")
+	if !waitUntil(m, 60, func() bool { return exists(filepath.Join(share, "made")) }) {
+		t.Fatalf("the new folder was not renamed on the host")
+	}
+	m.RunFrames(300)
+
+	// The new folder goes first, at 56,125, and the rest after it
+	dragTo(t, m, 178, 125, 56, 125)
+	moved := filepath.Join(share, "made", "readme.txt")
+	if !waitUntil(m, 60, func() bool { return exists(moved) && !exists(filepath.Join(share, "readme.txt")) }) {
+		t.Fatalf("the file was not moved into the folder on the host")
+	}
+	m.RunFrames(300)
+
+	// The folder to the Trash, and Empty Trash from the Special menu
+	dragTo(t, m, 119, 125, 472, 318)
+	m.RunFrames(600)
+	moveMouseTo(t, m, 185, 10)
+	m.SetMouseButton(true)
+	m.RunFrames(30)
+	moveMouseTo(t, m, 205, 43)
+	m.RunFrames(10)
+	m.SetMouseButton(false)
+	if !waitUntil(m, 60, func() bool { return !exists(filepath.Join(share, "Folder")) }) {
+		t.Errorf("the folder emptied from the Trash is still on the host")
+	}
+	if data, err := os.ReadFile(moved); err != nil || string(data) != "hello\n" {
+		t.Errorf("the moved file has %q, %v", data, err)
+	}
+}
+
+/*
+unpackMacBinary puts the file of a MacBinary archive on the host the way the
+server keeps one: its data fork as the file, and its Finder information and
+resource fork in its AppleDouble file
+*/
+func unpackMacBinary(t *testing.T, archive string, folder string) string {
+	t.Helper()
+	raw, err := os.ReadFile(archive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	name := string(raw[2 : 2+int(raw[1])])
+	dataLength := int(binary.BigEndian.Uint32(raw[83:]))
+	resourceLength := int(binary.BigEndian.Uint32(raw[87:]))
+	resourceStart := 128 + (dataLength+127)/128*128
+
+	file := filepath.Join(folder, name)
+	if err := os.WriteFile(file, raw[128:128+dataLength], 0o644); err != nil {
+		t.Fatal(err)
+	}
+	finder := string(raw[65:73]) + string([]uint8{raw[73], 0})
+	writeAppleDouble(t, file, finder, raw[resourceStart:resourceStart+resourceLength])
+	return file
+}
+
+/*
+An application on the shared folder runs from there: its code is its
+resource fork, read over the network as it runs, from an AppleDouble file on
+the host
+*/
+func TestAnApplicationRunsFromTheSharedFolder(t *testing.T) {
+	share := t.TempDir()
+	unpackMacBinary(t, testImages+"/teachtext.bin", share)
+
+	m := fileServerMac(t, share)
+	openSharedFolder(t, m)
+
+	// The one thing in the window, where the first goes
+	doubleClickAt(t, m, 56, 125)
+	waitForApplication(t, m, "TeachText", 60)
+	waitUntil(m, 20, func() bool { return applicationVolume(m) != "" })
+	if volume := applicationVolume(m); volume != filepath.Base(share) {
+		t.Errorf("TeachText runs from %q, wanted the shared folder, %q", volume, filepath.Base(share))
+	}
+}
