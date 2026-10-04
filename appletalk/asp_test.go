@@ -327,6 +327,31 @@ func (l *frameLog) Receive(frame []uint8) {
 }
 
 /*
+Settling the server's node handles what was sent to it before it returns, so
+its answer is on the network at once, with no waiting in the time of the host:
+a probe for its address is answered by the time Settle is done.
+*/
+func TestSettlingAnswersWhatWasSent(t *testing.T) {
+	network := localtalk.NewNetwork()
+	l := Listen(network, []uint8("Server"), &fakeServer{})
+	defer l.Stop()
+	log := &frameLog{}
+	network.Attach(log)
+
+	address := l.Node().Address()
+	for i := 0; i < 100; i++ {
+		network.Send(log, []uint8{address, 0x09, lapEnq})
+		l.Settle()
+		log.mutex.Lock()
+		answered := len(log.frames) == i+1 && log.frames[i][2] == lapAck
+		log.mutex.Unlock()
+		if !answered {
+			t.Fatalf("probe %v was not answered by the time the node settled", i)
+		}
+	}
+}
+
+/*
 The answer to a write goes before the release of the WriteContinue that got
 its data. A Macintosh that gets the release first is still busy with it when
 the answer comes, and loses that, to wait seconds for a retry.

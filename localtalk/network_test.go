@@ -133,6 +133,69 @@ func meetOverUDP(t *testing.T, loopback bool) {
 	}
 }
 
+/*
+A transport has delivered to another when every frame it queued has come in at the
+other and gone on to its network: what is on the other network then is
+everything sent, with nothing still on the way.
+*/
+func TestDeliveredIsEverythingSentArrived(t *testing.T) {
+	one, two := NewNetwork(), NewNetwork()
+	a, b := newRecorder(), newRecorder()
+	one.Attach(a)
+	two.Attach(b)
+	ua, err := JoinUDP(one, true, nil)
+	if err != nil {
+		t.Skipf("multicast is not available here: %v", err)
+	}
+	defer ua.Close()
+	ub, err := JoinUDP(two, true, nil)
+	if err != nil {
+		t.Skipf("multicast is not available here: %v", err)
+	}
+	defer ub.Close()
+
+	if !ua.Deliver(ub, 0) {
+		t.Fatalf("nothing sent, and not everything arrived")
+	}
+	frame := []uint8{0x20, 0x09, 0x01, 0x00, 0x05, 0x02, 0x02, 0x04}
+	for i := range 10 {
+		one.Send(a, append(append([]uint8(nil), frame...), uint8(i)))
+	}
+	if !ua.Deliver(ub, 2*time.Second) {
+		t.Skip("the frames did not come back from the multicast group, which this host may not let through")
+	}
+	for i := range 10 {
+		if !b.heard(append(append([]uint8(nil), frame...), uint8(i))) {
+			t.Errorf("frame %v was not on the other network when everything had arrived", i)
+		}
+	}
+}
+
+/*
+A frame that never arrives is waited for once: the next wait is for what was
+sent after it, not for it again
+*/
+func TestALostFrameIsNotWaitedForAgain(t *testing.T) {
+	one, two := NewNetwork(), NewNetwork()
+	ua := newUDP(one, 1, func([]uint8) error { return nil }, nil)
+	defer ua.Close()
+	ub := newUDP(two, 2, func([]uint8) error { return nil }, nil)
+	defer ub.Close()
+
+	// Queued, and sent nowhere: lost
+	ua.Receive([]uint8{0x20, 0x09, 0x01, 0x00, 0x05, 0x02, 0x02, 0x04})
+	if ua.Deliver(ub, 10*time.Millisecond) {
+		t.Fatalf("a frame sent nowhere was delivered")
+	}
+	start := time.Now()
+	if !ua.Deliver(ub, time.Second) {
+		t.Errorf("the lost frame was waited for again")
+	}
+	if waited := time.Since(start); waited > 100*time.Millisecond {
+		t.Errorf("the second wait took %v", waited)
+	}
+}
+
 func TestTwoNetworksMeetOverUDP(t *testing.T) {
 	meetOverUDP(t, false)
 }
@@ -159,17 +222,17 @@ func TestTheDatagramIsTheIdAndTheFrame(t *testing.T) {
 	}
 
 	// Another sender's comes in as the frame, our own does not
-	if got, ok := decodeDatagram(data, 0x99); !ok || !bytes.Equal(got, frame) {
-		t.Errorf("another sender's datagram gave %x", got)
+	if got, from, ok := decodeDatagram(data, 0x99); !ok || !bytes.Equal(got, frame) || from != 0x01020304 {
+		t.Errorf("another sender's datagram gave %x from %08x", got, from)
 	}
-	if _, ok := decodeDatagram(data, 0x01020304); ok {
+	if _, _, ok := decodeDatagram(data, 0x01020304); ok {
 		t.Errorf("our own datagram came back in")
 	}
 
 	// A control frame has no data
 	enq := []uint8{0x28, 0x28, 0x81}
 	data, _ = encodeDatagram(enq, 7)
-	if got, ok := decodeDatagram(data, 8); !ok || !bytes.Equal(got, enq) {
+	if got, _, ok := decodeDatagram(data, 8); !ok || !bytes.Equal(got, enq) {
 		t.Errorf("a lapENQ came through as %x", got)
 	}
 }

@@ -134,6 +134,11 @@ func (l *Listener) Sessions() int {
 	return n
 }
 
+// Settle handles every frame waiting for the listener's node, see Node.Settle
+func (l *Listener) Settle() {
+	l.node.Settle()
+}
+
 // Stop takes the server off the network
 func (l *Listener) Stop() {
 	l.node.Stop()
