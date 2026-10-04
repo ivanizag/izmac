@@ -67,6 +67,15 @@ type UDP struct {
 	stopped  chan struct{}
 
 	closing sync.Once
+
+	// queued is how many frames have gone in the queue to be sent, heard
+	// how many have come in from each other transport, by its id, and
+	// lost how many sent to each other one were waited for in vain: what
+	// a program running two on one computer waits on, see Deliver
+	counting sync.Mutex
+	queued   uint64
+	heard    map[uint32]uint64
+	lost     map[uint32]uint64
 }
 
 // newUDP is a transport with the id given, sending with the function given,
@@ -80,6 +89,8 @@ func newUDP(network *Network, id uint32, send func([]uint8) error, warn func(err
 		warn:     warn,
 		stop:     make(chan struct{}),
 		stopped:  make(chan struct{}),
+		heard:    make(map[uint32]uint64),
+		lost:     make(map[uint32]uint64),
 	}
 	go u.sending()
 	return u
@@ -154,9 +165,50 @@ func (u *UDP) Receive(frame []uint8) {
 	}
 	select {
 	case u.outgoing <- data:
+		u.counting.Lock()
+		u.queued++
+		u.counting.Unlock()
 	default:
 	}
 }
+
+/*
+Deliver waits until every frame this transport has queued to send so far has
+come in at another one and gone on to its network, for as long as given, and
+tells whether it did. The two run in the time of the host, and a program
+running two machines on one computer, each as fast as the host can go, calls
+it between frames of the machines: then a frame one machine sends is on the
+other's network before the other runs on, as on a wire, rather than whenever
+the host gets to it.
+
+A datagram can be lost on the way, and then it never arrives: what has not
+arrived when the time is up is taken as lost, and not waited for again.
+*/
+func (u *UDP) Deliver(other *UDP, wait time.Duration) bool {
+	deadline := time.Now().Add(wait)
+	for {
+		u.counting.Lock()
+		queued, lost := u.queued, u.lost[other.id]
+		u.counting.Unlock()
+		other.counting.Lock()
+		heard := other.heard[u.id]
+		other.counting.Unlock()
+
+		if heard+lost >= queued {
+			return true
+		}
+		if time.Now().After(deadline) {
+			u.counting.Lock()
+			u.lost[other.id] = queued - heard
+			u.counting.Unlock()
+			return false
+		}
+		time.Sleep(deliverPoll)
+	}
+}
+
+// deliverPoll is how often Deliver looks again
+const deliverPoll = 50 * time.Microsecond
 
 // sending sends what is queued, until the transport closes
 func (u *UDP) sending() {
@@ -207,15 +259,15 @@ func encodeDatagram(frame []uint8, id uint32) ([]uint8, bool) {
 	return data, err == nil
 }
 
-// decodeDatagram takes the frame out of a datagram, unless it is one of our
-// own coming back or not a frame at all
-func decodeDatagram(data []uint8, own uint32) ([]uint8, bool) {
+// decodeDatagram takes the frame out of a datagram, with the id of its sender,
+// unless it is one of our own coming back or not a frame at all
+func decodeDatagram(data []uint8, own uint32) ([]uint8, uint32, bool) {
 	var packet ltou.Packet
 	if err := ltou.Unmarshal(data, &packet); err != nil || packet.Pid == own {
-		return nil, false
+		return nil, 0, false
 	}
 	frame, err := llap.Marshal(packet.LLAP)
-	return frame, err == nil
+	return frame, packet.Pid, err == nil
 }
 
 // listen hands the frames of the others on the group to the network
@@ -230,8 +282,11 @@ func (u *UDP) listen() {
 			continue
 		}
 
-		if frame, ok := decodeDatagram(buffer[:n], u.id); ok {
+		if frame, from, ok := decodeDatagram(buffer[:n], u.id); ok {
 			u.network.Send(u, frame)
+			u.counting.Lock()
+			u.heard[from]++
+			u.counting.Unlock()
 		}
 	}
 }

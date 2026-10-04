@@ -190,6 +190,27 @@ func (n *Node) do(f func()) {
 	<-done
 }
 
+/*
+Settle handles, on the node's goroutine, every frame already waiting for it,
+and returns once it has: whatever the node answers to them is on the network
+by then. A node runs in the time of the host, and a machine run as fast as the
+host can go runs far ahead of it; a program running both settles the node
+between frames of the machine, so that an answer comes back in the time of
+the machine, as from a server on the same wire.
+*/
+func (n *Node) Settle() {
+	n.do(func() {
+		for {
+			select {
+			case frame := <-n.frames:
+				n.frame(frame)
+			default:
+				return
+			}
+		}
+	})
+}
+
 func (n *Node) run() {
 	defer close(n.stopped)
 	ticker := time.NewTicker(tickInterval)

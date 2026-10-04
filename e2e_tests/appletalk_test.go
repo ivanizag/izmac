@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/ivanizag/izmac"
 	"github.com/ivanizag/izmac/afp"
@@ -272,7 +273,25 @@ func newNetworkedMac(t *testing.T, network *localtalk.Network, hint uint8, apple
 func runBoth(a *izmac.Mac, b *izmac.Mac, frames int) {
 	for i := 0; i < frames; i++ {
 		a.RunFrames(1)
+		delivered(a, b)
 		b.RunFrames(1)
+		delivered(b, a)
+	}
+}
+
+/*
+delivered waits, when two machines are joined over UDP, for what one has sent
+to reach the other, so that it is on the other's network before the other runs
+its next frame, as on a wire. The machines run as fast as the host can go and
+the sockets in the time of the host: without it, an answer the other machine
+gives at once can come back after the one asking has given up waiting, more
+so on a host busy with other tests. A datagram the host lost is waited for a
+second, once.
+*/
+func delivered(from *izmac.Mac, to *izmac.Mac) {
+	a, b := from.LocalTalkUDP(), to.LocalTalkUDP()
+	if a != nil && b != nil {
+		a.Deliver(b, time.Second)
 	}
 }
 
@@ -300,29 +319,23 @@ loopback interface, through the sockets of the host. A host that cannot join
 multicast on its loopback skips it.
 
 The answer to a probe is due at once, and through the sockets it comes in the
-time of the host, while the machines run many times faster: now and then it
-arrives after the second machine has done probing. Each try is a new pair of
-machines, and three in a row missing it is a network that does not carry it.
+time of the host, while the machines run many times faster: runBoth waits for
+what one machine sent to reach the other before the other runs on, as on a
+wire, or the answer could come after the second machine has done probing.
 */
 func TestTwoMachinesMeetOverTheLoopback(t *testing.T) {
 	const hint = 0x34
-	for try := 0; try < 3; try++ {
-		a, err := newNetworkedMac(t, localtalk.NewNetwork(), hint, izmac.AppleTalkHost)
-		if err != nil {
-			t.Skipf("LocalTalk over UDP is not available here: %v", err)
-		}
-		b, err := newNetworkedMac(t, localtalk.NewNetwork(), hint, izmac.AppleTalkHost)
-		if err != nil {
-			t.Skipf("LocalTalk over UDP is not available here: %v", err)
-		}
-		node := secondNode(t, a, b, hint)
-		a.Close()
-		b.Close()
-		if node != hint {
-			return
-		}
+	a, err := newNetworkedMac(t, localtalk.NewNetwork(), hint, izmac.AppleTalkHost)
+	if err != nil {
+		t.Skipf("LocalTalk over UDP is not available here: %v", err)
 	}
-	t.Errorf("in three tries both machines took node %v: the first never answered the second's probe", hint)
+	b, err := newNetworkedMac(t, localtalk.NewNetwork(), hint, izmac.AppleTalkHost)
+	if err != nil {
+		t.Skipf("LocalTalk over UDP is not available here: %v", err)
+	}
+	if node := secondNode(t, a, b, hint); node == hint {
+		t.Errorf("both machines took node %v: the first never answered the second's probe", hint)
+	}
 }
 
 /*

@@ -234,6 +234,16 @@ func (p *localTalkPort) offer() {
 }
 
 /*
+LocalTalkUDP is the transport that joins the machine's LocalTalk to LocalTalk
+over UDP, with AppleTalk on host or udp, and nil otherwise. A program running
+two machines on one computer waits on it between their frames, see
+localtalk.UDP.Deliver.
+*/
+func (m *Mac) LocalTalkUDP() *localtalk.UDP {
+	return m.udp
+}
+
+/*
 shareFolder puts a file server on the network serving a folder of the host,
 named after the host unless given a name, as the Chooser lists it, with the
 folder's name for the volume's

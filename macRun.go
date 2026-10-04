@@ -121,6 +121,13 @@ machine.
 The commands sent to the machine are taken at the start of every frame, as
 the run loop of a frontend takes them: a paste with PasteText, a diskette with
 SendDisketteCommand, and the rest.
+
+The file server of -share, when there is one, is settled at the end of every
+frame: what the machine asked of it during the frame is answered before the
+next one starts. The server runs in the time of the host and the machine,
+here, as fast as the host can go; without this an answer a person would get
+at once could take seconds of the machine's time, more on a busy host, and a
+Finder waiting for it would see the mouse do things it never saw start.
 */
 func (m *Mac) RunFrames(frames uint64) {
 	if !m.started {
@@ -138,6 +145,9 @@ func (m *Mac) RunFrames(frames uint64) {
 			if m.sadMacTrace && m.halt.halted {
 				return
 			}
+		}
+		if m.fileServer != nil {
+			m.fileServer.Settle()
 		}
 	}
 }
