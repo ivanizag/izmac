@@ -52,6 +52,100 @@ The list of activities is linked from the "Things to do" row of
    are not ignored, thanks to the `!doc/activities/images/*/*.png` and `*.gif`
    lines of `.gitignore`.
 
+## Disks and software
+
+**The reader and the generator use the same files.** A page's pictures are
+only true if the reader runs what the generator ran. The generator uses only
+two sources:
+- what izmac downloads by itself: the Plus ROM and the MacPaint diskette;
+- the images committed in `test_images/`.
+
+Anything an activity needs goes in one of those two before the page is
+written.
+
+### Where to look
+
+- **The Internet Archive comes first**, because downloads from it can be
+  pinned and repeated, and readers can get the same file. The images so far
+  come from:
+  - the [MacPack](https://archive.org/details/macpack), a pack of Plus
+    software for the MiSTer core, with a hard disk, a supplement disk and many
+    diskettes;
+  - the [Macintosh ROM
+    archive](https://archive.org/details/mac_rom_archive_-_as_of_8-19-2011);
+  - the [MacPaint diskette](https://archive.org/details/mac_Paint_2).
+
+  Search there by program and version, and look inside the items. Many
+  bundle many disks in one zip, which `build.sh` reads one member at a time.
+- **Most software comes in archives** rather than as disk images: BinHex,
+  MacBinary, StuffIt, zip, 7-Zip. izmac opens these directly ([Disks and
+  archives](../disks.md#archives); StuffIt, 7-Zip and RAR need `unar`). So a
+  reader can often be sent straight to the archived file, as downloaded,
+  without unpacking it first. Use `-persist` when what the Macintosh saves on
+  it must last.
+- **Check that it runs on a Plus.** That means:
+  - the 68000;
+  - at most 4 MB of memory;
+  - System 1 to 7.1;
+  - 400K or 800K diskettes, or SCSI disks.
+
+  Many archived programs need a Mac II, color or a 68020. Try them on izmac
+  before planning an activity around them.
+
+### What we want on them
+
+- **The software of the time, as Apple shipped it**, so the screen looks the
+  way an owner's did. Pick the version a Plus owner would have had for the
+  activity: System 2.0 and MacPaint 1.5 for 1985, System 6 for the late
+  eighties, System 7.1 for networking. Avoid later utilities, extensions and
+  customisations.
+- **The smallest image that works.** A 400K or 800K diskette is best. Use a
+  hard disk only when the software does not fit: System 7 doesn't fit on a
+  diskette the Plus can read.
+- **Only what the activity needs.** Every extra file, folder or desk
+  accessory moves icons and menu items, and both the activities and the e2e
+  tests click on those by position.
+- **Names the reader can follow**, such as *Read Me* and *Shared*. Disk
+  names may be changed during the activity, as *Ada's Disk* is.
+- **Bootable images settled.** Start each bootable image once, so the
+  Finder's desktop file is already on it (`TestSettleTestImages`). Without
+  that, the first start looks different and is slower.
+- **Nothing the reader would have to make.** If an activity needs a
+  prepared disk, prepare it in `build.sh` and commit it. Never ask the reader
+  to use hfsutils or a disk tool.
+
+### Adding a disk to `test_images/`
+
+1. In `test_images/build.sh`, add the source with `fetch`: a name, its
+   `archive.org/download` URL and its SHA-256. Downloads are cached in
+   `~/.cache/izmac-test-images`.
+2. Build the image from it with the hfsutils helpers already there (`get`,
+   `put`, `text`, `blank`). Copy only what is needed.
+3. Run `build.sh`, then the settle step:
+
+   ```bash
+   IZMAC_SETTLE_TEST_IMAGES=1 go test -run TestSettleTestImages .
+   ```
+4. Add a row to the table in `test_images/README.md`, with its size and
+   exactly what is on it.
+5. Add a constant for it in `testImages_test.go`, and run all the tests: a
+   changed image can move what the existing tests look for.
+
+Copyright is not a concern for the files in `test_images/`. They are there
+for testing and for these pages, and their sources are public archives.
+
+### Telling the reader where to get it
+
+- **When izmac downloads the files by itself**, say so, and link the Internet
+  Archive items it gets them from.
+- **When the file is in the repository**, link its page on GitHub and tell
+  the reader to click *Download raw file*.
+- **When the original archive works as it is**, link the Internet Archive
+  item, and say which file in it to download.
+- **Say what to rename the file to**, and **when to make copies**: each
+  running machine needs a disk of its own, because two machines writing to
+  the same file would ruin it.
+
 ## The page
 
 - **Start with the history.** One or two paragraphs on what this was in its
