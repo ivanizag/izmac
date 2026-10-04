@@ -97,6 +97,11 @@ type Configuration struct {
 	// the machine when nil. It is how a test puts two machines on one.
 	localTalkNetwork *localtalk.Network
 
+	// shareServerName is the name the file server of Share goes by, the
+	// host's when it is empty. Only tests set it, for a name that is the
+	// same wherever they run.
+	shareServerName string
+
 	// PrinterFile is where the printer writes: the file the raw mode
 	// appends to, or the prefix of the pages the ImageWriter draws. Empty
 	// takes the default of whichever mode is in use.
