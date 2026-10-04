@@ -60,10 +60,18 @@ If izmac cannot open a file for writing it opens it read only instead, without
 complaining. The machine still boots from it and simply cannot save anything,
 which looks from inside like a disk that refuses every write.
 
-izmac does not make blank hard disks and cannot format one — a raw file of
-zeros has nothing on it for the machine to find. Start from an image that
-somebody already prepared, or make one under the Macintosh with a formatter of
-the period, such as Apple's HD SC Setup, running from a diskette.
+izmac does not make blank hard disks itself, but a file of zeros is one, and
+the Macintosh formats it the way it formatted a new drive: with Apple HD SC
+Setup, from the Utilities diskette of the System. The disk answers what HD SC
+Setup asks of a drive before it lists it, Apple's own mode page among them, so
+it shows up as an Apple drive and can be initialized, given its partitions and
+driver, and mounted.
+
+```bash
+# An empty 20 MB hard disk
+dd if=/dev/zero of=blank.img bs=1048576 count=20
+```
+
 
 ### Images with no SCSI driver on them
 

@@ -66,7 +66,13 @@ const (
 	cmdReadCapacity   = 0x25
 	cmdRead10         = 0x28
 	cmdWrite10        = 0x2a
+	cmdWriteBuffer    = 0x3b
+	cmdReadBuffer     = 0x3c
 )
+
+// bufferSize is the size of the cache READ BUFFER and WRITE BUFFER reach,
+// which a formatter fills and reads back to see that the drive keeps it
+const bufferSize = 64 * 1024
 
 // The status bytes
 const (
@@ -105,6 +111,14 @@ type Disk struct {
 
 	senseKey  uint8
 	senseInfo uint32
+
+	// afterDataOut is what is done with the data out once it has all
+	// arrived: written to the disk, kept in the buffer, or taken and
+	// ignored
+	afterDataOut func()
+
+	// buffer is the drive's cache as WRITE BUFFER leaves it
+	buffer []uint8
 
 	trace bool
 }
@@ -177,7 +191,7 @@ func (t *Disk) putByte(value uint8) {
 			t.index++
 		}
 		if t.index >= len(t.data) {
-			t.completeWrite()
+			t.afterDataOut()
 		}
 	}
 }
@@ -231,7 +245,7 @@ func (t *Disk) execute() {
 		t.sendData(t.capacityData())
 
 	case cmdModeSense6:
-		t.sendData(t.modeSenseData())
+		t.sendData(t.modeSenseData(t.command[2]&0x3f, int(t.command[4])))
 
 	case cmdRead6, cmdRead10:
 		t.read()
@@ -239,7 +253,20 @@ func (t *Disk) execute() {
 	case cmdWrite6, cmdWrite10:
 		t.write()
 
-	case cmdFormatUnit, cmdModeSelect6, cmdStartStopUnit, cmdPreventRemoval:
+	case cmdReadBuffer:
+		t.readBuffer()
+
+	case cmdWriteBuffer:
+		t.writeBuffer()
+
+	case cmdModeSelect6:
+		// The parameters are taken and ignored: a file has no settings
+		t.receive(int(t.command[4]), t.finishGood)
+
+	case cmdFormatUnit:
+		t.formatUnit()
+
+	case cmdStartStopUnit, cmdPreventRemoval:
 		// Accepted and ignored, there is nothing to do to a file
 		t.finishGood()
 
@@ -294,9 +321,36 @@ func (t *Disk) write() {
 	}
 
 	_, count := t.blockAndCount()
-	t.data = make([]uint8, count*storage.BlockSize)
+	t.receive(int(count*storage.BlockSize), t.completeWrite)
+}
+
+// receive moves to the data out phase for as many bytes as given, and does
+// what is given with them once they are all in
+func (t *Disk) receive(length int, then func()) {
+	if length == 0 {
+		then()
+		return
+	}
+	t.data = make([]uint8, length)
 	t.index = 0
+	t.afterDataOut = then
 	t.phase = phaseDataOut
+}
+
+/*
+formatUnit has nothing to do to a file, but with the format data bit set the
+initiator sends a defect list, a header of four bytes with the length of the
+list after it, which has to be taken all the same
+*/
+func (t *Disk) formatUnit() {
+	const formatData = 0x10
+	if t.command[1]&formatData == 0 {
+		t.finishGood()
+		return
+	}
+	t.receive(4, func() {
+		t.receive(int(t.data[2])<<8|int(t.data[3]), t.finishGood)
+	})
 }
 
 func (t *Disk) completeWrite() {
@@ -313,6 +367,67 @@ func (t *Disk) completeWrite() {
 	}
 
 	t.senseKey = senseNoSense
+	t.finishGood()
+}
+
+/*
+The buffer commands, in the modes a formatter uses: 0 for a header with the
+size of the buffer and the data after it, 2 for the data alone and 3 for a
+descriptor of the buffer. The length is the 24 bits at 6 of the block.
+*/
+const (
+	bufferModeHeaderAndData = 0
+	bufferModeData          = 2
+	bufferModeDescriptor    = 3
+)
+
+func (t *Disk) bufferLength() int {
+	return int(t.command[6])<<16 | int(t.command[7])<<8 | int(t.command[8])
+}
+
+func (t *Disk) readBuffer() {
+	if t.buffer == nil {
+		t.buffer = make([]uint8, bufferSize)
+	}
+	capacity := uint32(len(t.buffer))
+	size := []uint8{uint8(capacity >> 16), uint8(capacity >> 8), uint8(capacity)}
+
+	var data []uint8
+	switch t.command[1] & 0x07 {
+	case bufferModeHeaderAndData:
+		data = append(append([]uint8{0}, size...), t.buffer...)
+	case bufferModeData:
+		data = append([]uint8{}, t.buffer...)
+	case bufferModeDescriptor:
+		data = append([]uint8{0}, size...)
+	default:
+		t.fail(senseIllegalRequest)
+		return
+	}
+	if length := t.bufferLength(); length < len(data) {
+		data = data[:length]
+	}
+	t.sendData(data)
+}
+
+func (t *Disk) writeBuffer() {
+	mode := t.command[1] & 0x07
+	if mode != bufferModeHeaderAndData && mode != bufferModeData {
+		t.fail(senseIllegalRequest)
+		return
+	}
+	t.receive(t.bufferLength(), t.completeWriteBuffer)
+}
+
+func (t *Disk) completeWriteBuffer() {
+	if t.buffer == nil {
+		t.buffer = make([]uint8, bufferSize)
+	}
+	data := t.data
+	if t.command[1]&0x07 == bufferModeHeaderAndData {
+		data = data[min(4, len(data)):]
+	}
+	copy(t.buffer, data)
 	t.finishGood()
 }
 
@@ -390,15 +505,86 @@ func (t *Disk) capacityData() []uint8 {
 	}
 }
 
-// modeSenseData is the shortest answer that says the device is not write
-// protected and has no block descriptors worth reading
-func (t *Disk) modeSenseData() []uint8 {
+/*
+modeSenseData is the header that says whether the device is write protected,
+a block descriptor with the number of blocks and their size, and the pages
+asked for, cut to the length the initiator gave. That length is counted on:
+Apple HD SC Setup reads exactly as many bytes as it asked for, so a page left
+out is a formatter waiting for bytes that never come.
+*/
+func (t *Disk) modeSenseData(page uint8, allocation int) []uint8 {
+	const allPages = 0x3f
 	deviceSpecific := uint8(0)
 	if t.disk.IsReadOnly() {
 		deviceSpecific = 0x80 // Write protected
 	}
 
-	return []uint8{3, 0, deviceSpecific, 0}
+	blocks := t.disk.Blocks()
+	data := []uint8{0, 0, deviceSpecific, 8,
+		0, uint8(blocks >> 16), uint8(blocks >> 8), uint8(blocks),
+		0, 0, uint8(storage.BlockSize >> 8), uint8(storage.BlockSize & 0xff)}
+	for _, code := range []uint8{0x01, 0x02, 0x03, 0x04, 0x08, applePage} {
+		if page == code || page == allPages {
+			data = append(data, t.modePage(code)...)
+		}
+	}
+	data[0] = uint8(len(data) - 1)
+
+	if allocation > 0 && allocation < len(data) {
+		data = data[:allocation]
+	}
+	return data
+}
+
+/*
+The geometry the disk says it has. A file has none, but the format and the
+rigid disk pages are asked for, so it is made up the way a drive of the time
+was laid out: 4 heads of 32 sectors a track, and as many cylinders as it
+takes.
+*/
+const (
+	geometryHeads   = 4
+	geometrySectors = 32
+	applePage       = 0x30
+)
+
+/*
+modePage is one page in its standard layout, the code and the length first.
+Apple's own, 30h, holds the words Apple's drives were shipped with: HD SC
+Setup asks every device for it and leaves out of its list any that does not
+have them, which is how it told its own drives from the rest. Drive emulators
+answer it the same way, for the same reason.
+*/
+func (t *Disk) modePage(code uint8) []uint8 {
+	switch code {
+	case 0x01: // Error recovery
+		return []uint8{0x01, 0x0a, 0, 8, 0, 0, 0, 0, 8, 0, 0, 0}
+	case 0x02: // Disconnect and reconnect
+		return []uint8{0x02, 0x0e, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
+	case 0x03: // Format device
+		page := make([]uint8, 24)
+		page[0], page[1] = 0x03, 0x16
+		page[3] = geometryHeads // Tracks a zone
+		page[10], page[11] = 0, geometrySectors
+		page[12], page[13] = uint8(storage.BlockSize>>8), uint8(storage.BlockSize&0xff)
+		page[15] = 1    // Interleave
+		page[20] = 0x40 // Hard sectored
+		return page
+	case 0x04: // Rigid disk geometry
+		cylinders := (t.disk.Blocks() + geometryHeads*geometrySectors - 1) /
+			(geometryHeads * geometrySectors)
+		page := make([]uint8, 24)
+		page[0], page[1] = 0x04, 0x16
+		page[2], page[3], page[4] = uint8(cylinders>>16), uint8(cylinders>>8), uint8(cylinders)
+		page[5] = geometryHeads
+		page[20], page[21] = 0x0e, 0x10 // 3600 revolutions a minute
+		return page
+	case 0x08: // Caching
+		return []uint8{0x08, 0x0a, 0, 0, 0xff, 0xff, 0, 0, 0xff, 0xff, 0xff, 0xff}
+	case applePage:
+		return append([]uint8{applePage, 22}, []uint8("APPLE COMPUTER, INC   ")...)
+	}
+	return nil
 }
 
 // describeCommand names a descriptor block for the trace
@@ -417,6 +603,8 @@ func describeCommand(command []uint8) string {
 		cmdReadCapacity:   "READ CAPACITY",
 		cmdRead10:         "READ(10)",
 		cmdWrite10:        "WRITE(10)",
+		cmdReadBuffer:     "READ BUFFER",
+		cmdWriteBuffer:    "WRITE BUFFER",
 	}
 
 	name, known := names[command[0]]
