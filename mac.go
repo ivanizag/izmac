@@ -243,7 +243,7 @@ func newMac(config *Configuration, r *storage.Rom, disks []storage.BlockDisk,
 		}
 
 		if config.Share != "" {
-			m.fileServer = shareFolder(network, config.Share)
+			m.fileServer = shareFolder(network, config.Share, config.shareServerName)
 		}
 	}
 

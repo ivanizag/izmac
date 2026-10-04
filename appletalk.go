@@ -235,11 +235,13 @@ func (p *localTalkPort) offer() {
 
 /*
 shareFolder puts a file server on the network serving a folder of the host,
-named after the host, as the Chooser lists it, with the folder's name for the
-volume's
+named after the host unless given a name, as the Chooser lists it, with the
+folder's name for the volume's
 */
-func shareFolder(network *localtalk.Network, folder string) *appletalk.Listener {
-	name := serverName()
+func shareFolder(network *localtalk.Network, folder string, name string) *appletalk.Listener {
+	if name == "" {
+		name = serverName()
+	}
 	volume := filepath.Base(filepath.Clean(folder))
 	server := afp.NewServer(name, volume, folder)
 	return appletalk.Listen(network, server.Name(), server)
