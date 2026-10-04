@@ -89,6 +89,13 @@ func framed(screen image.Image, label string) *image.RGBA {
 // which says whose it is when there are two
 func screenshotOf(t *testing.T, m *Mac, activity string, name string, label string) {
 	t.Helper()
+	writeScreenshot(t, m.GetImage(), activity, name, label)
+}
+
+// writeScreenshot writes a screen, taken before, as one of the images of an
+// activity
+func writeScreenshot(t *testing.T, screen image.Image, activity string, name string, label string) {
+	t.Helper()
 	folder := filepath.Join(activityImages, activity)
 	if err := os.MkdirAll(folder, 0o755); err != nil {
 		t.Fatal(err)
@@ -98,7 +105,7 @@ func screenshotOf(t *testing.T, m *Mac, activity string, name string, label stri
 		t.Fatal(err)
 	}
 	defer f.Close()
-	if err := png.Encode(f, framed(m.GetImage(), label)); err != nil {
+	if err := png.Encode(f, framed(screen, label)); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -308,13 +315,23 @@ func macPaintScreenshots(t *testing.T) {
 	m.RunFrames(300)
 
 	// Print Final, and the page the ImageWriter printed
+	// The screen is kept a second at a time while it prints, and the last
+	// one before the page comes out is the one of the page drawn whole
 	chooseFromMenu(t, m, 55, 139)
-	m.RunFrames(300)
-	screenshot(t, m, page, "printing")
 	printed := config.PrinterFile + "_001.png"
-	if !waitUntil(m, 300, func() bool { return exists(printed) }) {
-		t.Fatalf("MacPaint printed nothing")
+	var lastBeforeThePage image.Image
+	for second := 0; !exists(printed); second++ {
+		if second == 300 {
+			t.Fatalf("MacPaint printed nothing")
+		}
+		// The machine draws its screen into the same image every time
+		screen := m.GetImage()
+		kept := image.NewRGBA(screen.Bounds())
+		copy(kept.Pix, screen.Pix)
+		lastBeforeThePage = kept
+		m.RunFrames(60)
 	}
+	writeScreenshot(t, lastBeforeThePage, page, "printing", "")
 	m.RunFrames(600)
 	data, err := os.ReadFile(printed)
 	if err != nil {
