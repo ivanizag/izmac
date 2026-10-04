@@ -177,6 +177,43 @@ func TestTheMacintoshFilesBesideADiskImageGoOnAVolume(t *testing.T) {
 	}
 }
 
+/*
+A DiskCopy image as a Macintosh keeps it: its type says what it is, and it has
+a resource fork with the checksums of the copy, which an application or a
+document would have too. ResEdit's diskette comes in a StuffIt archive like
+this.
+*/
+func TestADiskCopyImageWithAResourceForkIsADiskImage(t *testing.T) {
+	image := make([]uint8, 84+800*1024)
+	copy(image, "\x07ResEdit")
+	image[64+1], image[64+2] = 0x0c, 0x80 // 800K of sectors
+	image[80] = 1                         // an 800K diskette
+	image[82] = 1                         // $0100
+
+	// The ._ file with the Finder information and a resource fork of four
+	// bytes, as macOS zips them
+	const entries = 2
+	header := 26 + 12*entries
+	appleDouble := make([]uint8, header+32+4)
+	copy(appleDouble, "\x00\x05\x16\x07\x00\x02\x00\x00")
+	appleDouble[25] = entries
+	appleDouble[29], appleDouble[33], appleDouble[37] = 9, uint8(header), 32
+	appleDouble[29+12], appleDouble[33+12], appleDouble[37+12] = 2, uint8(header+32), 4
+	copy(appleDouble[header:], "dImgdCpy")
+	copy(appleDouble[header+32:], "ckid")
+
+	archive := writeZip(t, "ResEdit.zip",
+		[]string{"ResEdit.img", "__MACOSX/._ResEdit.img"}, [][]uint8{image, appleDouble})
+
+	c, _ := quietConfiguration()
+	if err := c.AddFiles([]string{archive}); err != nil {
+		t.Fatal(err)
+	}
+	if len(c.Diskettes) != 1 || c.Diskettes[0] != archive+"/ResEdit.img" {
+		t.Errorf("the diskettes are %v, wanted the image itself", c.Diskettes)
+	}
+}
+
 func TestAFolderGoesOnAVolume(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "Documents")
 	if err := os.MkdirAll(filepath.Join(dir, "Letters"), 0o700); err != nil {
