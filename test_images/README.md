@@ -55,7 +55,7 @@ images were made. Then each image is started once, in place:
 
 ```bash
 test_images/build.sh
-IZMAC_SETTLE_TEST_IMAGES=1 go test -run TestSettleTestImages .
+IZMAC_SETTLE_TEST_IMAGES=1 go test -run TestSettleTestImages ./e2e_tests
 ```
 
 The positions the tests click at depend on what is on the disks: a desk

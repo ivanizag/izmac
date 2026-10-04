@@ -48,7 +48,7 @@ func writeZip(t *testing.T, name string, names []string, contents [][]uint8) str
 func quietConfiguration() (*Configuration, *strings.Builder) {
 	c := NewConfiguration()
 	out := &strings.Builder{}
-	c.messages = out
+	c.Messages = out
 	return c, out
 }
 

@@ -64,8 +64,8 @@ type Configuration struct {
 	// host, in both directions
 	Clipboard bool
 
-	// Mouse is how the pointer of the machine is driven, mouseAbsolute or
-	// mouseRelative
+	// Mouse is how the pointer of the machine is driven, MouseAbsolute or
+	// MouseRelative
 	Mouse string
 
 	// Printer is what is on the end of a serial port: none, raw or
@@ -78,9 +78,9 @@ type Configuration struct {
 
 	/*
 		AppleTalk turns AppleTalk on, on the printer port, and says what the
-		LocalTalk network on the other end of it is: appleTalkLocal for
-		none but what izmac itself puts there, appleTalkHost for the other
-		izmacs on this computer, appleTalkUDP for the local network. Empty
+		LocalTalk network on the other end of it is: AppleTalkLocal for
+		none but what izmac itself puts there, AppleTalkHost for the other
+		izmacs on this computer, AppleTalkUDP for the local network. Empty
 		is AppleTalk off, which is what izmac has always started the
 		machine with.
 	*/
@@ -93,14 +93,18 @@ type Configuration struct {
 	*/
 	Share string
 
-	// localTalkNetwork is the network the printer port goes on, made for
-	// the machine when nil. It is how a test puts two machines on one.
-	localTalkNetwork *localtalk.Network
+	/*
+		LocalTalkNetwork is the network the printer port goes on when
+		AppleTalk is on, a new one for the machine when nil. Giving two
+		machines of the same program the same network puts them on one
+		LocalTalk with nothing in between, which is how a program runs two
+		machines that talk to each other.
+	*/
+	LocalTalkNetwork *localtalk.Network
 
-	// shareServerName is the name the file server of Share goes by, the
-	// host's when it is empty. Only tests set it, for a name that is the
-	// same wherever they run.
-	shareServerName string
+	// ShareName is the name the file server of Share goes by in the
+	// Chooser, the host's when it is empty
+	ShareName string
 
 	// PrinterFile is where the printer writes: the file the raw mode
 	// appends to, or the prefix of the pages the ImageWriter draws. Empty
@@ -139,8 +143,10 @@ type Configuration struct {
 	// by the names DiskFiles and Diskettes carry for them
 	memoryImages map[string][]uint8
 
-	// messages is where unpacking the images is reported
-	messages io.Writer
+	// Messages is where what izmac does with the images is reported, such
+	// as the archives it unpacked: the standard output unless told
+	// otherwise, io.Discard for nothing
+	Messages io.Writer
 }
 
 const (
@@ -149,25 +155,25 @@ const (
 	defaultPramFile  = "izmac_pram.bin"
 	defaultRamSizeKb = 1024
 
-	// speedPlus runs at the clock of the real machine, speedFull as fast
+	// SpeedPlus runs at the clock of the real machine, SpeedFull as fast
 	// as the host can go
-	speedPlus = "plus"
-	speedFull = "full"
+	SpeedPlus = "plus"
+	SpeedFull = "full"
 
 	/*
-		mouseAbsolute puts the pointer of the machine where the host has its
+		MouseAbsolute puts the pointer of the machine where the host has its
 		own, which the hardware can not be told and mousePointer.go goes around it
-		to do. mouseRelative pushes the pointer by the movement of the host's,
+		to do. MouseRelative pushes the pointer by the movement of the host's,
 		which is what the mouse of the machine really reports and what leaves
 		a frontend with a pointer to capture.
 	*/
-	mouseAbsolute = "absolute"
-	mouseRelative = "relative"
+	MouseAbsolute = "absolute"
+	MouseRelative = "relative"
 
 	// The two serial ports a printer can be put on, named as the machine's
 	// own software names them
-	printerPortPrinter = "printer"
-	printerPortModem   = "modem"
+	PrinterPortPrinter = "printer"
+	PrinterPortModem   = "modem"
 
 	// defaultScsiDriverFile is where a borrowed SCSI driver is kept, and is
 	// not a ROM at all: it is the front of a disk image, the maps and the
@@ -194,7 +200,7 @@ const (
 
 	/*
 		defaultDisketteURL is MacPaint 1.5, a 400Kb startup diskette with
-		System 2.0 and Finder 2.2 on it, kept at the Internet Archive.
+		System 2.0 and Finder 4.1 on it, kept at the Internet Archive.
 
 		The version matters. The MacPaint 1.0 diskette of the same
 		collection carries the System .97 of January 1984, which is the
@@ -211,14 +217,14 @@ func NewConfiguration() *Configuration {
 	c := &Configuration{
 		PramFile:      defaultPramFile,
 		RamSizeKb:     defaultRamSizeKb,
-		Speed:         speedPlus,
-		Mouse:         mouseAbsolute,
+		Speed:         SpeedPlus,
+		Mouse:         MouseAbsolute,
 		Clipboard:     true,
-		Printer:       printerImageWriter,
+		Printer:       PrinterImageWriter,
 		PrinterPort:   "",
 		disketteFile:  defaultDisketteFile,
 		absoluteMouse: true,
-		messages:      os.Stdout,
+		Messages:      os.Stdout,
 	}
 	c.cycleDurationNs = cycleDurationOf(CPUClockMhz)
 	return c
@@ -456,34 +462,37 @@ func (c *Configuration) AddFlags(fs *flag.FlagSet) {
 			"can be pasted on the host and the other way round. "+
 			"Use -clipboard=false to keep them apart")
 	fs.StringVar(&c.Mouse, "mouse", c.Mouse,
-		"how the mouse is driven: '"+mouseAbsolute+"' puts the pointer of "+
-			"the machine where yours is, '"+mouseRelative+"' pushes it by "+
+		"how the mouse is driven: '"+MouseAbsolute+"' puts the pointer of "+
+			"the machine where yours is, '"+MouseRelative+"' pushes it by "+
 			"the movement of yours, the way the hardware does, and the "+
 			"window captures your pointer to do it")
 	fs.StringVar(&c.Printer, "printer", c.Printer,
-		"what to attach to the serial port: '"+printerNone+"', '"+
-			printerRaw+"' to append every byte sent to a file, or '"+
-			printerImageWriter+"' to draw the pages an ImageWriter II "+
+		"what to attach to the serial port: '"+PrinterNone+"', '"+
+			PrinterRaw+"' to append every byte sent to a file, or '"+
+			PrinterImageWriter+"' to draw the pages an ImageWriter II "+
 			"would print")
 	fs.StringVar(&c.PrinterPort, "printerport", c.PrinterPort,
-		"the serial port the printer is on, '"+printerPortPrinter+
-			"' or '"+printerPortModem+"'. The default is the printer "+
+		"the serial port the printer is on, '"+PrinterPortPrinter+
+			"' or '"+PrinterPortModem+"'. The default is the printer "+
 			"port, or the modem port when AppleTalk is on")
 	fs.StringVar(&c.Share, "share", c.Share,
 		"a folder to serve to the machine as an AppleShare volume, over "+
 			"AppleTalk, which this turns on")
+	fs.StringVar(&c.ShareName, "sharename", c.ShareName,
+		"the name the file server of -share goes by in the Chooser, "+
+			"the name of this computer unless given")
 	fs.StringVar(&c.AppleTalk, "appletalk", c.AppleTalk,
-		"turn AppleTalk on, on the printer port: '"+appleTalkLocal+
+		"turn AppleTalk on, on the printer port: '"+AppleTalkLocal+
 			"' for a LocalTalk network with nothing else on it, '"+
-			appleTalkHost+"' for one with the other izmacs on this "+
-			"computer, '"+appleTalkUDP+"' for the LocalTalk over UDP of "+
+			AppleTalkHost+"' for one with the other izmacs on this "+
+			"computer, '"+AppleTalkUDP+"' for the LocalTalk over UDP of "+
 			"the local network, where other izmacs and Mini vMacs are")
 	fs.StringVar(&c.PrinterFile, "printerfile", c.PrinterFile,
 		"where the printer writes: the file the raw mode appends to, or "+
 			"the prefix of the page images. Each mode has its own default")
 	fs.StringVar(&c.Speed, "speed", c.Speed,
-		"cpu speed in Mhz, '"+speedPlus+"' for the real "+
-			"7.8336Mhz of the machine, '"+speedFull+"' for as fast as "+
+		"cpu speed in Mhz, '"+SpeedPlus+"' for the real "+
+			"7.8336Mhz of the machine, '"+SpeedFull+"' for as fast as "+
 			"possible, or a decimal number")
 	fs.StringVar(&c.Trace, "trace", c.Trace,
 		"comma separated list of tracers to enable: cpu, toolbox, sadmac, scsi, floppy")
@@ -545,13 +554,13 @@ func (c *Configuration) Validate() error {
 // it, whether the pointer is placed or pushed
 func (c *Configuration) parseMouse() error {
 	switch c.Mouse {
-	case mouseAbsolute, "":
+	case MouseAbsolute, "":
 		c.absoluteMouse = true
-	case mouseRelative:
+	case MouseRelative:
 		c.absoluteMouse = false
 	default:
 		return fmt.Errorf("invalid mouse %q, use '%v' or '%v'",
-			c.Mouse, mouseAbsolute, mouseRelative)
+			c.Mouse, MouseAbsolute, MouseRelative)
 	}
 	return nil
 }
@@ -563,17 +572,17 @@ minutes into a session and after the mistake has been forgotten.
 */
 func (c *Configuration) validatePrinter() error {
 	switch c.Printer {
-	case printerNone, "", printerRaw, printerImageWriter:
+	case PrinterNone, "", PrinterRaw, PrinterImageWriter:
 	default:
 		return fmt.Errorf("unknown printer %q, use %v, %v or %v",
-			c.Printer, printerNone, printerRaw, printerImageWriter)
+			c.Printer, PrinterNone, PrinterRaw, PrinterImageWriter)
 	}
 
 	switch c.PrinterPort {
-	case printerPortPrinter, "", printerPortModem:
+	case PrinterPortPrinter, "", PrinterPortModem:
 	default:
 		return fmt.Errorf("unknown serial port %q, use %v or %v",
-			c.PrinterPort, printerPortPrinter, printerPortModem)
+			c.PrinterPort, PrinterPortPrinter, PrinterPortModem)
 	}
 
 	if c.Share != "" {
@@ -582,15 +591,15 @@ func (c *Configuration) validatePrinter() error {
 			return fmt.Errorf("the folder to share, %v, is not a folder", c.Share)
 		}
 		if c.AppleTalk == "" {
-			c.AppleTalk = appleTalkLocal
+			c.AppleTalk = AppleTalkLocal
 		}
 	}
 
 	switch c.AppleTalk {
-	case "", appleTalkLocal, appleTalkHost, appleTalkUDP:
+	case "", AppleTalkLocal, AppleTalkHost, AppleTalkUDP:
 	default:
 		return fmt.Errorf("unknown AppleTalk network %q, use %v, %v or %v",
-			c.AppleTalk, appleTalkLocal, appleTalkHost, appleTalkUDP)
+			c.AppleTalk, AppleTalkLocal, AppleTalkHost, AppleTalkUDP)
 	}
 
 	/*
@@ -599,13 +608,13 @@ func (c *Configuration) validatePrinter() error {
 		on the modem port, as it did on a Macintosh on a network.
 	*/
 	if c.PrinterPort == "" {
-		c.PrinterPort = printerPortPrinter
+		c.PrinterPort = PrinterPortPrinter
 		if c.AppleTalk != "" {
-			c.PrinterPort = printerPortModem
+			c.PrinterPort = PrinterPortModem
 		}
 	}
-	if c.AppleTalk != "" && c.PrinterPort == printerPortPrinter &&
-		c.Printer != printerNone && c.Printer != "" {
+	if c.AppleTalk != "" && c.PrinterPort == PrinterPortPrinter &&
+		c.Printer != PrinterNone && c.Printer != "" {
 		return fmt.Errorf("AppleTalk is on the printer port, so the printer " +
 			"has to go on the modem port: use -printerport modem, or none")
 	}
@@ -622,15 +631,15 @@ and stay where they are relative to the code being run.
 */
 func (c *Configuration) parseSpeed() error {
 	switch c.Speed {
-	case speedPlus, "":
+	case SpeedPlus, "":
 		c.cycleDurationNs = cycleDurationOf(CPUClockMhz)
-	case speedFull:
+	case SpeedFull:
 		c.cycleDurationNs = 0
 	default:
 		mhz, err := strconv.ParseFloat(c.Speed, 64)
 		if err != nil || mhz <= 0 {
 			return fmt.Errorf("invalid speed %q, use '%v', '%v' or a positive number of Mhz",
-				c.Speed, speedPlus, speedFull)
+				c.Speed, SpeedPlus, SpeedFull)
 		}
 		c.cycleDurationNs = cycleDurationOf(mhz)
 	}

@@ -42,7 +42,7 @@
 #
 # After building, boot each once so the Finder makes its desktop file:
 #
-#   IZMAC_SETTLE_TEST_IMAGES=1 go test -run TestSettleTestImages .
+#   IZMAC_SETTLE_TEST_IMAGES=1 go test -run TestSettleTestImages ./e2e_tests
 #
 set -e
 
@@ -305,4 +305,4 @@ for f in system6.dsk system6.img system7.img macplus.rom hddriver.img macpaint.d
 	cp "$WORK/$f" "$OUT/$f"
 	chmod 644 "$OUT/$f"
 done
-echo "Done, now settle them: IZMAC_SETTLE_TEST_IMAGES=1 go test -run TestSettleTestImages ."
+echo "Done, now settle them: IZMAC_SETTLE_TEST_IMAGES=1 go test -run TestSettleTestImages ./e2e_tests"

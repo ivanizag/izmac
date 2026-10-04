@@ -97,8 +97,9 @@ izmac -share ~/Documents/ForTheMac System.img
 ```
 
 It turns AppleTalk on, `local` unless `-appletalk` says otherwise. The server
-is a node of its own on the network, named after your computer, and the folder
-is its one volume, under the folder's name. In the Chooser, pick AppleShare,
+is a node of its own on the network, named after your computer unless
+`-sharename` gives it another name, and the folder is its one volume, under
+the folder's name. In the Chooser, pick AppleShare,
 then the server, and log in as a guest: there are no users and no passwords,
 and anyone who sees the server can use the folder. With `-appletalk host`, that
 is every izmac on this computer, and with `udp` every machine on the LocalTalk

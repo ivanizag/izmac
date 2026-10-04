@@ -42,9 +42,9 @@ const (
 	// appleTalkLocal is a LocalTalk network with nothing on it but what
 	// izmac puts there, appleTalkHost the LocalTalk over UDP of the
 	// izmacs on this computer, and appleTalkUDP that of the local network
-	appleTalkLocal = "local"
-	appleTalkHost  = "host"
-	appleTalkUDP   = "udp"
+	AppleTalkLocal = "local"
+	AppleTalkHost  = "host"
+	AppleTalkUDP   = "udp"
 
 	// The LLAP control frames, by type
 	lapEnq = 0x81
@@ -158,10 +158,10 @@ func (p *localTalkPort) joinNetwork(network *localtalk.Network, appleTalk string
 	network.Attach(p)
 	p.network = networkLink{network: network, port: p}
 
-	if appleTalk != appleTalkUDP && appleTalk != appleTalkHost {
+	if appleTalk != AppleTalkUDP && appleTalk != AppleTalkHost {
 		return nil, nil
 	}
-	return localtalk.JoinUDP(network, appleTalk == appleTalkHost, func(err error) {
+	return localtalk.JoinUDP(network, appleTalk == AppleTalkHost, func(err error) {
 		fmt.Printf("AppleTalk: frames are not getting out to LocalTalk over UDP, "+
 			"the machine is alone on the network: %v\n", err)
 	})

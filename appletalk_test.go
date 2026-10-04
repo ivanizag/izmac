@@ -208,7 +208,7 @@ func TestAppleTalkMovesThePrinterToTheModemPort(t *testing.T) {
 	if err := c.ParseFlags("izmac", []string{"-rom", "rom.bin", "-appletalk", "local"}, io.Discard); err != nil {
 		t.Fatal(err)
 	}
-	if c.PrinterPort != printerPortModem {
+	if c.PrinterPort != PrinterPortModem {
 		t.Errorf("with AppleTalk on the printer is on the %v port, wanted the modem one", c.PrinterPort)
 	}
 
@@ -216,7 +216,7 @@ func TestAppleTalkMovesThePrinterToTheModemPort(t *testing.T) {
 	if err := off.ParseFlags("izmac", []string{"-rom", "rom.bin"}, io.Discard); err != nil {
 		t.Fatal(err)
 	}
-	if off.PrinterPort != printerPortPrinter {
+	if off.PrinterPort != PrinterPortPrinter {
 		t.Errorf("with AppleTalk off the printer is on the %v port", off.PrinterPort)
 	}
 }
@@ -250,7 +250,7 @@ func TestSharingAFolderTurnsAppleTalkOn(t *testing.T) {
 	if err := c.ParseFlags("izmac", []string{"-rom", "rom.bin", "-share", t.TempDir()}, io.Discard); err != nil {
 		t.Fatal(err)
 	}
-	if c.AppleTalk != appleTalkLocal {
+	if c.AppleTalk != AppleTalkLocal {
 		t.Errorf("sharing a folder left AppleTalk as %q", c.AppleTalk)
 	}
 
@@ -260,7 +260,7 @@ func TestSharingAFolderTurnsAppleTalkOn(t *testing.T) {
 		"-appletalk", "udp"}, io.Discard); err != nil {
 		t.Fatal(err)
 	}
-	if udp.AppleTalk != appleTalkUDP {
+	if udp.AppleTalk != AppleTalkUDP {
 		t.Errorf("sharing a folder changed AppleTalk to %q", udp.AppleTalk)
 	}
 }

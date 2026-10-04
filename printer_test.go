@@ -51,7 +51,7 @@ func TestWhatIsPrintedReachesTheFile(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "printed.bin")
 
 	config := NewConfiguration()
-	config.Printer = printerRaw
+	config.Printer = PrinterRaw
 	config.PrinterFile = file
 	m := printerMac(t, config)
 
@@ -72,7 +72,7 @@ func TestAMachineThatDoesNotPrintWritesNothing(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "printed.bin")
 
 	config := NewConfiguration()
-	config.Printer = printerRaw
+	config.Printer = PrinterRaw
 	config.PrinterFile = file
 	printerMac(t, config)
 
@@ -90,7 +90,7 @@ func TestOnlyThePortThePrinterIsOnPrints(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "printed.bin")
 
 	config := NewConfiguration()
-	config.Printer = printerRaw
+	config.Printer = PrinterRaw
 	config.PrinterFile = file
 	m := printerMac(t, config)
 
@@ -114,8 +114,8 @@ func TestThePrinterCanGoOnTheModemPort(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "printed.bin")
 
 	config := NewConfiguration()
-	config.Printer = printerRaw
-	config.PrinterPort = printerPortModem
+	config.Printer = PrinterRaw
+	config.PrinterPort = PrinterPortModem
 	config.PrinterFile = file
 	m := printerMac(t, config)
 
@@ -139,7 +139,7 @@ func TestAPagePrintedThroughTheChipIsWritten(t *testing.T) {
 	prefix := filepath.Join(t.TempDir(), "page")
 
 	config := NewConfiguration()
-	config.Printer = printerImageWriter
+	config.Printer = PrinterImageWriter
 	config.PrinterFile = prefix
 	m := printerMac(t, config)
 
@@ -156,7 +156,7 @@ func TestAPagePrintedThroughTheChipIsWritten(t *testing.T) {
 // one is a byte that goes nowhere rather than a crash
 func TestAMachineCanHaveNoPrinter(t *testing.T) {
 	config := NewConfiguration()
-	config.Printer = printerNone
+	config.Printer = PrinterNone
 	m := printerMac(t, config)
 
 	if m.printer != nil {
@@ -187,13 +187,13 @@ func TestAPortThatIsNotOneIsRefused(t *testing.T) {
 // The summary names the printer, so that a run says what it has on it
 func TestTheSummaryNamesThePrinter(t *testing.T) {
 	config := NewConfiguration()
-	config.Printer = printerImageWriter
+	config.Printer = PrinterImageWriter
 	m := printerMac(t, config)
 
 	named := false
 	for _, line := range m.Summary() {
-		if strings.Contains(line, printerImageWriter) &&
-			strings.Contains(line, printerPortPrinter) {
+		if strings.Contains(line, PrinterImageWriter) &&
+			strings.Contains(line, PrinterPortPrinter) {
 			named = true
 		}
 	}
