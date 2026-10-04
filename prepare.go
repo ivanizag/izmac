@@ -238,8 +238,9 @@ func (c *Configuration) diskImagesIn(unwrapper *unwrap.Unwrapper, filename strin
 		}
 
 		// A file with a resource fork is an application or a document,
-		// whatever its data fork looks like
-		if len(f.Resource) == 0 && storage.IsDiskImage(f.Data) {
+		// whatever its data fork looks like, but for the images DiskCopy
+		// made, which keep their checksums in one
+		if (len(f.Resource) == 0 || f.IsDiskCopyImage()) && storage.IsDiskImage(f.Data) {
 			images = append(images, f)
 		} else {
 			others = append(others, f)

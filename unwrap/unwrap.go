@@ -60,6 +60,15 @@ func (f *File) IsMacFile() bool {
 }
 
 /*
+IsDiskCopyImage tells a file that DiskCopy says is one of its images, by the
+type it gives them. Such a file often has a resource fork too, with the
+checksums and the settings of the copy, and is a disk image all the same.
+*/
+func (f *File) IsDiskCopyImage() bool {
+	return string(f.Type[:]) == "dImg"
+}
+
+/*
 IsClutter tells the files nobody put in an archive on purpose: what the Finder
 and Windows leave in every folder they open, and the desktop databases of the
 volume the files came from, which would only mislead the Finder of a new one.
