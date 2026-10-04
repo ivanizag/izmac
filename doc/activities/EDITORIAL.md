@@ -28,7 +28,8 @@ The list of activities is linked from the "Things to do" row of
    look at every image it makes. Write the text from what the machine really
    does, not from memory of what it did.
 3. **Add a function to the generator**: `<name>Screenshots(t *testing.T)` in
-   `activities_test.go`, run from `TestActivityScreenshots` with `t.Run`. It
+   a file of its own, `activities_<name>_test.go`, run from
+   `TestActivityScreenshots` in `activities_test.go` with `t.Run`. It
    drives the machine with the e2e test helpers, such as:
    - `buildTestMac`, `waitForApplication`, `waitUntil`;
    - `moveMouseTo`, `clickMouse`, `doubleClickAt`, `dragTo`;
@@ -83,6 +84,10 @@ written.
   reader can often be sent straight to the archived file, as downloaded,
   without unpacking it first. Use `-persist` when what the Macintosh saves on
   it must last.
+- **An archive of the Internet Archive often works as it is**, a zip with the
+  scans of the box beside a StuffIt archive of a disk image, say: izmac goes
+  through the layers and leaves out what is not a disk. Try the download
+  itself before repackaging anything, and send the reader to it if it works.
 - **Check that it runs on a Plus.** That means:
   - the 68000;
   - at most 4 MB of memory;
@@ -173,6 +178,10 @@ for testing and for these pages, and their sources are public archives.
   option that matters.
 - **Say when an option's file need not exist yet.** Readers worry about it.
   For example, a `-pram` file is created on the first write.
+- **Dates, prices and names are claims too.** Say only what is sure, or
+  leave it out: who wrote a program, what year it came out, what it cost.
+  Several had to be corrected in the first drafts: a version the Plus
+  "came with", who named the fonts, a printer "twice as slow".
 - **Every claim must be true of what the emulator shows.** Check versions,
   sizes, names and timings on the machine. Remove claims that cannot be
   checked: a "diskette noise" line and a claim about System 7's memory were
@@ -208,6 +217,9 @@ for testing and for these pages, and their sources are public archives.
     sent back in review.
 - **Copy `m.GetImage()` before keeping it.** It returns the same buffer on
   every call, which the machine keeps drawing into.
+- **Some things change on every run, and that is fine** when the picture
+  does not depend on them: the clock of the Alarm Clock and the Control
+  Panel, the time on HyperCard's Home card, where Bolo starts the tank.
 - **Don't take pictures of random things.** The Puzzle shuffles itself
   differently every run, so a picture of a moved tile was dropped. The
   shuffled puzzle stays, but it changes in every regeneration.
@@ -217,6 +229,17 @@ for testing and for these pages, and their sources are public archives.
   - Do things in the order that keeps icons where the text says they are.
 - **Show the result of each important step**, not every step. A picture that
   looks the same as the one before it adds nothing.
+- **The main page groups the activities by theme**, each with a picture
+  320 pixels wide in an `<img>` tag, a link to the page, and a paragraph.
+- **A printed page is kept from its top to half an inch below the printing**
+  (`keepPrintedPage`), outlined, its cut edge in dashes. A whole page of
+  eleven inches with a few lines at the top reads as a picture that did not
+  finish loading.
+- **One picture of one thing.** A GIF that ends on what the next screenshot
+  shows makes the screenshot redundant; drop it, unless the main page uses it
+  as a thumbnail.
+- **One activity per program**, even for short ones such as a game: a page
+  of two programs is two pages.
 - **Keep the main page's thumbnails as PNGs.** `disk-window.png` is still
   generated because `README.md` uses it, even though the page uses a GIF
   there.
@@ -296,6 +319,31 @@ for testing and for these pages, and their sources are public archives.
     from the Goodies menu opens it somewhere else.
   - Print Final has no dialog. It draws the page as it prints, which takes
     about forty seconds.
+- **A double click does not always register** in an application, ResEdit's
+  lists and dialogs for one. Use the menu command for opening instead, or
+  select and click the dialog's button.
+- **The System 6 Finder has no Command-W for a desk accessory**: Command-W
+  is passed to it as a key. Close it with its close box.
+- **A paste from the host** in the generator is `m.startPaste` followed by
+  `pasteFrames` of running: `PasteText` goes through the command channel
+  that only a frontend's loop reads. Many applications, TeachText among them,
+  keep their own clipboard while they run and only read the System's when
+  they start; show a paste where it arrives, in the Finder's Show Clipboard.
+- **Diskettes are put in with `m.InsertDiskette`**, and the swapping a
+  Macintosh of one drive asks for is `swapDiskettes`, which puts the other
+  one in whenever the drive is left empty. The Installer asks for its
+  diskettes by name and does not give a wrong one back, so
+  `feedDiskettes` gives them in the order it asks for them, found by trying.
+- **A file the Mac writes to the host**, a page of the printer or a file on
+  `-share`, is waited for by looking at the host: `waitForPages` runs the
+  machine until no page has come out for twenty seconds.
+- **The share's server is named after the host** unless the configuration's
+  `shareServerName` says otherwise; the generator sets it, so the pictures do
+  not show the name of the computer they were made on.
+- **Exploring a new program is quicker with a throwaway test** that starts a
+  machine and runs a script of clicks, keys and screenshots from a file,
+  with a contact sheet of the screenshots at the end. Keep it out of the
+  commit.
 - **Find coordinates on a screenshot**, then check them in the next image.
   The frame adds 14 pixels on each side, so subtract 14 from coordinates
   measured on a framed image.

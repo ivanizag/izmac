@@ -70,8 +70,6 @@ pages it writes as images.
 
    ![The spray can](images/macpaint/spray-can.gif)
 
-   ![The drawing](images/macpaint/drawing.png)
-
 ## FatBits
 
 6. **Hold the Command key and click with the pencil** on the edge of the oval.
@@ -109,7 +107,7 @@ pages it writes as images.
    ```
 
    and the file is the page as the ImageWriter would have printed it, at 144
-   dots to the inch.
+   dots to the inch. This is its top, where the drawing is:
 
    ![The printed page](images/macpaint/printed-page.png)
 

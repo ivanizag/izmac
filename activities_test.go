@@ -10,10 +10,11 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/ivanizag/izmac/localtalk"
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/basicfont"
 	"golang.org/x/image/math/fixed"
+
+	"github.com/ivanizag/izmac/localtalk"
 )
 
 /*
@@ -149,6 +150,21 @@ func TestActivityScreenshots(t *testing.T) {
 	t.Run("first-steps", firstStepsScreenshots)
 	t.Run("macpaint", macPaintScreenshots)
 	t.Run("file-sharing", fileSharingScreenshots)
+	t.Run("desk-accessories", deskAccessoriesScreenshots)
+	t.Run("multifinder", multiFinderScreenshots)
+	t.Run("floppies", floppiesScreenshots)
+	t.Run("file-server", fileServerScreenshots)
+	t.Run("archives", archivesScreenshots)
+	t.Run("macwrite", macWriteScreenshots)
+	t.Run("spreadsheet", spreadsheetScreenshots)
+	t.Run("basic", basicScreenshots)
+	t.Run("hypercard", hyperCardScreenshots)
+	t.Run("resedit", resEditScreenshots)
+	t.Run("installing", installingScreenshots)
+	t.Run("printing", printingScreenshots)
+	t.Run("systems", systemsScreenshots)
+	t.Run("lode-runner", lodeRunnerScreenshots)
+	t.Run("dark-castle", darkCastleScreenshots)
 }
 
 /*
@@ -432,11 +448,62 @@ func macPaintScreenshots(t *testing.T) {
 	}
 	writeScreenshot(t, drawn, page, "printing", "")
 	m.RunFrames(600)
-	data, err := os.ReadFile(printed)
+	keepPrintedPage(t, printed, page)
+}
+
+/*
+keepPrintedPage keeps the page the ImageWriter printed as one of the images of
+an activity, from its top to half an inch below the last line printed: the
+rest of a page of eleven inches is blank, and shown whole it reads as a
+picture that did not finish. The page is outlined in grey so that it shows as
+paper on a white background, the edge where it is cut short in dashes.
+*/
+func keepPrintedPage(t *testing.T, printed string, page string) {
+	t.Helper()
+	f, err := os.Open(printed)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(activityImages, page, "printed-page.png"), data, 0o644); err != nil {
+	paper, err := png.Decode(f)
+	f.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The last row with ink on it, and half an inch more at 144 dots
+	bounds := paper.Bounds()
+	last := bounds.Min.Y
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			if r, _, _, _ := paper.At(x, y).RGBA(); r < 0x8000 {
+				last = y
+				break
+			}
+		}
+	}
+	bottom := min(last+72, bounds.Max.Y)
+
+	kept := image.NewRGBA(image.Rect(0, 0, bounds.Dx(), bottom-bounds.Min.Y))
+	draw.Draw(kept, kept.Bounds(), paper, bounds.Min, draw.Src)
+	edge := color.Gray{Y: 0xb0}
+	w, h := kept.Bounds().Dx(), kept.Bounds().Dy()
+	for x := 0; x < w; x++ {
+		kept.Set(x, 0, edge)
+		if x/8%2 == 0 {
+			kept.Set(x, h-1, edge)
+		}
+	}
+	for y := 0; y < h; y++ {
+		kept.Set(0, y, edge)
+		kept.Set(w-1, y, edge)
+	}
+
+	out, err := os.Create(filepath.Join(activityImages, page, "printed-page.png"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer out.Close()
+	if err := png.Encode(out, kept); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -822,5 +889,37 @@ func (r *recording) save(t *testing.T, activity string, name string, hold int) {
 	defer f.Close()
 	if err := gif.EncodeAll(f, &gif.GIF{Image: r.frames, Delay: r.delays}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+/*
+typeString types a text as a hand would on the keyboard of the Plus, capitals
+and punctuation with the shift key, and a new line with the return key
+*/
+func typeString(m *Mac, text string) {
+	punctuation := map[rune]string{
+		' ': "Space", '\n': "Return", '\t': "Tab",
+		'.': "Period", ',': "Comma", '\'': "Quote", ';': "Semicolon",
+		'-': "Minus", '=': "Equal", '/': "Slash", '[': "LeftBracket",
+		']': "RightBracket", '\\': "Backslash", '`': "Backquote",
+		'"': "Shift+Quote", ':': "Shift+Semicolon", '!': "Shift+1",
+		'@': "Shift+2", '#': "Shift+3", '$': "Shift+4", '%': "Shift+5",
+		'^': "Shift+6", '&': "Shift+7", '*': "Shift+8", '(': "Shift+9",
+		')': "Shift+0", '_': "Shift+Minus", '+': "Shift+Equal",
+		'?': "Shift+Slash", '<': "Shift+Comma", '>': "Shift+Period",
+		'{': "Shift+LeftBracket", '}': "Shift+RightBracket",
+		'|': "Shift+Backslash", '~': "Shift+Backquote",
+	}
+	for _, r := range text {
+		switch {
+		case r >= 'a' && r <= 'z':
+			typeKeys(m, string(r-'a'+'A'))
+		case r >= 'A' && r <= 'Z':
+			typeKeys(m, "Shift+"+string(r))
+		case r >= '0' && r <= '9':
+			typeKeys(m, string(r))
+		default:
+			typeKeys(m, punctuation[r])
+		}
 	}
 }

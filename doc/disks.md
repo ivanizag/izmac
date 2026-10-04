@@ -72,6 +72,8 @@ driver, and mounted.
 dd if=/dev/zero of=blank.img bs=1048576 count=20
 ```
 
+[Installing System 6 on a hard disk](activities/installing.md) goes through
+it.
 
 ### Images with no SCSI driver on them
 

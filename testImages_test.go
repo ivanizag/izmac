@@ -44,9 +44,31 @@ const (
 	// AppleShare and File Sharing
 	testSystemSevenDisk = testImages + "/system7.img"
 
-	// testPaintDiskette is MacPaint 1.5 with System 2.0 and Finder 2.2 on a
+	// testPaintDiskette is MacPaint 1.5 with System 2.0 and Finder 4.1 on a
 	// 400K diskette
 	testPaintDiskette = testImages + "/macpaint.dsk"
+
+	// testSystemFourDiskette is System 4.1 and the Finder 5.5 on an 800K
+	// diskette
+	testSystemFourDiskette = testImages + "/system41.dsk"
+
+	// The four 800K diskettes System 6.0.8 was sold on, as they were
+	testSystemToolsDiskette   = testImages + "/system-tools.dsk"
+	testUtilitiesOneDiskette  = testImages + "/utilities-1.dsk"
+	testUtilitiesTwoDiskette  = testImages + "/utilities-2.dsk"
+	testPrintingToolsDiskette = testImages + "/printing-tools.dsk"
+
+	// The disks and archives of the activities, each as it was downloaded:
+	// applications of the time on diskettes that start the machine, and
+	// archives as the software sites kept them
+	testMacWriteDiskette  = testImages + "/macwrite.dsk"
+	testMultiplanDiskette = testImages + "/multiplan.dsk"
+	testBasicDiskette     = testImages + "/basic.dsk"
+	testHyperCardDiskette = testImages + "/hypercard.dsk"
+	testResEditArchive    = testImages + "/resedit.sit"
+	testBoloArchive       = testImages + "/bolo.sit"
+	testLodeRunnerDisk    = testImages + "/loderunner.dsk"
+	testDarkCastleDisk    = testImages + "/darkcastle.dsk"
 )
 
 // testImage is a copy of one of the test images, in the test's own directory
@@ -132,6 +154,7 @@ func TestSettleTestImages(t *testing.T) {
 		{testSystemSixDiskette, true, 1024, 4000, 185, 200, 123},
 		{testSystemSixDisk, false, 1024, 3000, 185, 200, 123},
 		{testSystemSevenDisk, false, 4096, 9000, 215, 240, 139},
+		{testSystemFourDiskette, true, 1024, 3000, 185, 200, 139},
 	} {
 		config := testConfig(t)
 		if image.diskette {
