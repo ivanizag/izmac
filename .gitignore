@@ -9,6 +9,8 @@ pram.bin
 # The screenshots the emulator writes are ignored above, the ones the
 # documentation is written around are not
 !doc/*.png
+!doc/activities/images/*/*.png
+!doc/activities/images/*/*.gif
 
 # The images the tests run on are part of the repository, see
 # test_images/README.md

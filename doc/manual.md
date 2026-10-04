@@ -19,6 +19,7 @@ read the first two and stop; the rest is there when you want it.
 | [Command line options](options.md) | every option of both frontends |
 | [Speed, the clock and the tracers](advanced.md) | the emulator's own knobs, and the debugging tools |
 | [When something goes wrong](troubleshooting.md) | the failures worth recognising |
+| [Things to do](activities/README.md) | what using a Macintosh Plus was like, step by step |
 
 ## Installing and running it
 
