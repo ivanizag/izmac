@@ -3,6 +3,8 @@ package localtalk
 import (
 	"bytes"
 	"errors"
+	"math/rand/v2"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -30,6 +32,13 @@ func (r *recorder) received() [][]uint8 {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 	return append([][]uint8(nil), r.frames...)
+}
+
+// heard says whether a frame has reached the station
+func (r *recorder) heard(frame []uint8) bool {
+	return slices.ContainsFunc(r.received(), func(got []uint8) bool {
+		return bytes.Equal(got, frame)
+	})
 }
 
 func TestAFrameReachesEveryOtherStation(t *testing.T) {
@@ -78,6 +87,12 @@ the local network that needs it to carry multicast, which a container, a
 locked down CI machine or a managed firewall may not, and the test skips where
 it can not be joined or nothing comes back. On the loopback interface it
 needs nothing but the computer.
+
+The group is not the test's alone. Every izmac on LocalTalk over UDP is on
+it, and so are the machines of the end to end tests, which run at the same
+time as these in a go test of every package: their frames reach both
+networks too. So the frame sent ends in bytes of its own, and what is looked
+for is that frame, not any.
 */
 func meetOverUDP(t *testing.T, loopback bool) {
 	one, two := NewNetwork(), NewNetwork()
@@ -97,22 +112,24 @@ func meetOverUDP(t *testing.T, loopback bool) {
 	defer ub.Close()
 
 	frame := []uint8{0x20, 0x09, 0x01, 0x00, 0x05, 0x02, 0x02, 0x04}
+	for range 8 {
+		frame = append(frame, uint8(rand.N(256)))
+	}
 	one.Send(a, frame)
 
-	select {
-	case <-b.got:
-	case <-time.After(2 * time.Second):
-		t.Skip("nothing came back from the multicast group, which this host may not let through")
-	}
-
-	if got := b.received(); !bytes.Equal(got[0], frame) {
-		t.Errorf("the other network got %x, wanted %x", got[0], frame)
+	deadline := time.After(2 * time.Second)
+	for !b.heard(frame) {
+		select {
+		case <-b.got:
+		case <-deadline:
+			t.Skip("the frame did not come back from the multicast group, which this host may not let through")
+		}
 	}
 
 	// And the frame did not come back to its own network as from outside
 	time.Sleep(100 * time.Millisecond)
-	if len(a.received()) != 0 {
-		t.Errorf("the sender's network heard its own frame back: %x", a.received())
+	if a.heard(frame) {
+		t.Errorf("the sender's network heard its own frame back")
 	}
 }
 
