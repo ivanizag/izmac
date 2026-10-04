@@ -163,7 +163,11 @@ func firstStepsScreenshots(t *testing.T) {
 	m := buildTestMac(t, config)
 
 	// Switched on, recorded from the first frame to the desktop
+	// Switched on, and recorded from the disk with the question mark that
+	// asks for a disk after the memory test, to the desktop
+	waitForAQuestionMark(t, m)
 	starting := record(m, "")
+	starting.capture(10)
 	for frame := 0; currentApplication(m) != "Finder"; frame += 6 {
 		if frame > 60*60 {
 			t.Fatalf("the Finder did not start")
@@ -175,30 +179,33 @@ func firstStepsScreenshots(t *testing.T) {
 
 	// The diskette opened, recorded: the pointer taken to it, the double
 	// click, and the window coming out of the icon
+	moveMouseTo(t, m, 472, 45)
+	m.RunFrames(30)
 	opening := record(m, "")
 	opening.capture(100)
-	opening.glide(t, 472, 45)
 	opening.doubleClick()
 	opening.run(600, 6)
 	opening.save(t, page, "open-disk", 300)
 	screenshot(t, m, page, "disk-window")
 
-	// The Apple menu, recorded: pulled down, gone over to the bottom and back
-	// up, and let go of outside, which chooses nothing
+	// The Apple menu, recorded: pulled down, gone over to the bottom and
+	// back up to the Puzzle, and let go of outside afterwards, which chooses
+	// nothing
+	moveMouseTo(t, m, 16, 10)
+	m.RunFrames(30)
 	menu := record(m, "")
 	menu.capture(50)
-	menu.glide(t, 16, 10)
 	menu.press(true)
 	menu.run(20, 2)
 	menu.glide(t, 40, 30)
 	menu.glide(t, 40, 170)
 	menu.run(20, 2)
-	menu.glide(t, 40, 60)
-	menu.run(20, 2)
-	menu.glide(t, 300, 250)
-	menu.press(false)
-	menu.run(30, 3)
+	menu.glide(t, 40, 155)
+	menu.run(10, 2)
 	menu.save(t, page, "apple-menu", 200)
+	moveMouseTo(t, m, 300, 250)
+	m.SetMouseButton(false)
+	m.RunFrames(30)
 
 	// About the Finder
 	chooseFromMenu(t, m, 16, 27)
@@ -241,9 +248,10 @@ func firstStepsScreenshots(t *testing.T) {
 	pressCommand(m, "N")
 	m.RunFrames(300)
 	screenshot(t, m, page, "new-folder")
+	moveMouseTo(t, m, 287, 140)
+	m.RunFrames(30)
 	trash := record(m, "")
 	trash.capture(50)
-	trash.glide(t, 287, 140)
 	trash.press(true)
 	trash.run(20, 2)
 	trash.glide(t, 472, 318)
@@ -261,6 +269,7 @@ func firstStepsScreenshots(t *testing.T) {
 	// mark that blinks while the machine waits for one
 	chooseFromMenu(t, m, 185, 123)
 	m.RunFrames(900)
+	waitForAQuestionMark(t, m)
 	shutDown := record(m, "")
 	shutDown.capture(5)
 	shutDown.run(240, 3)
@@ -314,9 +323,10 @@ func macPaintScreenshots(t *testing.T) {
 	// empty oval
 	pick(t, m, 350, 305)
 	pick(t, m, 54, 150)
+	moveMouseTo(t, m, 110, 70)
+	m.RunFrames(30)
 	rectangle := record(m, "")
 	rectangle.capture(50)
-	rectangle.glide(t, 110, 70)
 	rectangle.press(true)
 	rectangle.run(10, 2)
 	rectangle.glide(t, 160, 160)
@@ -361,9 +371,10 @@ func macPaintScreenshots(t *testing.T) {
 	// about
 	pick(t, m, 127, 306)
 	pick(t, m, 54, 84)
+	moveMouseTo(t, m, 400, 215)
+	m.RunFrames(30)
 	spray := record(m, "")
 	spray.capture(50)
-	spray.glide(t, 400, 215)
 	spray.press(true)
 	spray.run(30, 2)
 	spray.glide(t, 440, 230)
@@ -485,9 +496,10 @@ func fileSharingScreenshots(t *testing.T) {
 	typeKeys(server, "Shift+A", "D", "A", "Quote", "S", "Space", "Shift+M", "A", "C")
 	// Start, recorded at five times the speed, which a Plus takes a minute
 	// over
+	moveMouseTo(t, server, 148, 197)
+	server.RunFrames(30)
 	starting := record(server, ada)
 	starting.capture(50)
-	starting.glide(t, 148, 197)
 	starting.press(true)
 	starting.run(8, 2)
 	starting.press(false)
@@ -596,15 +608,21 @@ func fileSharingScreenshots(t *testing.T) {
 	doubleClickAt(t, client, 472, 95)
 	client.RunFrames(1500)
 	screenshotOf(t, client, page, "remote-disk", grace)
+
+	// The drag recorded, from the pointer on the folder to Shared opened
+	// with the folder in it
+	moveMouseTo(t, client, 472, 150)
+	client.RunFrames(30)
 	copying := record(client, grace)
 	copying.capture(50)
-	copying.glide(t, 472, 150)
 	copying.press(true)
 	copying.run(20, 2)
 	copying.glide(t, 103, 92)
 	copying.run(20, 2)
 	copying.press(false)
 	copying.run(1800, 6)
+	copying.doubleClick()
+	copying.run(1200, 6)
 	copying.save(t, page, "copying", 300)
 
 	// And the first, stopped to be looked at, has it in its shared folder
@@ -734,6 +752,37 @@ func (r *recording) doubleClick() {
 		r.run(6, 2)
 		r.press(false)
 		r.run(6, 2)
+	}
+}
+
+/*
+showsAQuestionMark says whether the middle of the screen has the disk with the
+question mark the Macintosh asks for a disk with, by how much of it is black:
+the disk on the grey is a third of it, the question mark a few dots more, and
+the grey alone, the black of the screen switched on and the white of the
+screen cleared are something else
+*/
+func showsAQuestionMark(screen *image.RGBA) bool {
+	black := 0
+	for y := 155; y < 190; y++ {
+		for x := 240; x < 272; x++ {
+			if screen.RGBAAt(x, y).R == 0 {
+				black++
+			}
+		}
+	}
+	return black > 370 && black < 420
+}
+
+// waitForAQuestionMark runs the machine until it shows the disk with the
+// question mark
+func waitForAQuestionMark(t *testing.T, m *Mac) {
+	t.Helper()
+	for frame := 0; !showsAQuestionMark(m.GetImage()); frame++ {
+		if frame > 60*60 {
+			t.Fatalf("the Macintosh did not ask for a disk")
+		}
+		m.RunFrames(1)
 	}
 }
 
