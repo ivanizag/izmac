@@ -12,6 +12,7 @@ What says the machine got there is the Finder running, and the volume it
 started from.
 */
 func TestTheMachineStartsFromTheSystemSixDiskette(t *testing.T) {
+	t.Parallel()
 	config := testConfig(t)
 	config.Diskettes = []string{testImage(t, testSystemSixDiskette)}
 	m := buildTestMac(t, config)
@@ -23,6 +24,7 @@ func TestTheMachineStartsFromTheSystemSixDiskette(t *testing.T) {
 }
 
 func TestTheMachineStartsFromABareVolume(t *testing.T) {
+	t.Parallel()
 	config := testConfig(t)
 	config.DiskFiles = []string{testImage(t, testSystemSixDisk)}
 	m := buildTestMac(t, config)
@@ -34,6 +36,7 @@ func TestTheMachineStartsFromABareVolume(t *testing.T) {
 }
 
 func TestTheMachineStartsFromAPartitionedDisk(t *testing.T) {
+	t.Parallel()
 	config := testConfig(t)
 	config.DiskFiles = []string{testImage(t, testSystemSevenDisk)}
 	config.RamSizeKb = 4096
@@ -51,6 +54,7 @@ drives before the bus, which is how a Macintosh with a broken System on its
 hard disk is started from a diskette
 */
 func TestADisketteStartsTheMachineBeforeTheHardDisk(t *testing.T) {
+	t.Parallel()
 	config := testConfig(t)
 	config.Diskettes = []string{testImage(t, testSystemSixDiskette)}
 	config.DiskFiles = []string{testImage(t, testSystemSixDisk)}
@@ -68,6 +72,7 @@ opened with Command O, the startup disk being what the Finder has selected,
 and Read Me, a TeachText document, opened with a double click
 */
 func TestTheFinderOpensADocumentInItsApplication(t *testing.T) {
+	t.Parallel()
 	m := bootedMac(t)
 	waitForApplication(t, m, "Finder", 10)
 
