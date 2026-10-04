@@ -149,6 +149,20 @@ func TestActivityScreenshots(t *testing.T) {
 	t.Run("first-steps", firstStepsScreenshots)
 	t.Run("macpaint", macPaintScreenshots)
 	t.Run("file-sharing", fileSharingScreenshots)
+	t.Run("desk-accessories", deskAccessoriesScreenshots)
+	t.Run("multifinder", multiFinderScreenshots)
+	t.Run("floppies", floppiesScreenshots)
+	t.Run("file-server", fileServerScreenshots)
+	t.Run("archives", archivesScreenshots)
+	t.Run("macwrite", macWriteScreenshots)
+	t.Run("spreadsheet", spreadsheetScreenshots)
+	t.Run("basic", basicScreenshots)
+	t.Run("hypercard", hyperCardScreenshots)
+	t.Run("resedit", resEditScreenshots)
+	t.Run("installing", installingScreenshots)
+	t.Run("printing", printingScreenshots)
+	t.Run("systems", systemsScreenshots)
+	t.Run("games", gamesScreenshots)
 }
 
 /*
@@ -822,5 +836,37 @@ func (r *recording) save(t *testing.T, activity string, name string, hold int) {
 	defer f.Close()
 	if err := gif.EncodeAll(f, &gif.GIF{Image: r.frames, Delay: r.delays}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+/*
+typeString types a text as a hand would on the keyboard of the Plus, capitals
+and punctuation with the shift key, and a new line with the return key
+*/
+func typeString(m *Mac, text string) {
+	punctuation := map[rune]string{
+		' ': "Space", '\n': "Return", '\t': "Tab",
+		'.': "Period", ',': "Comma", '\'': "Quote", ';': "Semicolon",
+		'-': "Minus", '=': "Equal", '/': "Slash", '[': "LeftBracket",
+		']': "RightBracket", '\\': "Backslash", '`': "Backquote",
+		'"': "Shift+Quote", ':': "Shift+Semicolon", '!': "Shift+1",
+		'@': "Shift+2", '#': "Shift+3", '$': "Shift+4", '%': "Shift+5",
+		'^': "Shift+6", '&': "Shift+7", '*': "Shift+8", '(': "Shift+9",
+		')': "Shift+0", '_': "Shift+Minus", '+': "Shift+Equal",
+		'?': "Shift+Slash", '<': "Shift+Comma", '>': "Shift+Period",
+		'{': "Shift+LeftBracket", '}': "Shift+RightBracket",
+		'|': "Shift+Backslash", '~': "Shift+Backquote",
+	}
+	for _, r := range text {
+		switch {
+		case r >= 'a' && r <= 'z':
+			typeKeys(m, string(r-'a'+'A'))
+		case r >= 'A' && r <= 'Z':
+			typeKeys(m, "Shift+"+string(r))
+		case r >= '0' && r <= '9':
+			typeKeys(m, string(r))
+		default:
+			typeKeys(m, punctuation[r])
+		}
 	}
 }
