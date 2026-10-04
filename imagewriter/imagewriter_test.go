@@ -211,6 +211,33 @@ func TestACharacterPrintsAndMovesTheHeadOn(t *testing.T) {
 }
 
 // An unknown command is stepped over rather than printed
+/*
+The draft quality of the Macintosh driver, a word of it: the head put at a
+column in dots of the pica, and the word printed in the condensed pitch. The
+pitch changes the size of the dots, not where the head is, so the word starts
+an inch and a half in, at the 120th pica dot, whatever it is printed in.
+*/
+func TestChangingThePitchLeavesTheHeadWhereItIs(t *testing.T) {
+	pages := printed(t, "\x1bN\x1bF0120\x1bqI\x0c")
+	if len(pages) != 1 {
+		t.Fatalf("the job printed %v pages, wanted 1", len(pages))
+	}
+
+	// The I is a vertical bar in the middle of its cell, two columns in
+	inch := rasterDpi * 3 / 2
+	middle := inch + rasterX(2, 120)
+	found := -1
+	for x := 0; x < pageWidth; x++ {
+		if inked(pages[0], x, 6) {
+			found = x
+			break
+		}
+	}
+	if found < middle-2 || found > middle+2 {
+		t.Errorf("the word starts at the column %v of the raster, wanted about %v", found, middle)
+	}
+}
+
 func TestAnUnknownCommandIsIgnored(t *testing.T) {
 	pages := printed(t, "\x1b!\x1b>\x1bG0001\x01\x0c")
 

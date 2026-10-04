@@ -266,7 +266,7 @@ func (w *ImageWriter) escape(b uint8) error {
 	}
 
 	if density, ok := pitchDensities()[b]; ok {
-		w.density = density
+		w.setDensity(density)
 		return nil
 	}
 
@@ -278,6 +278,19 @@ func (w *ImageWriter) escape(b uint8) error {
 	}
 
 	return nil
+}
+
+/*
+setDensity changes the pitch, which leaves the head where it is: the column is
+counted in dots of the pitch, so it is counted again in the new one. The
+draft quality depends on it. The driver puts the head at each word in dots of
+the pica, and only then picks the condensed pitch the word is printed in; a
+column left as it was would put every word two thirds of the way to where it
+belongs, on top of the one before it.
+*/
+func (w *ImageWriter) setDensity(density int) {
+	w.column = (w.column*density + w.density/2) / w.density
+	w.density = density
 }
 
 /*
