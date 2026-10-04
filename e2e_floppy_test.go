@@ -110,18 +110,22 @@ func masterDirectoryBlockSignature(image []uint8) uint16 {
 	return uint16(image[masterDirectoryBlock])<<8 | uint16(image[masterDirectoryBlock+1])
 }
 
+// pointerAt is where the pointer is on the screen, from the low memory the ROM
+// keeps it in
+func pointerAt(m *Mac) (int16, int16) {
+	const rawMouseV, rawMouseH = 0x082c, 0x082e
+
+	v := int16(uint16(m.mm.Peek(rawMouseV))<<8 | uint16(m.mm.Peek(rawMouseV+1)))
+	h := int16(uint16(m.mm.Peek(rawMouseH))<<8 | uint16(m.mm.Peek(rawMouseH+1)))
+	return h, v
+}
+
 // moveMouseTo pushes the pointer to a place on the screen a bit at a time,
 // since the ROM scales what the mouse reports and one push does not arrive
 func moveMouseTo(t *testing.T, m *Mac, wantH int16, wantV int16) {
 	t.Helper()
 
-	const rawMouseV, rawMouseH = 0x082c, 0x082e
-
-	at := func() (int16, int16) {
-		v := int16(uint16(m.mm.Peek(rawMouseV))<<8 | uint16(m.mm.Peek(rawMouseV+1)))
-		h := int16(uint16(m.mm.Peek(rawMouseH))<<8 | uint16(m.mm.Peek(rawMouseH+1)))
-		return h, v
-	}
+	at := func() (int16, int16) { return pointerAt(m) }
 
 	// The System of 1985 moves the pointer more slowly than later ones, so
 	// there are tries enough for it too; the pointer gets there long before

@@ -39,7 +39,10 @@ pages it writes as images.
 
 2. **Click a pattern at the bottom**, the bricks for instance, and **the filled
    rectangle** in the tools, the right one of the sixth row. Then drag on the
-   page from one corner of the rectangle to the other.
+   page from one corner of the rectangle to the other. The rectangle follows
+   the pointer, already filled, until you let go.
+
+   ![Dragging a rectangle](images/macpaint/rectangle.gif)
 
 3. **Click the empty oval**, the left one of the eighth row, and drag an oval
    beside the rectangle. Then **click the grey pattern and the paint bucket**,
@@ -60,7 +63,12 @@ pages it writes as images.
 4. **Click the A**, the text tool, click under the shapes and type. The Font,
    FontSize and Style menus change how it looks while you are typing it.
 
-5. **Click the pencil** and drag a line under the text.
+5. **Click the pencil** and drag a line under the text. Then **click black**,
+   the first of the patterns, and **the spray can**, on the right of the third
+   row, and hold the button down on the page while moving the mouse: the paint
+   comes out in dots, thicker the longer it stays in one place.
+
+   ![The spray can](images/macpaint/spray-can.gif)
 
    ![The drawing](images/macpaint/drawing.png)
 
@@ -87,13 +95,12 @@ pages it writes as images.
 ## Print
 
 8. **Choose Print Final from the File menu.** *Print Draft* is quicker and
-   rougher. MacPaint draws the page, a band at a time, as it sends it to the
-   printer, and it takes a while: izmac sends it to its ImageWriter at the
-   speed of the serial port of the Macintosh, as the real one did. The
-   recording is five times faster than that; the real thing takes about forty
-   seconds.
+   rougher. MacPaint draws the page a band at a time as it sends it to the
+   printer, and it takes a while, about forty seconds: izmac sends it to its
+   ImageWriter at the speed of the serial port of the Macintosh, as the real
+   one did.
 
-   ![Printing](images/macpaint/printing.gif)
+   ![Printing](images/macpaint/printing.png)
 
 9. The page comes out beside izmac, as a picture: izmac says
 

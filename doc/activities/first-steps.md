@@ -27,12 +27,13 @@ Internet Archive, and keeps them beside itself for the next time.
    izmac
    ```
 
-   After a few seconds of grey screen, while the diskette is read, the desktop
-   appears:
-   the menu bar at the top, the diskette, called *Paint*, at the top right, and
-   the Trash at the bottom right.
+   The screen goes grey while the Macintosh checks its memory, a diskette with a
+   question mark asks for a disk for a moment, and the smiling Macintosh says
+   one has been found. *Welcome to Macintosh* is the System starting, and then
+   the desktop appears: the menu bar at the top, the diskette, called *Paint*,
+   at the top right, and the Trash at the bottom right.
 
-   ![The desktop](images/first-steps/desktop.png)
+   ![Starting up](images/first-steps/starting.gif)
 
    Everything on the screen is pointed at with the mouse: point at something
    with your own mouse and the Macintosh's pointer goes there. A click selects,
@@ -43,7 +44,10 @@ Internet Archive, and keeps them beside itself for the next time.
    much is used and how much is left: a diskette of this machine held 400K,
    about the size of one photograph of today.
 
-   ![The diskette opened](images/first-steps/disk-window.png)
+   ![The diskette opened](images/first-steps/open-disk.gif)
+
+   The outlines growing out of the icon are the Finder showing where the window
+   comes from, a little film it plays every time something opens.
 
    Drag the window by its title bar to move it, the box at its bottom right to
    resize it, and click the box at its top left to close it. The scroll bars
@@ -60,7 +64,7 @@ Internet Archive, and keeps them beside itself for the next time.
    Macintosh ran one application at a time, and the desk accessories were how
    you looked something up in the middle of something else.
 
-   ![The Apple menu](images/first-steps/apple-menu.png)
+   ![The Apple menu](images/first-steps/apple-menu.gif)
 
    *Choose Printer* is what became the Chooser a year later.
 
@@ -105,10 +109,11 @@ Internet Archive, and keeps them beside itself for the next time.
    ![A new folder](images/first-steps/new-folder.png)
 
 9. **Drag the new folder onto the Trash**, and let go when the Trash darkens.
-   The Trash bulges: what is in it is not deleted yet, and can be dragged back
-   out.
+   While you drag, an outline of the folder follows the pointer, and the Finder
+   moves it only when you let go. The Trash bulges: what is in it is not
+   deleted yet, and can be dragged back out.
 
-   ![The Trash, with the folder in it](images/first-steps/in-the-trash.png)
+   ![The folder dragged to the Trash](images/first-steps/to-the-trash.gif)
 
 10. **Open the Special menu and choose Empty Trash.** Now it is gone.
 

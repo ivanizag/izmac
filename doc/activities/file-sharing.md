@@ -83,10 +83,11 @@ The steps in this part are on **Ada's** Macintosh.
 
    Type the **owner name**, *Ada*, press Tab, a **password**, *secret*, press
    Tab, and the **Macintosh name**, *Ada's Mac*. Then click **Start** under
-   File Sharing. Starting takes about a minute on a Macintosh Plus, and when
-   it is done the button says *Stop*.
+   File Sharing. Starting takes about a minute on a Macintosh Plus, the button
+   says *Cancel* meanwhile, and when it is done it says *Stop*. The recording
+   is five times faster.
 
-   ![File Sharing on](images/file-sharing/sharing-on.png)
+   ![Starting File Sharing](images/file-sharing/sharing-on.gif)
 
 5. Close Sharing Setup, the Control Panels and the System Folder, with the box
    at the top left of each, to be back at the window of the disk.
@@ -137,9 +138,10 @@ The steps in this part are on **Grace's** Macintosh.
 
     <p align="right"><img src="images/file-sharing/remote-disk.png" alt="Ada's disk on Grace's Macintosh"></p>
 
-    The folder is copied over the network into Ada's shared folder.
+    The folder is copied over the network into Ada's shared folder, with the
+    Finder counting what is left to copy.
 
-    <p align="right"><img src="images/file-sharing/copied.png" alt="Copied"></p>
+    <p align="right"><img src="images/file-sharing/copying.gif" alt="Copying across"></p>
 
 ## Back on Ada's
 

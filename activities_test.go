@@ -161,19 +161,46 @@ func firstStepsScreenshots(t *testing.T) {
 	config := testConfig(t)
 	config.Diskettes = []string{testImage(t, testPaintDiskette)}
 	m := buildTestMac(t, config)
-	waitForApplication(t, m, "Finder", 60)
-	m.RunFrames(600)
-	screenshot(t, m, page, "desktop")
 
-	// The diskette opened
-	doubleClickAt(t, m, 472, 45)
-	m.RunFrames(600)
+	// Switched on, recorded from the first frame to the desktop
+	starting := record(m, "")
+	for frame := 0; currentApplication(m) != "Finder"; frame += 6 {
+		if frame > 60*60 {
+			t.Fatalf("the Finder did not start")
+		}
+		starting.run(6, 6)
+	}
+	starting.run(600, 6)
+	starting.save(t, page, "starting", 300)
+
+	// The diskette opened, recorded: the pointer taken to it, the double
+	// click, and the window coming out of the icon
+	opening := record(m, "")
+	opening.capture(100)
+	opening.glide(t, 472, 45)
+	opening.doubleClick()
+	opening.run(600, 6)
+	opening.save(t, page, "open-disk", 300)
 	screenshot(t, m, page, "disk-window")
 
-	// The Apple menu, and About the Finder
-	openMenu(t, m, 16)
-	screenshot(t, m, page, "apple-menu")
-	closeMenu(t, m)
+	// The Apple menu, recorded: pulled down, gone over to the bottom and back
+	// up, and let go of outside, which chooses nothing
+	menu := record(m, "")
+	menu.capture(50)
+	menu.glide(t, 16, 10)
+	menu.press(true)
+	menu.run(20, 2)
+	menu.glide(t, 40, 30)
+	menu.glide(t, 40, 170)
+	menu.run(20, 2)
+	menu.glide(t, 40, 60)
+	menu.run(20, 2)
+	menu.glide(t, 300, 250)
+	menu.press(false)
+	menu.run(30, 3)
+	menu.save(t, page, "apple-menu", 200)
+
+	// About the Finder
 	chooseFromMenu(t, m, 16, 27)
 	m.RunFrames(300)
 	screenshot(t, m, page, "about-the-finder")
@@ -214,9 +241,16 @@ func firstStepsScreenshots(t *testing.T) {
 	pressCommand(m, "N")
 	m.RunFrames(300)
 	screenshot(t, m, page, "new-folder")
-	dragTo(t, m, 287, 140, 472, 318)
-	m.RunFrames(300)
-	screenshot(t, m, page, "in-the-trash")
+	trash := record(m, "")
+	trash.capture(50)
+	trash.glide(t, 287, 140)
+	trash.press(true)
+	trash.run(20, 2)
+	trash.glide(t, 472, 318)
+	trash.run(30, 2)
+	trash.press(false)
+	trash.run(300, 6)
+	trash.save(t, page, "to-the-trash", 300)
 	openMenu(t, m, 185)
 	screenshot(t, m, page, "special-menu")
 	closeMenu(t, m)
@@ -276,10 +310,22 @@ func macPaintScreenshots(t *testing.T) {
 	m.RunFrames(900)
 	screenshot(t, m, page, "empty")
 
-	// A rectangle filled with bricks, and an empty oval
+	// A rectangle filled with bricks, recorded as it is dragged out, and an
+	// empty oval
 	pick(t, m, 350, 305)
 	pick(t, m, 54, 150)
-	dragOn(t, m, 110, 70, 220, 150)
+	rectangle := record(m, "")
+	rectangle.capture(50)
+	rectangle.glide(t, 110, 70)
+	rectangle.press(true)
+	rectangle.run(10, 2)
+	rectangle.glide(t, 160, 160)
+	rectangle.glide(t, 240, 100)
+	rectangle.glide(t, 220, 150)
+	rectangle.run(20, 2)
+	rectangle.press(false)
+	rectangle.run(30, 3)
+	rectangle.save(t, page, "rectangle", 200)
 	pick(t, m, 29, 194)
 	dragOn(t, m, 250, 70, 380, 160)
 
@@ -310,6 +356,25 @@ func macPaintScreenshots(t *testing.T) {
 		"1", "9", "8", "4", "Shift+1")
 	pick(t, m, 54, 106)
 	dragOn(t, m, 140, 230, 340, 232)
+
+	// The spray can, in black, recorded while it is held down and moved
+	// about
+	pick(t, m, 127, 306)
+	pick(t, m, 54, 84)
+	spray := record(m, "")
+	spray.capture(50)
+	spray.glide(t, 400, 215)
+	spray.press(true)
+	spray.run(30, 2)
+	spray.glide(t, 440, 230)
+	spray.run(20, 2)
+	spray.glide(t, 410, 250)
+	spray.run(20, 2)
+	spray.glide(t, 380, 235)
+	spray.run(20, 2)
+	spray.press(false)
+	spray.run(20, 2)
+	spray.save(t, page, "spray-can", 200)
 	screenshot(t, m, page, "drawing")
 
 	// FatBits, the drawing a dot at a time, entered with the command key and
@@ -333,21 +398,28 @@ func macPaintScreenshots(t *testing.T) {
 	clickMouse(m)
 	m.RunFrames(300)
 
-	// Print Final, recorded while MacPaint draws the page as it sends it to
-	// the printer, and the page the ImageWriter printed
+	// Print Final, and the page MacPaint draws as it sends it to the printer,
+	// kept as it was last seen whole, before MacPaint went back to the
+	// drawing; the grey around the page is how its window is told from the
+	// drawing's
 	chooseFromMenu(t, m, 55, 139)
 	printed := config.PrinterFile + "_001.png"
-	printing := record(m, "")
+	var drawn *image.RGBA
 	for second := 0; !exists(printed); second++ {
 		if second == 600 {
 			t.Fatalf("MacPaint printed nothing")
 		}
-		// Five times faster than it happens: the real thing takes
-		// about forty seconds
 		m.RunFrames(30)
-		printing.capture(10)
+		screen := m.GetImage()
+		if showsThePage(screen) {
+			drawn = image.NewRGBA(screen.Bounds())
+			copy(drawn.Pix, screen.Pix)
+		}
 	}
-	printing.save(t, page, "printing", 300)
+	if drawn == nil {
+		t.Fatalf("MacPaint printed without showing the page")
+	}
+	writeScreenshot(t, drawn, page, "printing", "")
 	m.RunFrames(600)
 	data, err := os.ReadFile(printed)
 	if err != nil {
@@ -411,10 +483,19 @@ func fileSharingScreenshots(t *testing.T) {
 	typeText(server, "secret")
 	pressKey(server, "Tab")
 	typeKeys(server, "Shift+A", "D", "A", "Quote", "S", "Space", "Shift+M", "A", "C")
-	moveMouseTo(t, server, 148, 197)
-	clickMouse(server)
-	server.RunFrames(3600)
-	screenshotOf(t, server, page, "sharing-on", ada)
+	// Start, recorded at five times the speed, which a Plus takes a minute
+	// over
+	starting := record(server, ada)
+	starting.capture(50)
+	starting.glide(t, 148, 197)
+	starting.press(true)
+	starting.run(8, 2)
+	starting.press(false)
+	for frame := 0; frame < 3600; frame += 30 {
+		server.RunFrames(30)
+		starting.capture(10)
+	}
+	starting.save(t, page, "sharing-on", 300)
 	pressCommand(server, "W")
 	server.RunFrames(300)
 
@@ -515,9 +596,16 @@ func fileSharingScreenshots(t *testing.T) {
 	doubleClickAt(t, client, 472, 95)
 	client.RunFrames(1500)
 	screenshotOf(t, client, page, "remote-disk", grace)
-	dragTo(t, client, 472, 150, 103, 92)
-	client.RunFrames(1800)
-	screenshotOf(t, client, page, "copied", grace)
+	copying := record(client, grace)
+	copying.capture(50)
+	copying.glide(t, 472, 150)
+	copying.press(true)
+	copying.run(20, 2)
+	copying.glide(t, 103, 92)
+	copying.run(20, 2)
+	copying.press(false)
+	copying.run(1800, 6)
+	copying.save(t, page, "copying", 300)
 
 	// And the first, stopped to be looked at, has it in its shared folder
 	close(stop)
@@ -531,7 +619,7 @@ A recording is an animated screenshot, for what is worth watching move: a GIF
 of the screen in its frame, a picture taken every few frames of the machine.
 The screen has two colours and changes in little places at a time, so each
 picture after the first is only the part of it that changed, and a picture
-that changed nothing makes the one before last longer.
+that changed nothing makes the one before last longer, up to a few seconds.
 */
 type recording struct {
 	m      *Mac
@@ -543,6 +631,10 @@ type recording struct {
 
 // recordingPalette is what a framed screenshot is made of: the corners left
 // out of the frame, black, white, and the grey of a label
+// longestStill is the longest a picture stays, in hundredths of a second: a
+// wait on the machine with nothing changing is shortened to that
+const longestStill = 300
+
 func recordingPalette() color.Palette {
 	return color.Palette{
 		color.Transparent, color.Black, color.White, color.Gray{Y: 0xb0},
@@ -590,7 +682,7 @@ func (r *recording) capture(delay int) {
 	}
 	r.last = picture
 	if changed.Empty() {
-		r.delays[len(r.delays)-1] += delay
+		r.delays[len(r.delays)-1] = min(r.delays[len(r.delays)-1]+delay, longestStill)
 		return
 	}
 	part := image.NewPaletted(changed, recordingPalette())
@@ -604,6 +696,62 @@ func (r *recording) run(frames int, every int) {
 		r.m.RunFrames(uint64(every))
 		r.capture(every * 100 / 60)
 	}
+}
+
+/*
+glide takes the pointer to a place a little at a time, as a hand would, a
+picture at each step
+*/
+func (r *recording) glide(t *testing.T, toH, toV int16) {
+	t.Helper()
+	const stepPixels = 12
+	fromH, fromV := pointerAt(r.m)
+	distance := max(abs(int(toH-fromH)), abs(int(toV-fromV)))
+	steps := distance/stepPixels + 1
+	for step := 1; step <= steps; step++ {
+		moveMouseTo(t, r.m, fromH+int16(int(toH-fromH)*step/steps), fromV+int16(int(toV-fromV)*step/steps))
+		r.capture(3)
+	}
+}
+
+func abs(n int) int {
+	if n < 0 {
+		return -n
+	}
+	return n
+}
+
+// press presses or lets go of the button
+func (r *recording) press(down bool) {
+	r.m.SetMouseButton(down)
+	r.run(2, 2)
+}
+
+// doubleClick clicks twice in a row where the pointer is
+func (r *recording) doubleClick() {
+	for i := 0; i < 2; i++ {
+		r.press(true)
+		r.run(6, 2)
+		r.press(false)
+		r.run(6, 2)
+	}
+}
+
+/*
+showsThePage says whether MacPaint has the page it is printing on the screen:
+its window has a light grey, a dot in four black, on the left of the page,
+where the drawing is white
+*/
+func showsThePage(screen *image.RGBA) bool {
+	black := 0
+	for y := 250; y < 270; y++ {
+		for x := 100; x < 120; x++ {
+			if screen.RGBAAt(x, y).R == 0 {
+				black++
+			}
+		}
+	}
+	return black > 50 && black < 300
 }
 
 // save writes the recording as one of the images of an activity, the last
