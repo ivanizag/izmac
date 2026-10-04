@@ -58,9 +58,9 @@ type printer struct {
 
 const (
 	// The modes the printer option takes
-	printerNone        = "none"
-	printerRaw         = "raw"
-	printerImageWriter = "imagewriter"
+	PrinterNone        = "none"
+	PrinterRaw         = "raw"
+	PrinterImageWriter = "imagewriter"
 
 	// defaultPrinterRawFile is where the raw mode writes, and carries the
 	// izmac_ prefix everything izmac writes for itself carries
@@ -75,22 +75,22 @@ const (
 // for none
 func newPrinter(config *Configuration) (*printer, error) {
 	channel := component.ChannelB
-	if config.PrinterPort == printerPortModem {
+	if config.PrinterPort == PrinterPortModem {
 		channel = component.ChannelA
 	}
 
 	switch config.Printer {
-	case printerNone, "":
+	case PrinterNone, "":
 		return nil, nil
 
-	case printerRaw:
+	case PrinterRaw:
 		target := config.PrinterFile
 		if target == "" {
 			target = defaultPrinterRawFile
 		}
 		return &printer{
 			channel: channel,
-			name:    printerRaw,
+			name:    PrinterRaw,
 			target:  target,
 			open: func() (io.WriteCloser, error) {
 				return os.OpenFile(target,
@@ -98,14 +98,14 @@ func newPrinter(config *Configuration) (*printer, error) {
 			},
 		}, nil
 
-	case printerImageWriter:
+	case PrinterImageWriter:
 		prefix := config.PrinterFile
 		if prefix == "" {
 			prefix = defaultPrinterPagePrefix
 		}
 		return &printer{
 			channel: channel,
-			name:    printerImageWriter,
+			name:    PrinterImageWriter,
 			target:  prefix + "_nnn.png",
 			open: func() (io.WriteCloser, error) {
 				w := imagewriter.New(prefix)
@@ -118,7 +118,7 @@ func newPrinter(config *Configuration) (*printer, error) {
 	}
 
 	return nil, fmt.Errorf("unknown printer %q, use %v, %v or %v",
-		config.Printer, printerNone, printerRaw, printerImageWriter)
+		config.Printer, PrinterNone, PrinterRaw, PrinterImageWriter)
 }
 
 /*
@@ -167,9 +167,9 @@ func (p *printer) close() error {
 // it
 func (p *printer) portName() string {
 	if p.channel == component.ChannelA {
-		return printerPortModem
+		return PrinterPortModem
 	}
-	return printerPortPrinter
+	return PrinterPortPrinter
 }
 
 // String describes the printer for the summary of the machine

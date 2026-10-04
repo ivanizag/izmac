@@ -490,10 +490,10 @@ func (c *Configuration) openDisk(name string, scsiDriver *storage.ScsiDriver) (s
 
 // out is where the preparing is reported
 func (c *Configuration) out() io.Writer {
-	if c.messages == nil {
+	if c.Messages == nil {
 		return io.Discard
 	}
-	return c.messages
+	return c.Messages
 }
 
 // describeImage says what an image is, for the report

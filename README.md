@@ -77,11 +77,27 @@ go test ./...          # all of it
 go test -short ./...   # without the end to end tests, in seconds
 ```
 
-The end to end tests start a Macintosh Plus on the ROM and the disks in
-[`test_images`](test_images) and take it through what a user does: the Finder,
-the Chooser, printing, AppleShare, two machines on LocalTalk. They run in
-parallel, and take a few minutes. [`test_images/README.md`](test_images/README.md)
-says what is on each disk and how they are made.
+The end to end tests, in [`e2e_tests`](e2e_tests), start a Macintosh Plus on
+the ROM and the disks in [`test_images`](test_images) and take it through what
+a user does: the Finder, the Chooser, printing, AppleShare, two machines on
+LocalTalk. They run in parallel, and take a few minutes.
+[`test_images/README.md`](test_images/README.md) says what is on each disk and
+how they are made.
+
+## Driving it from a program
+
+izmac is a Go package as well as an emulator. A program makes a machine with
+`izmac.NewMac`, runs it a frame at a time with `RunFrames`, and reads what it
+shows with `Screenshot`, `CurrentApplication` or `MountedVolumes`. The
+[`operator`](operator) package is someone sitting at it, with the mouse and the
+keyboard: it clicks, drags, chooses from menus, types, and waits for an
+application to start, as a person would. The end to end tests are written with
+it.
+
+The [`activities`](activities) package makes the pictures of the
+[activities](doc/activities/README.md): an `Album` of screenshots and GIF
+recordings, in the frame they all have. The activities of the documentation
+are its tests, and anyone can write more the same way.
 
 ## References
 

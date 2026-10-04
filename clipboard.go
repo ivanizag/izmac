@@ -79,6 +79,16 @@ func (m *Mac) PasteText(text string) {
 	m.commandChannel <- &commandText{id: CommandPasteText, text: text}
 }
 
+/*
+IsPasting tells whether a paste from the host is still on its way into the
+machine: asked for, and not yet taken by the Scrap Manager. A program pasting
+with PasteText runs the machine until it is not, which is usually a frame or
+two once an application is asking for events.
+*/
+func (m *Mac) IsPasting() bool {
+	return m.pastePending
+}
+
 // TakeCopiedText returns the text copied on the machine since the last call,
 // and whether there was any
 func (m *Mac) TakeCopiedText() (string, bool) {

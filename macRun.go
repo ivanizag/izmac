@@ -109,13 +109,18 @@ func (m *Mac) Run() {
 
 /*
 RunFrames runs the emulation for a number of frames as fast as it can,
-stopping early if the machine halts while the sadmac tracer is on. It is what
-the headless frontend and the tests use.
+stopping early if the machine halts while the sadmac tracer is on, or if it
+is sent CommandKill. It is what the headless frontend, the tests and any
+program driving a machine of its own use.
 
 Calling it again carries on from where the last call left off rather than
 starting the machine over, so a caller can boot, do something, and run on to
 see what came of it. Only the first call, or one after Reset(), starts the
 machine.
+
+The commands sent to the machine are taken at the start of every frame, as
+the run loop of a frontend takes them: a paste with PasteText, a diskette with
+SendDisketteCommand, and the rest.
 */
 func (m *Mac) RunFrames(frames uint64) {
 	if !m.started {
@@ -124,9 +129,15 @@ func (m *Mac) RunFrames(frames uint64) {
 
 	target := m.frames + frames
 	for m.frames < target {
-		m.step()
-		if m.sadMacTrace && m.halt.halted {
+		if m.executeCommands() {
 			return
+		}
+		next := m.frames + 1
+		for m.frames < next {
+			m.step()
+			if m.sadMacTrace && m.halt.halted {
+				return
+			}
 		}
 	}
 }

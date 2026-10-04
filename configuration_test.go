@@ -58,19 +58,19 @@ func TestTheDefaults(t *testing.T) {
 
 	// A machine of the time had a printer on the printer port, and one
 	// that is never printed to writes nothing anywhere
-	if c.Printer != printerImageWriter {
-		t.Errorf("the printer defaults to %v, wanted %v", c.Printer, printerImageWriter)
+	if c.Printer != PrinterImageWriter {
+		t.Errorf("the printer defaults to %v, wanted %v", c.Printer, PrinterImageWriter)
 	}
-	if c.PrinterPort != printerPortPrinter {
+	if c.PrinterPort != PrinterPortPrinter {
 		t.Errorf("the printer is on the %v port by default, wanted the %v one",
-			c.PrinterPort, printerPortPrinter)
+			c.PrinterPort, PrinterPortPrinter)
 	}
 }
 
 // And it is taken off the machine altogether by asking for none
 func TestThePrinterCanBeTakenOff(t *testing.T) {
 	c := NewConfiguration()
-	err := c.ParseFlags("izmac", []string{"-rom", "rom.bin", "-printer", printerNone},
+	err := c.ParseFlags("izmac", []string{"-rom", "rom.bin", "-printer", PrinterNone},
 		io.Discard)
 	if err != nil {
 		t.Fatal(err)

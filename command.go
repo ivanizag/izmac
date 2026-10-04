@@ -1,6 +1,9 @@
 package izmac
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
 
 const commandChannelSize = 10
 
@@ -131,25 +134,8 @@ func (m *Mac) executeCommands() bool {
 		case c := <-m.commandChannel:
 			switch c.getId() {
 			case CommandKill:
-				// A page that was still being printed when the machine
-				// was shut down is finished rather than lost
-				if m.printer != nil {
-					if err := m.printer.close(); err != nil {
-						fmt.Println(err)
-					}
-				}
-				// The machine leaves the LocalTalk of the local network
-				if m.fileServer != nil {
-					m.fileServer.Stop()
-				}
-				if m.udp != nil {
-					m.udp.Close()
-				}
-				// And so is what the machine wrote to a diskette whose
-				// motor had not stopped yet, which is when it is written
-				// back otherwise
-				if err := m.FlushDiskettes(); err != nil {
-					fmt.Printf("Floppy: %v\n", err)
+				if err := m.Close(); err != nil {
+					fmt.Println(err)
 				}
 				return true
 			case CommandReset:
@@ -180,6 +166,33 @@ func (m *Mac) executeCommands() bool {
 			return false
 		}
 	}
+}
+
+/*
+Close finishes with the machine: a page that was still being printed comes
+out rather than being lost, the file server and the LocalTalk of the local
+network are left, and what the machine wrote to a diskette whose motor had
+not stopped yet, which is when it is written back otherwise, is written. A
+program that runs machines with RunFrames calls it when it is done with one;
+the frontends' loop calls it on CommandKill.
+*/
+func (m *Mac) Close() error {
+	var errs []error
+	if m.printer != nil {
+		errs = append(errs, m.printer.close())
+	}
+	if m.fileServer != nil {
+		m.fileServer.Stop()
+		m.fileServer = nil
+	}
+	if m.udp != nil {
+		m.udp.Close()
+		m.udp = nil
+	}
+	if err := m.FlushDiskettes(); err != nil {
+		errs = append(errs, fmt.Errorf("floppy: %w", err))
+	}
+	return errors.Join(errs...)
 }
 
 // executeDisketteCommand runs a change to a drive, reporting what went wrong

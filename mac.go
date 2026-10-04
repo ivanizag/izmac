@@ -233,7 +233,7 @@ func newMac(config *Configuration, r *storage.Rom, disks []storage.BlockDisk,
 	if config.AppleTalk != "" {
 		m.localTalk = newLocalTalkPort(mm.scc)
 
-		network := config.localTalkNetwork
+		network := config.LocalTalkNetwork
 		if network == nil {
 			network = localtalk.NewNetwork()
 		}
@@ -243,7 +243,7 @@ func newMac(config *Configuration, r *storage.Rom, disks []storage.BlockDisk,
 		}
 
 		if config.Share != "" {
-			m.fileServer = shareFolder(network, config.Share, config.shareServerName)
+			m.fileServer = shareFolder(network, config.Share, config.ShareName)
 		}
 	}
 

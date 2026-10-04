@@ -24,23 +24,26 @@ The list of activities is linked from the "Things to do" row of
 
 1. **Propose before writing.** List candidate activities with a line each, and
    let the user choose. Write only the ones chosen.
-2. **Do the activity on the emulator first**, in `activities_test.go`, and
-   look at every image it makes. Write the text from what the machine really
+2. **Do the activity on the emulator first**, in the `activities` package,
+   and look at every image it makes. Write the text from what the machine really
    does, not from memory of what it did.
 3. **Add a function to the generator**: `<name>Screenshots(t *testing.T)` in
-   a file of its own, `activities_<name>_test.go`, run from
-   `TestActivityScreenshots` in `activities_test.go` with `t.Run`. It
-   drives the machine with the e2e test helpers, such as:
-   - `buildTestMac`, `waitForApplication`, `waitUntil`;
-   - `moveMouseTo`, `clickMouse`, `doubleClickAt`, `dragTo`;
-   - `pressKey`, `pressCommand`, `typeKeys`, `typeText`.
+   a file of its own, `activities/<name>_test.go`, run from
+   `TestActivityScreenshots` in `activities/activities_test.go` with
+   `t.Run`. It makes its machine with `testConfig` and `buildTestMac`, and
+   drives it with an `operator.Operator`: `MoveTo`, `Click`,
+   `DoubleClickAt`, `Drag`, `ChooseFromMenu`, `PressKey`, `Command`,
+   `TypeString`, `WaitForApplication` and the rest, each failure stopped
+   with `must`.
 
-   Then it takes pictures with `screenshot`, `screenshotOf` (which adds a
-   label), `writeScreenshot`, or a `record(...)` recording.
+   Then it takes pictures into an `Album` of the page: `Screenshot`,
+   `ScreenshotOf` (which adds a label), `Write`, or a `Record(...)`
+   recording saved with `SaveRecording`. The album, the frame and the
+   recorder are exported, for anyone writing activities of their own.
 4. **Generate the images:**
 
    ```bash
-   IZMAC_ACTIVITY_SCREENSHOTS=1 go test -count=1 -run 'TestActivityScreenshots/<name>' .
+   IZMAC_ACTIVITY_SCREENSHOTS=1 go test -count=1 -run 'TestActivityScreenshots/<name>' ./activities
    ```
 
    Without the variable the test skips itself. It overwrites the images of
@@ -129,7 +132,7 @@ written.
 3. Run `build.sh`, then the settle step:
 
    ```bash
-   IZMAC_SETTLE_TEST_IMAGES=1 go test -run TestSettleTestImages .
+   IZMAC_SETTLE_TEST_IMAGES=1 go test -run TestSettleTestImages ./e2e_tests
    ```
 4. Add a row to the table in `test_images/README.md`, with its size and
    exactly what is on it.
@@ -203,10 +206,10 @@ for testing and for these pages, and their sources are public archives.
 - **Every picture is made by the generator**, from the images committed in
   `test_images/` or from what izmac downloads by itself. Never use anything
   local and uncommitted.
-- **The frame is part of the picture.** `framed` draws a black, CRT-like
+- **The frame is part of the picture.** `Frame` draws a black, CRT-like
   border with rounded corners and leaves the corners outside it transparent.
   Rounding the screen itself looked like cut-off triangles.
-- **Label the frame** (`screenshotOf` with a label, or `record(m, label)`)
+- **Label the frame** (`ScreenshotOf` with a label, or `Record(op, label)`)
   only when more than one machine takes part.
 - **Take the picture once the screen is finished.**
   - A fixed wait is fine for something quick.
@@ -215,8 +218,9 @@ for testing and for these pages, and their sources are public archives.
     example: `showsThePage` keeps the last frame with the page on screen,
     drawn whole. A picture taken too early, with the page half drawn, was
     sent back in review.
-- **Copy `m.GetImage()` before keeping it.** It returns the same buffer on
-  every call, which the machine keeps drawing into.
+- **Keep `m.Screenshot()`, not `m.GetImage()`.** `GetImage` returns the same
+  buffer on every call, which the machine keeps drawing into; `Screenshot`
+  is a copy.
 - **Some things change on every run, and that is fine** when the picture
   does not depend on them: the clock of the Alarm Clock and the Control
   Panel, the time on HyperCard's Home card, where Bolo starts the tank.
@@ -232,9 +236,9 @@ for testing and for these pages, and their sources are public archives.
 - **The main page groups the activities by theme**, each with a picture
   320 pixels wide in an `<img>` tag, a link to the page, and a paragraph.
 - **A printed page is kept from its top to half an inch below the printing**
-  (`keepPrintedPage`), outlined, its cut edge in dashes. A whole page of
-  eleven inches with a few lines at the top reads as a picture that did not
-  finish loading.
+  (the album's `KeepPrintedPage`), outlined, its cut edge in dashes. A whole
+  page of eleven inches with a few lines at the top reads as a picture that
+  did not finish loading.
 - **One picture of one thing.** A GIF that ends on what the next screenshot
   shows makes the screenshot redundant; drop it, unless the main page uses it
   as a thumbnail.
@@ -276,15 +280,15 @@ for testing and for these pages, and their sources are public archives.
   say so in the text, with the real time. File Sharing starting is recorded at
   five times its speed by running 30 frames per capture of 10 hundredths of a
   second.
-- **Still stretches are capped** at `longestStill`, three seconds, so waits for
+- **Still stretches are capped** at `LongestStill`, three seconds, so waits for
   the diskette or the network don't stall the GIF. The last frame gets an
-  extra hold, the `hold` of `save`, so the result can be seen before the loop
-  starts again.
-- **Use `recording.glide` to move the pointer during a recording.**
-  `moveMouseTo` jumps, while `glide` moves in small steps and captures each
-  one.
-  - Use `press` for the button and `doubleClick` for a double click, and
-    `run(frames, every)` to let the machine go on while capturing.
+  extra hold, the `hold` of `SaveRecording`, so the result can be seen
+  before the loop starts again.
+- **Use `Recording.Glide` to move the pointer during a recording.** The
+  operator's `MoveTo` jumps between two pictures, while `Glide` moves in small
+  steps and captures each one.
+  - Use `Press` for the button and `DoubleClick` for a double click, and
+    `Run(frames, every)` to let the machine go on while capturing.
   - Capture every 2 frames or more: browsers slow down GIF delays shorter
     than two hundredths of a second.
 - **Keep the files small.** The recorder uses four colours and stores only
@@ -295,8 +299,8 @@ for testing and for these pages, and their sources are public archives.
 ## Driving the machine
 
 - **Go down a menu first, then across.** Moving diagonally from the menu bar
-  goes over the next menu's title and opens that menu. `chooseFromMenu`
-  already does it in this order. With `glide`, stay well below the menu bar:
+  goes over the next menu's title and opens that menu. `ChooseFromMenu`
+  already does it in this order. With `Glide`, stay well below the menu bar:
   the pointer can overshoot into the bar when it moves back up.
 - **The Finder 4.1 of System 2.0 has no Command-W.** Close windows with
   their close box, for example Get Info's at (24,40).
@@ -307,7 +311,8 @@ for testing and for these pages, and their sources are public archives.
 - **Guest access to a System 7.1.2 File Sharing server didn't work.** The
   Chooser greys out Guest even after it is allowed in Users & Groups. Log in
   as the owner, a registered user, instead.
-- **For two machines**, put them on one `localtalk.NewNetwork()`. Run the
+- **For two machines**, give both configurations the same
+  `localtalk.NewNetwork()` as `LocalTalkNetwork`. Run the
   first on a goroutine of its own while the second is driven, and stop it
   before taking its pictures.
 - **MacPaint 1.5:**
@@ -324,21 +329,22 @@ for testing and for these pages, and their sources are public archives.
   select and click the dialog's button.
 - **The System 6 Finder has no Command-W for a desk accessory**: Command-W
   is passed to it as a key. Close it with its close box.
-- **A paste from the host** in the generator is `m.startPaste` followed by
-  `pasteFrames` of running: `PasteText` goes through the command channel
-  that only a frontend's loop reads. Many applications, TeachText among them,
+- **A paste from the host** is the operator's `Paste`, which runs the machine
+  until the Scrap Manager has taken it. Many applications, TeachText among them,
   keep their own clipboard while they run and only read the System's when
   they start; show a paste where it arrives, in the Finder's Show Clipboard.
-- **Diskettes are put in with `m.InsertDiskette`**, and the swapping a
-  Macintosh of one drive asks for is `swapDiskettes`, which puts the other
-  one in whenever the drive is left empty. The Installer asks for its
-  diskettes by name and does not give a wrong one back, so
-  `feedDiskettes` gives them in the order it asks for them, found by trying.
+- **Diskettes are put in with `InsertDiskette`**, and the swapping a
+  Macintosh of one drive asks for is the operator's `SwapDiskettes`, which
+  puts the other one in whenever the drive is left empty. The Installer asks
+  for its diskettes by name and does not give a wrong one back, so
+  `FeedDiskettes` gives them in the order it asks for them, found by trying.
+  Both take a function they call every half second, for a recording.
 - **A file the Mac writes to the host**, a page of the printer or a file on
   `-share`, is waited for by looking at the host: `waitForPages` runs the
   machine until no page has come out for twenty seconds.
 - **The share's server is named after the host** unless the configuration's
-  `shareServerName` says otherwise; the generator sets it, so the pictures do
+  `ShareName`, `-sharename` on the command line, says otherwise; the
+  generator sets it, so the pictures do
   not show the name of the computer they were made on.
 - **Exploring a new program is quicker with a throwaway test** that starts a
   machine and runs a script of clicks, keys and screenshots from a file,
