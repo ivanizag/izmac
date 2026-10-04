@@ -12,23 +12,24 @@ shared, from the Chooser.
 
 This is two Macintoshes in an office: Ada's, which shares its disk, and Grace's,
 which connects to it and puts a folder in it. Both are izmacs on your computer,
-on one emulated LocalTalk.
+on one emulated LocalTalk. The screenshots of Ada's are on the left of the page
+and say *Ada's Mac* under the screen; those of Grace's are on the right, and
+say *Grace's Mac*.
 
 ## What you need
 
-A disk with System 7 and File Sharing installed for each Macintosh. izmac's own
-tests use one, System 7.1.2 on a 4 MB hard disk, made from the
-[MacPack](https://archive.org/details/macpack) at the Internet Archive; download
-it twice, one for each:
+A hard disk with System 7 and File Sharing installed, one for each Macintosh.
+izmac's own tests use one, System 7.1.2 on a 4 MB disk, made from the
+[MacPack](https://archive.org/details/macpack) at the Internet Archive:
 
-```bash
-curl -L -o ada.img https://github.com/ivanizag/izmac/raw/main/test_images/system7.img
-curl -L -o grace.img https://github.com/ivanizag/izmac/raw/main/test_images/system7.img
-```
+1. Download **`system7.img`** from izmac's repository: open
+   [test_images/system7.img](https://github.com/ivanizag/izmac/blob/main/test_images/system7.img)
+   and click the download button, *Download raw file*.
+2. Put it in the folder you run izmac from, and make it two: rename it to
+   **`ada.img`**, and make a copy of it called **`grace.img`**.
 
-Each Macintosh needs its own disk image, since two machines writing to the same
-file would ruin it, and its own parameter RAM file, which is where a Macintosh
-remembers its settings, its address on the network among them.
+Each Macintosh needs a disk of its own: two machines writing to the same file
+would ruin it.
 
 ## Start both
 
@@ -44,12 +45,19 @@ remembers its settings, its address on the network among them.
    izmac -appletalk host -ram 4096 -pram grace.pram grace.img
    ```
 
-   `-appletalk host` puts the printer port of each on a LocalTalk shared by all
-   the izmacs started that way on this computer, and `-ram 4096` gives each the
-   four megabytes that were the most a Plus could have, which System 7 makes
-   good use of. The first time, your computer may ask whether
-   izmac can accept network connections: say yes.
-   [AppleTalk](../appletalk.md) has the other ways of connecting them.
+   `-appletalk host` puts the printer port of each on a LocalTalk shared by
+   all the izmacs started that way on this computer, and `-ram 4096` gives
+   each the four megabytes that were the most a Plus could have, which
+   System 7 makes good use of.
+
+   `-pram` is the file each keeps its settings in, its address on the network
+   among them, and the two need one each. The files do not have to be there
+   yet: izmac makes them the first time the Macintosh changes a setting, which
+   System 7 does as it starts.
+
+   The first time, your computer may ask whether izmac can accept network
+   connections: say yes. [AppleTalk](../appletalk.md) has the other ways of
+   connecting them.
 
 ## Share Ada's disk
 
@@ -102,13 +110,13 @@ The steps in this part are on **Grace's** Macintosh.
 7. **Choose Chooser from the Apple menu**, and click **AppleShare** on its left.
    Every file server on the network appears on the right: Ada's Mac is one.
 
-   ![The Chooser](images/file-sharing/chooser.png)
+   <p align="right"><img src="images/file-sharing/chooser.png" alt="The Chooser"></p>
 
 8. **Click Ada's Mac and OK.** Log in as a **registered user**, with the owner
    name and the password Ada typed in Sharing Setup: *Ada* and *secret*. Then
    click OK.
 
-   ![Connecting as a registered user](images/file-sharing/connect-as.png)
+   <p align="right"><img src="images/file-sharing/connect-as.png" alt="Connecting as a registered user"></p>
 
    The owner of a Macintosh can use all of its disk from another one. Anyone
    else would see only the folders shared with them.
@@ -116,22 +124,22 @@ The steps in this part are on **Grace's** Macintosh.
 9. **Choose the disk** in the list, *Ada's Disk*, and click OK. Then close the
    Chooser.
 
-   ![The items of Ada's Mac](images/file-sharing/select-items.png)
+   <p align="right"><img src="images/file-sharing/select-items.png" alt="The items of Ada's Mac"></p>
 
    Ada's disk is on Grace's desktop now, with the icon of a disk on the network,
    under Grace's own.
 
-   ![Ada's disk on Grace's desktop](images/file-sharing/mounted.png)
+   <p align="right"><img src="images/file-sharing/mounted.png" alt="Ada's disk on Grace's desktop"></p>
 
 10. **Make a folder and copy it across**: choose New Folder from the File menu,
     type *From Grace* and press Return. A folder appears on the desktop. Then
     double-click Ada's disk to open it, and drag the folder onto *Shared*.
 
-    ![Ada's disk on Grace's Macintosh](images/file-sharing/remote-disk.png)
+    <p align="right"><img src="images/file-sharing/remote-disk.png" alt="Ada's disk on Grace's Macintosh"></p>
 
     The folder is copied over the network into Ada's shared folder.
 
-    ![Copied](images/file-sharing/copied.png)
+    <p align="right"><img src="images/file-sharing/copied.png" alt="Copied"></p>
 
 ## Back on Ada's
 

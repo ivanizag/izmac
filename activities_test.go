@@ -1,12 +1,18 @@
 package izmac
 
 import (
+	"image"
+	"image/color"
+	"image/draw"
 	"image/png"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/ivanizag/izmac/localtalk"
+	"golang.org/x/image/font"
+	"golang.org/x/image/font/basicfont"
+	"golang.org/x/image/math/fixed"
 )
 
 /*
@@ -22,8 +28,66 @@ can be made again when the emulator or the instructions change.
 const activityImages = "doc/activities/images"
 
 // screenshot writes the screen of a machine as one of the images of an
-// activity
+// activity, in its frame
 func screenshot(t *testing.T, m *Mac, activity string, name string) {
+	t.Helper()
+	screenshotOf(t, m, activity, name, "")
+}
+
+/*
+The frame around a screenshot: black, as the glass of the screen of the
+Macintosh is around what it shows, so that the corners the ROM rounds off in
+black read as round, and with rounded corners of its own. A label, when there
+is one, goes in its bottom edge in grey, the way a name is on the front of a
+monitor.
+*/
+const (
+	frameWidth  = 14
+	frameLabel  = 14
+	frameRadius = 12
+)
+
+func framed(screen image.Image, label string) *image.RGBA {
+	b := screen.Bounds()
+	bottom := frameWidth
+	if label != "" {
+		bottom += frameLabel
+	}
+	width, height := b.Dx()+2*frameWidth, b.Dy()+frameWidth+bottom
+	out := image.NewRGBA(image.Rect(0, 0, width, height))
+
+	// Black, but for what the rounding leaves out of each corner
+	corner := func(x int, last int) int {
+		return max(frameRadius-x, x-(last-frameRadius), 0)
+	}
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			dx, dy := corner(x, width-1), corner(y, height-1)
+			if dx*dx+dy*dy <= frameRadius*frameRadius {
+				out.Set(x, y, color.Black)
+			}
+		}
+	}
+	draw.Draw(out, image.Rect(frameWidth, frameWidth, frameWidth+b.Dx(), frameWidth+b.Dy()),
+		screen, b.Min, draw.Src)
+
+	if label != "" {
+		face := basicfont.Face7x13
+		writer := font.Drawer{
+			Dst:  out,
+			Src:  image.NewUniform(color.Gray{Y: 0xb0}),
+			Face: face,
+		}
+		textWidth := writer.MeasureString(label).Round()
+		writer.Dot = fixed.P((width-textWidth)/2, frameWidth+b.Dy()+frameLabel-1)
+		writer.DrawString(label)
+	}
+	return out
+}
+
+// screenshotOf writes the screen of a machine with a label in its frame,
+// which says whose it is when there are two
+func screenshotOf(t *testing.T, m *Mac, activity string, name string, label string) {
 	t.Helper()
 	folder := filepath.Join(activityImages, activity)
 	if err := os.MkdirAll(folder, 0o755); err != nil {
@@ -34,7 +98,7 @@ func screenshot(t *testing.T, m *Mac, activity string, name string) {
 		t.Fatal(err)
 	}
 	defer f.Close()
-	if err := png.Encode(f, m.GetImage()); err != nil {
+	if err := png.Encode(f, framed(m.GetImage(), label)); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -269,7 +333,7 @@ copies a file into it, which the first then shows. The first runs on a
 goroutine of its own while the second is driven.
 */
 func fileSharingScreenshots(t *testing.T) {
-	const page = "file-sharing"
+	const page, ada, grace = "file-sharing", "Ada's Mac", "Grace's Mac"
 	network := localtalk.NewNetwork()
 	machine := func() *Mac {
 		config := testConfig(t)
@@ -298,15 +362,15 @@ func fileSharingScreenshots(t *testing.T) {
 	typeKeys(server, "Shift+A", "D", "A", "Quote", "S", "Space", "Shift+D", "I", "S", "K")
 	pressKey(server, "Return")
 	server.RunFrames(300)
-	screenshot(t, server, page, "disk-window")
+	screenshotOf(t, server, page, "disk-window", ada)
 	for _, at := range [][2]int16{{160, 92}, {358, 92}} {
 		doubleClickAt(t, server, at[0], at[1])
 		server.RunFrames(900)
 	}
-	screenshot(t, server, page, "control-panels")
+	screenshotOf(t, server, page, "control-panels", ada)
 	doubleClickAt(t, server, 232, 92)
 	server.RunFrames(900)
-	screenshot(t, server, page, "sharing-setup")
+	screenshotOf(t, server, page, "sharing-setup", ada)
 	moveMouseTo(t, server, 300, 85)
 	clickMouse(server)
 	typeKeys(server, "Shift+A", "D", "A")
@@ -317,7 +381,7 @@ func fileSharingScreenshots(t *testing.T) {
 	moveMouseTo(t, server, 148, 197)
 	clickMouse(server)
 	server.RunFrames(3600)
-	screenshot(t, server, page, "sharing-on")
+	screenshotOf(t, server, page, "sharing-on", ada)
 	pressCommand(server, "W")
 	server.RunFrames(300)
 
@@ -337,7 +401,7 @@ func fileSharingScreenshots(t *testing.T) {
 	moveMouseTo(t, server, 26, 106)
 	clickMouse(server)
 	server.RunFrames(120)
-	screenshot(t, server, page, "share-folder")
+	screenshotOf(t, server, page, "share-folder", ada)
 	pressCommand(server, "W")
 	server.RunFrames(600)
 	pressKey(server, "Return")
@@ -385,7 +449,7 @@ func fileSharingScreenshots(t *testing.T) {
 	moveMouseTo(t, client, 330, 78)
 	clickMouse(client)
 	client.RunFrames(60)
-	screenshot(t, client, page, "chooser")
+	screenshotOf(t, client, page, "chooser", grace)
 	moveMouseTo(t, client, 364, 266)
 	clickMouse(client)
 	client.RunFrames(900)
@@ -394,11 +458,11 @@ func fileSharingScreenshots(t *testing.T) {
 	typeKeys(client, "Shift+A", "D", "A")
 	pressKey(client, "Tab")
 	typeText(client, "secret")
-	screenshot(t, client, page, "connect-as")
+	screenshotOf(t, client, page, "connect-as", grace)
 	moveMouseTo(t, client, 390, 258)
 	clickMouse(client)
 	client.RunFrames(900)
-	screenshot(t, client, page, "select-items")
+	screenshotOf(t, client, page, "select-items", grace)
 	moveMouseTo(t, client, 336, 258)
 	clickMouse(client)
 	waitUntil(client, 60, func() bool { return len(mountedVolumes(client)) == 2 })
@@ -406,7 +470,7 @@ func fileSharingScreenshots(t *testing.T) {
 	moveMouseTo(t, client, 34, 32)
 	clickMouse(client)
 	client.RunFrames(1200)
-	screenshot(t, client, page, "mounted")
+	screenshotOf(t, client, page, "mounted", grace)
 
 	// A folder made on the desktop of this one, and dragged into the shared
 	// folder of the other
@@ -417,14 +481,14 @@ func fileSharingScreenshots(t *testing.T) {
 	client.RunFrames(300)
 	doubleClickAt(t, client, 472, 95)
 	client.RunFrames(1500)
-	screenshot(t, client, page, "remote-disk")
+	screenshotOf(t, client, page, "remote-disk", grace)
 	dragTo(t, client, 472, 150, 103, 92)
 	client.RunFrames(1800)
-	screenshot(t, client, page, "copied")
+	screenshotOf(t, client, page, "copied", grace)
 
 	// And the first, stopped to be looked at, has it in its shared folder
 	close(stop)
 	<-stopped
 	server.RunFrames(1200)
-	screenshot(t, server, page, "arrived")
+	screenshotOf(t, server, page, "arrived", ada)
 }
