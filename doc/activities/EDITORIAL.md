@@ -231,6 +231,15 @@ for testing and for these pages, and their sources are public archives.
   looks the same as the one before it adds nothing.
 - **The main page groups the activities by theme**, each with a picture
   320 pixels wide in an `<img>` tag, a link to the page, and a paragraph.
+- **A printed page is kept from its top to half an inch below the printing**
+  (`keepPrintedPage`), outlined, its cut edge in dashes. A whole page of
+  eleven inches with a few lines at the top reads as a picture that did not
+  finish loading.
+- **One picture of one thing.** A GIF that ends on what the next screenshot
+  shows makes the screenshot redundant; drop it, unless the main page uses it
+  as a thumbnail.
+- **One activity per program**, even for short ones such as a game: a page
+  of two programs is two pages.
 - **Keep the main page's thumbnails as PNGs.** `disk-window.png` is still
   generated because `README.md` uses it, even though the page uses a GIF
   there.

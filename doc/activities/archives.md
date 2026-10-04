@@ -99,7 +99,7 @@ their university.
 
 ## What next
 
-Bolo was made for the network: [Two Macs sharing
-files](file-sharing.md) shows how to put two izmacs on one LocalTalk, and
-the AppleTalk game type of Bolo works between them. [Games of the
-Plus](games.md) has more to play.
+Bolo was made for the network: [Two Macs sharing files](file-sharing.md)
+shows how to put two izmacs on one LocalTalk, the network its AppleTalk game
+is played over. [Lode Runner](lode-runner.md) and [Dark
+Castle](dark-castle.md) are more to play.

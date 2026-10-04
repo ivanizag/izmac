@@ -75,13 +75,7 @@ func printingScreenshots(t *testing.T) {
 	// The same corner of each page, side by side
 	compareQualities(t, printed, []string{"Draft", "Standard", "High"},
 		filepath.Join(activityImages, page, "qualities.png"))
-	data, err := os.ReadFile(printed[2])
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(activityImages, page, "printed-page.png"), data, 0o644); err != nil {
-		t.Fatal(err)
-	}
+	keepPrintedPage(t, printed[2], page)
 }
 
 /*

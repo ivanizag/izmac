@@ -144,9 +144,16 @@ emulated network.
 
 ## Play
 
-### [Games of the Plus](games.md)
+### [Lode Runner](lode-runner.md)
 
-<a href="games.md"><img src="images/games/dark-castle.png" width="320" alt="Dark Castle"></a>
+<a href="lode-runner.md"><img src="images/lode-runner/game-menu.png" width="320" alt="Lode Runner"></a>
 
-Lode Runner and Dark Castle, playing their own demonstrations: what the Plus
-could do with 512 by 342 dots in black and white.
+Broderbund's game of 1983: a runner, ladders, gold and guards, and a gun that
+digs holes in the bricks. It plays its first level by itself.
+
+### [Dark Castle](dark-castle.md)
+
+<a href="dark-castle.md"><img src="images/dark-castle/title.png" width="320" alt="Dark Castle"></a>
+
+The game of 1986 people bought a Macintosh to play, drawn like an old
+engraving, with its demonstration of the rooms of the castle.

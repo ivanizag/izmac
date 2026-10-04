@@ -1,7 +1,6 @@
 package izmac
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
 )
@@ -82,7 +81,7 @@ func macWriteScreenshots(t *testing.T) {
 		m.RunFrames(60)
 	}
 	m.RunFrames(600)
-	macWritePrinted(t, printed, page)
+	keepPrintedPage(t, printed, page)
 
 	// Saved on the diskette as Letter
 	chooseFromMenu(t, m, 53, 91)
@@ -92,17 +91,4 @@ func macWriteScreenshots(t *testing.T) {
 	screenshot(t, m, page, "save-as")
 	pressKey(m, "Return")
 	m.RunFrames(900)
-}
-
-// macWritePrinted copies the page the ImageWriter printed to the images of
-// the activity
-func macWritePrinted(t *testing.T, printed string, page string) {
-	t.Helper()
-	data, err := os.ReadFile(printed)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(activityImages, page, "printed-page.png"), data, 0o644); err != nil {
-		t.Fatal(err)
-	}
 }

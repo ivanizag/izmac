@@ -77,7 +77,8 @@ from the start, and writes the pages it prints as images.
      takes two passes of the head for every line. It took several times as
      long as Draft.
 
-7. The high quality page whole:
+7. The high quality page, down to where the memo ends; the rest of the page
+   is blank:
 
    ![The memo in high quality](images/printing/printed-page.png)
 

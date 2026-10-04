@@ -74,7 +74,8 @@ Internet Archive.
 
    ![Printing](images/macwrite/print.png)
 
-7. The page comes out as an image beside izmac, `izmac_page_001.png`:
+7. The page comes out as an image beside izmac, `izmac_page_001.png`, a whole
+   page of eleven inches. This is its top, where the letter is:
 
    ![The printed letter](images/macwrite/printed-page.png)
 

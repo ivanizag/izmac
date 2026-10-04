@@ -2,13 +2,15 @@
 
 [Back to the activities](README.md)
 
-Every home computer of the early eighties started in BASIC: switch it on, and
+Most home computers of the early eighties started in BASIC: switch one on, and
 there was a prompt waiting for a program. The Macintosh did not, and had no
 language in the box at all. Apple had its own BASIC for it nearly finished,
-MacBASIC, and dropped it in 1985 in a deal with Microsoft, whose BASIC the
-Apple II needed, and so the BASIC of the Macintosh was **Microsoft BASIC**:
-the language of the home computers, with windows, the mouse, menus and
-QuickDraw's drawing within reach of a line of code.
+MacBASIC, and dropped it in 1985: the Apple II had come with Microsoft's
+BASIC, Applesoft, since the late seventies, the licence for it was running
+out, and Microsoft made dropping MacBASIC part of renewing it. So the BASIC
+of the Macintosh was **Microsoft BASIC**: the language of the home computers,
+with windows, the mouse, menus and QuickDraw's drawing within reach of a line
+of code.
 
 This is a short program typed and run in Microsoft BASIC 2.0, of 1985.
 

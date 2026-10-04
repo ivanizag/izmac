@@ -10,10 +10,11 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/ivanizag/izmac/localtalk"
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/basicfont"
 	"golang.org/x/image/math/fixed"
+
+	"github.com/ivanizag/izmac/localtalk"
 )
 
 /*
@@ -162,7 +163,8 @@ func TestActivityScreenshots(t *testing.T) {
 	t.Run("installing", installingScreenshots)
 	t.Run("printing", printingScreenshots)
 	t.Run("systems", systemsScreenshots)
-	t.Run("games", gamesScreenshots)
+	t.Run("lode-runner", lodeRunnerScreenshots)
+	t.Run("dark-castle", darkCastleScreenshots)
 }
 
 /*
@@ -446,11 +448,62 @@ func macPaintScreenshots(t *testing.T) {
 	}
 	writeScreenshot(t, drawn, page, "printing", "")
 	m.RunFrames(600)
-	data, err := os.ReadFile(printed)
+	keepPrintedPage(t, printed, page)
+}
+
+/*
+keepPrintedPage keeps the page the ImageWriter printed as one of the images of
+an activity, from its top to half an inch below the last line printed: the
+rest of a page of eleven inches is blank, and shown whole it reads as a
+picture that did not finish. The page is outlined in grey so that it shows as
+paper on a white background, the edge where it is cut short in dashes.
+*/
+func keepPrintedPage(t *testing.T, printed string, page string) {
+	t.Helper()
+	f, err := os.Open(printed)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(activityImages, page, "printed-page.png"), data, 0o644); err != nil {
+	paper, err := png.Decode(f)
+	f.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The last row with ink on it, and half an inch more at 144 dots
+	bounds := paper.Bounds()
+	last := bounds.Min.Y
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			if r, _, _, _ := paper.At(x, y).RGBA(); r < 0x8000 {
+				last = y
+				break
+			}
+		}
+	}
+	bottom := min(last+72, bounds.Max.Y)
+
+	kept := image.NewRGBA(image.Rect(0, 0, bounds.Dx(), bottom-bounds.Min.Y))
+	draw.Draw(kept, kept.Bounds(), paper, bounds.Min, draw.Src)
+	edge := color.Gray{Y: 0xb0}
+	w, h := kept.Bounds().Dx(), kept.Bounds().Dy()
+	for x := 0; x < w; x++ {
+		kept.Set(x, 0, edge)
+		if x/8%2 == 0 {
+			kept.Set(x, h-1, edge)
+		}
+	}
+	for y := 0; y < h; y++ {
+		kept.Set(0, y, edge)
+		kept.Set(w-1, y, edge)
+	}
+
+	out, err := os.Create(filepath.Join(activityImages, page, "printed-page.png"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer out.Close()
+	if err := png.Encode(out, kept); err != nil {
 		t.Fatal(err)
 	}
 }
