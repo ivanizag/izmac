@@ -124,7 +124,7 @@ Internet Archive, and keeps them beside itself for the next time.
     blinking question mark for a disk to start from. That was the moment to
     reach for the switch at the back.
 
-    ![After Shut Down](images/first-steps/shut-down.png)
+    ![After Shut Down](images/first-steps/shut-down.gif)
 
     Close the izmac window to switch it off. Later Systems put up a message that
     it is safe to switch off, and izmac closes by itself when they do.

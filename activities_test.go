@@ -4,6 +4,7 @@ import (
 	"image"
 	"image/color"
 	"image/draw"
+	"image/gif"
 	"image/png"
 	"os"
 	"path/filepath"
@@ -222,10 +223,14 @@ func firstStepsScreenshots(t *testing.T) {
 	chooseFromMenu(t, m, 185, 43)
 	m.RunFrames(300)
 
-	// Shut Down, the last item of Special
+	// Shut Down, the last item of Special, and the disk with the question
+	// mark that blinks while the machine waits for one
 	chooseFromMenu(t, m, 185, 123)
 	m.RunFrames(900)
-	screenshot(t, m, page, "shut-down")
+	shutDown := record(m, "")
+	shutDown.capture(5)
+	shutDown.run(240, 3)
+	shutDown.save(t, page, "shut-down", 0)
 }
 
 // dragOn drags with the button held from one place to another, which is how
@@ -271,14 +276,28 @@ func macPaintScreenshots(t *testing.T) {
 	m.RunFrames(900)
 	screenshot(t, m, page, "empty")
 
-	// A rectangle filled with bricks, an oval filled with grey, and an
-	// empty rounded rectangle around them
+	// A rectangle filled with bricks, and an empty oval
 	pick(t, m, 350, 305)
 	pick(t, m, 54, 150)
 	dragOn(t, m, 110, 70, 220, 150)
-	pick(t, m, 150, 322)
-	pick(t, m, 54, 194)
+	pick(t, m, 29, 194)
 	dragOn(t, m, 250, 70, 380, 160)
+
+	// The oval filled with grey by the paint bucket, recorded: the bucket
+	// clicked inside it, and the pattern poured in
+	pick(t, m, 150, 322)
+	pick(t, m, 29, 84)
+	moveMouseTo(t, m, 315, 120)
+	m.RunFrames(30)
+	fill := record(m, "")
+	fill.capture(100)
+	m.SetMouseButton(true)
+	fill.run(6, 2)
+	m.SetMouseButton(false)
+	fill.run(60, 3)
+	fill.save(t, page, "fill", 200)
+
+	// An empty rounded rectangle around both
 	pick(t, m, 29, 172)
 	dragOn(t, m, 95, 60, 400, 175)
 	screenshot(t, m, page, "shapes")
@@ -314,24 +333,21 @@ func macPaintScreenshots(t *testing.T) {
 	clickMouse(m)
 	m.RunFrames(300)
 
-	// Print Final, and the page the ImageWriter printed
-	// The screen is kept a second at a time while it prints, and the last
-	// one before the page comes out is the one of the page drawn whole
+	// Print Final, recorded while MacPaint draws the page as it sends it to
+	// the printer, and the page the ImageWriter printed
 	chooseFromMenu(t, m, 55, 139)
 	printed := config.PrinterFile + "_001.png"
-	var lastBeforeThePage image.Image
+	printing := record(m, "")
 	for second := 0; !exists(printed); second++ {
-		if second == 300 {
+		if second == 600 {
 			t.Fatalf("MacPaint printed nothing")
 		}
-		// The machine draws its screen into the same image every time
-		screen := m.GetImage()
-		kept := image.NewRGBA(screen.Bounds())
-		copy(kept.Pix, screen.Pix)
-		lastBeforeThePage = kept
-		m.RunFrames(60)
+		// Five times faster than it happens: the real thing takes
+		// about forty seconds
+		m.RunFrames(30)
+		printing.capture(10)
 	}
-	writeScreenshot(t, lastBeforeThePage, page, "printing", "")
+	printing.save(t, page, "printing", 300)
 	m.RunFrames(600)
 	data, err := os.ReadFile(printed)
 	if err != nil {
@@ -508,4 +524,106 @@ func fileSharingScreenshots(t *testing.T) {
 	<-stopped
 	server.RunFrames(1200)
 	screenshotOf(t, server, page, "arrived", ada)
+}
+
+/*
+A recording is an animated screenshot, for what is worth watching move: a GIF
+of the screen in its frame, a picture taken every few frames of the machine.
+The screen has two colours and changes in little places at a time, so each
+picture after the first is only the part of it that changed, and a picture
+that changed nothing makes the one before last longer.
+*/
+type recording struct {
+	m      *Mac
+	label  string
+	frames []*image.Paletted
+	delays []int
+	last   *image.Paletted
+}
+
+// recordingPalette is what a framed screenshot is made of: the corners left
+// out of the frame, black, white, and the grey of a label
+func recordingPalette() color.Palette {
+	return color.Palette{
+		color.Transparent, color.Black, color.White, color.Gray{Y: 0xb0},
+	}
+}
+
+func record(m *Mac, label string) *recording {
+	return &recording{m: m, label: label}
+}
+
+// capture takes a picture of the screen, shown for a time in hundredths of a
+// second
+func (r *recording) capture(delay int) {
+	whole := framed(r.m.GetImage(), r.label)
+	picture := image.NewPaletted(whole.Bounds(), recordingPalette())
+	for i := 0; i < len(whole.Pix); i += 4 {
+		var index uint8
+		switch {
+		case whole.Pix[i+3] == 0:
+			index = 0
+		case whole.Pix[i] == 0:
+			index = 1
+		case whole.Pix[i] == 0xff:
+			index = 2
+		default:
+			index = 3
+		}
+		picture.Pix[i/4] = index
+	}
+
+	if r.last == nil {
+		r.frames, r.delays, r.last = append(r.frames, picture), append(r.delays, delay), picture
+		return
+	}
+
+	// Only the part that changed, if anything did
+	changed := image.Rectangle{}
+	bounds := picture.Bounds()
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			if picture.ColorIndexAt(x, y) != r.last.ColorIndexAt(x, y) {
+				changed = changed.Union(image.Rect(x, y, x+1, y+1))
+			}
+		}
+	}
+	r.last = picture
+	if changed.Empty() {
+		r.delays[len(r.delays)-1] += delay
+		return
+	}
+	part := image.NewPaletted(changed, recordingPalette())
+	draw.Draw(part, changed, picture, changed.Min, draw.Src)
+	r.frames, r.delays = append(r.frames, part), append(r.delays, delay)
+}
+
+// run runs the machine for some frames, taking a picture every few of them
+func (r *recording) run(frames int, every int) {
+	for done := 0; done < frames; done += every {
+		r.m.RunFrames(uint64(every))
+		r.capture(every * 100 / 60)
+	}
+}
+
+// save writes the recording as one of the images of an activity, the last
+// picture held a while before it starts again
+func (r *recording) save(t *testing.T, activity string, name string, hold int) {
+	t.Helper()
+	if len(r.delays) == 0 {
+		t.Fatalf("the recording %v has nothing in it", name)
+	}
+	r.delays[len(r.delays)-1] += hold
+	folder := filepath.Join(activityImages, activity)
+	if err := os.MkdirAll(folder, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.Create(filepath.Join(folder, name+".gif"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	if err := gif.EncodeAll(f, &gif.GIF{Image: r.frames, Delay: r.delays}); err != nil {
+		t.Fatal(err)
+	}
 }

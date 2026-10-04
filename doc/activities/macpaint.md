@@ -41,9 +41,15 @@ pages it writes as images.
    rectangle** in the tools, the right one of the sixth row. Then drag on the
    page from one corner of the rectangle to the other.
 
-3. **Click the grey pattern and the filled oval**, the right one of the eighth
-   row, and drag an oval beside the rectangle. Then **the empty rounded
-   rectangle**, on the left of the seventh row, and drag one around both.
+3. **Click the empty oval**, the left one of the eighth row, and drag an oval
+   beside the rectangle. Then **click the grey pattern and the paint bucket**,
+   the left one of the third row, and click inside the oval: the pattern pours
+   into it, up to the black dots of its edge, all at once.
+
+   ![The paint bucket](images/macpaint/fill.gif)
+
+   Then **the empty rounded rectangle**, on the left of the seventh row, and
+   drag one around both.
 
    ![Shapes with patterns](images/macpaint/shapes.png)
 
@@ -81,11 +87,13 @@ pages it writes as images.
 ## Print
 
 8. **Choose Print Final from the File menu.** *Print Draft* is quicker and
-   rougher. MacPaint shows the page going to the printer, and it takes a
-   while: izmac sends it to its ImageWriter at the speed of the serial port of
-   the Macintosh, as the real one did.
+   rougher. MacPaint draws the page, a band at a time, as it sends it to the
+   printer, and it takes a while: izmac sends it to its ImageWriter at the
+   speed of the serial port of the Macintosh, as the real one did. The
+   recording is five times faster than that; the real thing takes about forty
+   seconds.
 
-   ![Printing](images/macpaint/printing.png)
+   ![Printing](images/macpaint/printing.gif)
 
 9. The page comes out beside izmac, as a picture: izmac says
 
