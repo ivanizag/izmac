@@ -1,7 +1,7 @@
 #!/bin/sh
 #
 # Builds the test images from the disks they are taken from, with hfsutils,
-# python3 and unzip. The images are in the repository, and this is only needed
+# python3, unzip and unar. The images are in the repository, and this is only needed
 # to make them again or change them; see README.md for what is on each.
 #
 # The disks they are taken from are downloaded from the Internet Archive, once:
@@ -21,8 +21,24 @@
 #   Supplement.vhd  the supplement disk of the MacPack, with the System Extras
 #                   of each System, File Sharing among them
 #   DSK.zip         the diskettes of the MacPack, the 800K set of System 6.0.8
-#                   among them: Utilities 1, with AppleShare installed, and
-#                   Printing Tools, with the ImageWriter driver and TeachText
+#                   among them: Utilities 1, with AppleShare installed,
+#                   Utilities 2, with the Key Layout and the control panels,
+#                   and Printing Tools, with the ImageWriter driver and
+#                   TeachText. The four of the set are also kept as they are,
+#                   for installing System 6.
+#
+# And the disks and archives of the activities of doc/activities, kept as
+# they were downloaded, each the one a reader is sent to:
+#
+#   macwrite.dsk    MacWrite 4.5 with System 2.0, the Disk Write diskette
+#   multiplan.dsk   Microsoft Multiplan 1.11
+#   basic.dsk       Microsoft BASIC 2.0, in DiskCopy 4.2
+#   hypercard.dsk   HyperCard 1.1, its Startup diskette, out of a RAR of the
+#                   whole set of four with the scans of the box
+#   resedit.sit     ResEdit 2.1, the diskette of the book ResEdit Complete in
+#                   a StuffIt archive, out of a zip with the scans
+#   bolo.sit        Bolo 0.99.7, as the Tucows archive kept it
+#   loderunner.dsk  Lode Runner, and darkcastle.dsk Dark Castle 1.2
 #
 # After building, boot each once so the Finder makes its desktop file:
 #
@@ -73,13 +89,39 @@ fetch Supplement.vhd "$MACPACK_ZIP/Supplement.vhd" \
 	b42502933e869d68f4a28ec30d2fef1571025f1523bac6d13715b9b5fe4ff2e5
 fetch DSK.zip "$MACPACK_ZIP/DSK.zip" \
 	ff5eca49dd9c3f63bf5e72ba35a897c560cc86e0bb4b93944bb0f5f42f6b2152
+fetch macwrite.dsk "$ARCHIVE/mac_Disk_Write_2/Disk_Write_2.dsk" \
+	94c4bddf64c5d474342326c0b999ac1cbac8efcf10d7432062707e4a97fa195d
+fetch multiplan.dsk "$ARCHIVE/mac_MSMultiplan_1.11/MSMultiplan_1.11.dsk" \
+	58b3088be10e2c051103be4feeac99ec00c39f0bc1ef8da5fc88ae8b40ddb064
+fetch basic.dsk "$ARCHIVE/mac_MSBASIC_2/MSBASIC_2.dsk" \
+	71ff985e69d11cf75a92320a9c02f566b8d0f5f5e5ba3c86c51341e8974e7183
+fetch HyperCard11.rar "$ARCHIVE/apple-hyper-card-1.1-1987-english-3.5-800-kb/Apple%20HyperCard%201.1%20(1987)%20%5BEnglish%5D%20(3.5''-800KB).rar" \
+	75e3a303f5046ea497563e8756c0202d5dc203a34e285854d1a0afc5172878e4
+fetch ResEdit21.zip "$ARCHIVE/apple-res-edit-2.1-for-mac-addison-wesley-edition-2.1-1990-12-english-3.5-800-k/Apple%20ResEdit%202.1%20for%20Mac%20Addison-Wesley%20Edition%20(2.1)%20(1990-12)%20%5BEnglish%5D%20(3.5''-800K).zip" \
+	3fb12c2deef58a69d74dc15f81534b2d03acb818c8c034a178a70ab236ac0742
+fetch bolo.sit "$ARCHIVE/tucows_205988_Bolo/bolojolopak.sit" \
+	70836d2474a0c66ead15148e31252b9601bb40463b09197bd65c0e56ae693d4c
+fetch loderunner.dsk "$ARCHIVE/mac_Lode_Runner/Lode_Runner.dsk" \
+	2d9a85fc60c4bdc62b4e2f4aa9d81ad0a0a7de2c19a71ce0698c89b7517230f1
+fetch darkcastle.dsk "$ARCHIVE/mac_DarkCastle_1_2/DarkCastle_1_2.dsk" \
+	102e644bb7aa85b28efe362d9fe94f58fa721988ed9939762b3f51ec83f0a0b1
 
 MACPACK="$WORK/HD20SC.vhd"
 SUPPLEMENT="$WORK/Supplement.vhd"
 UTILITIES="$WORK/utilities1.dsk"
-PRINTING="$WORK/printing.dsk"
+UTILITIES2="$WORK/utilities2.dsk"
+PRINTING="$WORK/printingtools.dsk"
+TOOLS="$WORK/systemtools.dsk"
 unzip -p "$WORK/DSK.zip" "800K/System608/Utilities 1.dsk" >"$UTILITIES"
+unzip -p "$WORK/DSK.zip" "800K/System608/Utilities 2.dsk" >"$UTILITIES2"
 unzip -p "$WORK/DSK.zip" "800K/System608/Printing Tools.dsk" >"$PRINTING"
+unzip -p "$WORK/DSK.zip" "800K/System608/System Tools.dsk" >"$TOOLS"
+
+# The archives of the activities: HyperCard's Startup diskette out of its RAR,
+# and ResEdit's StuffIt archive out of its zip
+unar -q -o "$WORK/hypercard" "$WORK/HyperCard11.rar" "*/IMG/HyperCard Startup.img" >/dev/null
+find "$WORK/hypercard" -name "HyperCard Startup.img" -exec cp {} "$WORK/hypercard.dsk" \;
+unzip -p "$WORK/ResEdit21.zip" "*/IMG/ResEdit 2.1.sit" >"$WORK/resedit.sit"
 
 # The MacPack disk has its HFS volume after the partition map and the driver,
 # 96 blocks in; the first two blocks of a volume are its boot blocks
@@ -118,6 +160,12 @@ get "$UTILITIES" ":System Folder:DA Handler" u1-dahandler
 get "$UTILITIES" ":System Folder:Multifinder" u1-multifinder
 get "$PRINTING" ":Apple Color:TeachText" teachtext
 get "$PRINTING" ":ImageWriter" imagewriter
+for f in "Key Layout" Keyboard Mouse Sound; do
+	get "$UTILITIES2" ":System Folder Additions:$f" "u2-$f"
+done
+for f in System Finder General "Startup Device" "Scrapbook File" "Clipboard File"; do
+	get "$MACPACK" ":System 4.1:$f" "s41-$f"
+done
 for f in System Finder MultiFinder General "Startup Device" "Scrapbook File" Backgrounder; do
 	get "$MACPACK" ":System 6.0.8:$f" "s6-$f"
 done
@@ -169,6 +217,9 @@ for f in System Finder MultiFinder General "Startup Device" "Scrapbook File" Bac
 	put ":System Folder:$f" "s6-$f"
 done
 put ":System Folder:ImageWriter" imagewriter
+for f in "Key Layout" Keyboard Mouse Sound; do
+	put ":System Folder:$f" "u2-$f"
+done
 put ":TeachText" teachtext
 text ":Read Me" "This is a text file on the System 6 test disk."
 hmkdir ":Empty Folder"
@@ -225,14 +276,32 @@ for i in range(1, 8):
 open(sys.argv[3], 'wb').write(disk + volume)
 PYTHON
 
+echo "system41.dsk: System 4.1 and the Finder 5.5 on an 800K diskette"
+blank "$WORK/system41.dsk" 800 "System 4.1"
+dd if="$MACPACK" of="$WORK/system41.dsk" bs=512 skip=$MACPACK_VOLUME count=2 conv=notrunc 2>/dev/null
+hmount "$WORK/system41.dsk" >/dev/null
+hmkdir ":System Folder"
+for f in System Finder General "Startup Device" "Scrapbook File" "Clipboard File"; do
+	put ":System Folder:$f" "s41-$f"
+done
+hattrib -b ":System Folder"
+humount >/dev/null
+
 echo "The rest as they are"
+cp "$TOOLS" "$WORK/system-tools.dsk"
+cp "$UTILITIES" "$WORK/utilities-1.dsk"
+cp "$UTILITIES2" "$WORK/utilities-2.dsk"
+cp "$PRINTING" "$WORK/printing-tools.dsk"
 cp "$WORK/teachtext" "$WORK/teachtext.bin"
 
 # The partition map and the driver of the MacPack disk, cut short, is what a
 # bare volume borrows its SCSI driver from
 head -c 65536 "$CACHE/HD20SC.vhd" >"$WORK/hddriver.img"
 
-for f in system6.dsk system6.img system7.img macplus.rom hddriver.img macpaint.dsk teachtext.bin; do
+for f in system6.dsk system6.img system7.img macplus.rom hddriver.img macpaint.dsk teachtext.bin \
+	system41.dsk system-tools.dsk utilities-1.dsk utilities-2.dsk printing-tools.dsk \
+	macwrite.dsk multiplan.dsk basic.dsk hypercard.dsk resedit.sit bolo.sit \
+	loderunner.dsk darkcastle.dsk; do
 	cp "$WORK/$f" "$OUT/$f"
 	chmod 644 "$OUT/$f"
 done
