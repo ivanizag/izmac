@@ -31,6 +31,7 @@ so that the pictures it shows are what the reader will see:
 | `bolo.sit` | 731K | Bolo 0.99.7, the tank game, in StuffIt, as the Tucows archive kept it |
 | `loderunner.dsk` | 400K | Lode Runner |
 | `darkcastle.dsk` | 800K | Dark Castle 1.2, which starts the game with no Finder |
+| `thinkpascal-1.dsk`, `thinkpascal-2.dsk` | 800K each | The first two of the four diskettes of THINK Pascal 4.0: the application, and the archive of its interfaces and libraries |
 
 The System 6 hard disk is bare and the System 7 one partitioned on purpose,
 so that both ways a disk reaches the bus are tested. System 7 does not fit on
@@ -49,7 +50,8 @@ supplement disk and the diskettes of the
 [MacPack](https://archive.org/details/macpack), a pack of software for the
 Macintosh Plus core of MiSTer. The software of the activities comes from the
 Internet Archive too, its Macintosh software and its copy of the Tucows
-archive. The downloads, about 470 MB, are kept in
+archive, but for THINK Pascal, which comes from WinWorld. The downloads, about
+485 MB, are kept in
 `~/.cache/izmac-test-images` and checked against the SHA-256 they had when the
 images were made. Then each image is started once, in place:
 

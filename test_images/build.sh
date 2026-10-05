@@ -4,10 +4,11 @@
 # python3, unzip and unar. The images are in the repository, and this is only needed
 # to make them again or change them; see README.md for what is on each.
 #
-# The disks they are taken from are downloaded from the Internet Archive, once:
-# they are kept in IZMAC_TEST_IMAGES_CACHE, ~/.cache/izmac-test-images unless
-# it says otherwise, and checked against the SHA-256 they had when the images
-# were first built from them. About 370 MB in all, most of it the supplement
+# The disks they are taken from are downloaded once, from the Internet Archive
+# and, for THINK Pascal, from WinWorld: they are kept in
+# IZMAC_TEST_IMAGES_CACHE, ~/.cache/izmac-test-images unless it says
+# otherwise, and checked against the SHA-256 they had when the images were
+# first built from them. About 385 MB in all, most of it the supplement
 # disk of the MacPack, which is the one place the File Sharing of System 7.1.2
 # was found ready to copy.
 #
@@ -39,6 +40,11 @@
 #                   a StuffIt archive, out of a zip with the scans
 #   bolo.sit        Bolo 0.99.7, as the Tucows archive kept it
 #   loderunner.dsk  Lode Runner, and darkcastle.dsk Dark Castle 1.2
+#   thinkpascal-1.dsk, thinkpascal-2.dsk
+#                   the first two of the four diskettes of THINK Pascal 4.0,
+#                   the application and its interfaces and libraries, out of
+#                   the 7-Zip archive WinWorld keeps of the set, which is not
+#                   on the Internet Archive
 #
 # After building, boot each once so the Finder makes its desktop file:
 #
@@ -105,6 +111,8 @@ fetch loderunner.dsk "$ARCHIVE/mac_Lode_Runner/Lode_Runner.dsk" \
 	2d9a85fc60c4bdc62b4e2f4aa9d81ad0a0a7de2c19a71ce0698c89b7517230f1
 fetch darkcastle.dsk "$ARCHIVE/mac_DarkCastle_1_2/DarkCastle_1_2.dsk" \
 	102e644bb7aa85b28efe362d9fe94f58fa721988ed9939762b3f51ec83f0a0b1
+fetch ThinkPascal40.7z "https://winworldpc.com/download/3295d3eb-1e78-11ec-ad33-0200008a0da4/from/c39ac2af-c381-c2bf-1b25-11c3a4e284a2" \
+	51faeb5c80e1b949d373039686e48a2e8d3eb716a5d4385f5a67ae96c1ba9584
 
 MACPACK="$WORK/HD20SC.vhd"
 SUPPLEMENT="$WORK/Supplement.vhd"
@@ -122,6 +130,11 @@ unzip -p "$WORK/DSK.zip" "800K/System608/System Tools.dsk" >"$TOOLS"
 unar -q -o "$WORK/hypercard" "$WORK/HyperCard11.rar" "*/IMG/HyperCard Startup.img" >/dev/null
 find "$WORK/hypercard" -name "HyperCard Startup.img" -exec cp {} "$WORK/hypercard.dsk" \;
 unzip -p "$WORK/ResEdit21.zip" "*/IMG/ResEdit 2.1.sit" >"$WORK/resedit.sit"
+
+# And the first two diskettes of THINK Pascal out of its 7-Zip archive
+unar -q -o "$WORK/thinkpascal" "$WORK/ThinkPascal40.7z" "*/disk01.img" "*/disk02.img" >/dev/null
+find "$WORK/thinkpascal" -name disk01.img -exec cp {} "$WORK/thinkpascal-1.dsk" \;
+find "$WORK/thinkpascal" -name disk02.img -exec cp {} "$WORK/thinkpascal-2.dsk" \;
 
 # The MacPack disk has its HFS volume after the partition map and the driver,
 # 96 blocks in; the first two blocks of a volume are its boot blocks
@@ -301,7 +314,7 @@ head -c 65536 "$CACHE/HD20SC.vhd" >"$WORK/hddriver.img"
 for f in system6.dsk system6.img system7.img macplus.rom hddriver.img macpaint.dsk teachtext.bin \
 	system41.dsk system-tools.dsk utilities-1.dsk utilities-2.dsk printing-tools.dsk \
 	macwrite.dsk multiplan.dsk basic.dsk hypercard.dsk resedit.sit bolo.sit \
-	loderunner.dsk darkcastle.dsk; do
+	loderunner.dsk darkcastle.dsk thinkpascal-1.dsk thinkpascal-2.dsk; do
 	cp "$WORK/$f" "$OUT/$f"
 	chmod 644 "$OUT/$f"
 done

@@ -65,6 +65,10 @@ const (
 	testBoloArchive       = testImages + "/bolo.sit"
 	testLodeRunnerDisk    = testImages + "/loderunner.dsk"
 	testDarkCastleDisk    = testImages + "/darkcastle.dsk"
+
+	// The first two diskettes of THINK Pascal 4.0, as they were
+	testThinkPascalOneDiskette = testImages + "/thinkpascal-1.dsk"
+	testThinkPascalTwoDiskette = testImages + "/thinkpascal-2.dsk"
 )
 
 /*
