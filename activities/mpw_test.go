@@ -18,6 +18,23 @@ mpwScreenshots is a Mandelbrot set explorer written in C and built with MPW
 the shared folder with the line ends of the Macintosh, compiled and linked
 there from the Worksheet, run, and zoomed into twice
 */
+// mandelbrotListing is the program of the page, as the reader downloads it
+const mandelbrotListing = "../doc/activities/listings/Mandelbrot.c"
+
+/*
+The page shows the program in blocks, with what each does, and links to it
+whole: the blocks, one after the other, are the program
+*/
+func TestThePageOfMPWHasTheWholeProgram(t *testing.T) {
+	listing, err := os.ReadFile(mandelbrotListing)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if blocks := pageListing(t, "mpw", "c"); blocks != string(listing) {
+		t.Errorf("the blocks of C of the page are not %v", mandelbrotListing)
+	}
+}
+
 func mpwScreenshots(t *testing.T) {
 	const page = "mpw"
 	album := NewAlbum(filepath.Join(activityImages, page))
@@ -25,7 +42,11 @@ func mpwScreenshots(t *testing.T) {
 	if err := os.Mkdir(share, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	source := strings.ReplaceAll(pageListing(t, page, "c"), "\n", "\r")
+	listing, err := os.ReadFile(mandelbrotListing)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := strings.ReplaceAll(string(listing), "\n", "\r")
 	if err := os.WriteFile(filepath.Join(share, "Mandelbrot.c"), []uint8(source), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -108,42 +129,68 @@ func mpwScreenshots(t *testing.T) {
 
 	// Mandelbrot run from the Worksheet, and drawn, recorded ten times as
 	// fast
+	first := image.Rect(112, 50, 400, 242)
 	must(t, op.TypeString("\nMandelbrot"))
-	must(t, op.MoveTo(420, 300))
+	must(t, op.MoveTo(440, 300))
 	drawing := Record(op, "")
 	drawing.Capture(100)
 	must(t, op.TypeKeys("Enter"))
-	t.Logf("drawn in %v seconds", drawn(m, func() { op.Run(120); drawing.Capture(20) }))
+	t.Logf("drawn in %v seconds", drawn(m, first, func() { op.Run(120); drawing.Capture(20) }))
 	must(t, album.SaveRecording(drawing, "drawing", 300))
 
+	// The pointer over the picture, and what the point does
+	must(t, op.MoveTo(330, 96))
+	m.RunFrames(60)
+	must(t, album.Screenshot(m, "pointer"))
+
 	// A rectangle around the end of the antenna, being dragged, and drawn
-	must(t, op.MoveTo(150, 140))
+	// in a window of its own
+	must(t, op.MoveTo(150, 130))
 	op.Hold()
 	m.RunFrames(10)
-	must(t, op.MoveTo(175, 156))
-	must(t, op.MoveTo(198, 172))
+	must(t, op.MoveTo(175, 146))
+	must(t, op.MoveTo(198, 162))
 	m.RunFrames(30)
 	must(t, album.Screenshot(m, "selecting"))
 	op.Release()
-	t.Logf("drawn in %v seconds", drawn(m, func() { op.Run(120) }))
-	must(t, op.MoveTo(420, 300))
+	t.Logf("drawn in %v seconds", drawn(m, image.Rect(128, 66, 416, 258), func() { op.Run(120) }))
+	must(t, op.MoveTo(440, 300))
 	m.RunFrames(30)
 	must(t, album.Screenshot(m, "antenna"))
 
-	// And one around the copy of the set on it
-	must(t, op.Drag(234, 144, 270, 168))
-	t.Logf("drawn in %v seconds", drawn(m, func() { op.Run(120) }))
-	must(t, op.MoveTo(420, 300))
+	// And one around the copy of the set on it, in a third window
+	must(t, op.Drag(250, 150, 286, 174))
+	t.Logf("drawn in %v seconds", drawn(m, image.Rect(144, 82, 432, 274), func() { op.Run(120) }))
+	must(t, op.MoveTo(470, 300))
 	m.RunFrames(30)
 	must(t, album.Screenshot(m, "copy"))
+
+	// Black and White, every window drawn again: twenty minutes, enough for
+	// the three. Waiting for the screen to stop changing is no good here:
+	// the rows inside the copy of the set come out as they were, and those
+	// above it white, as the window was.
+	must(t, op.Command("B"))
+	m.RunFrames(20 * 60 * 60)
+	must(t, album.Screenshot(m, "black-and-white"))
+
+	// The two new windows closed, and the first made bigger
+	must(t, op.Command("W"))
+	m.RunFrames(120)
+	must(t, op.Command("W"))
+	m.RunFrames(120)
+	must(t, op.Drag(393, 251, 505, 335))
+	m.RunFrames(10 * 60 * 60)
+	must(t, op.MoveTo(20, 300))
+	m.RunFrames(30)
+	must(t, album.Screenshot(m, "bigger"))
 }
 
 /*
-drawn runs the machine, a step at a time, until the picture of Mandelbrot has
-stopped changing for ten seconds, and says how many seconds it was changing
+drawn runs the machine, a step of two seconds at a time, until a part of the
+screen has stopped changing for ten seconds, and says how many seconds it was
+changing
 */
-func drawn(m *izmac.Mac, step func()) int {
-	window := image.Rect(112, 60, 400, 252)
+func drawn(m *izmac.Mac, window image.Rectangle, step func()) int {
 	var last []uint8
 	seconds, still := 0, 0
 	for still < 10 && seconds < 1200 {
