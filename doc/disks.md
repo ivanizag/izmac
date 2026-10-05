@@ -236,6 +236,13 @@ files macOS leaves beside the others on a USB stick. A file with none of them
 arrives as a plain document with no type, which TeachText can still open if it
 is text.
 
+A file in a folder that is in BinHex (`.hqx`) or MacBinary (`.bin`), as the
+archives on the Internet keep Macintosh files one at a time, goes on the volume
+as the file it holds, with its forks, its type and creator and its own name:
+`Game.bin` is the application `Game`. An archive of several files in a folder,
+a zip or a StuffIt archive, stays the file it is, to be copied and opened on
+the Macintosh.
+
 A folder or a file dropped on the window goes the same way, into a drive when
 it fits on a diskette.
 
