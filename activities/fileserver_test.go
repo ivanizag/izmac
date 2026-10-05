@@ -25,6 +25,7 @@ func fileServerScreenshots(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(share, "Letter.txt"), []uint8(letter), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	predate(t, filepath.Join(share, "Letter.txt"), share)
 
 	config := testConfig(t)
 	config.Diskettes = []string{testImage(t, testSystemSixDiskette)}

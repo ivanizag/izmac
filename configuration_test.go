@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ivanizag/izmac/scsi"
 )
@@ -634,5 +635,34 @@ func TestADiskCopyFileIsSortedAsADiskette(t *testing.T) {
 	if len(c.Diskettes) != 1 || len(c.DiskFiles) != 0 {
 		t.Errorf("a DiskCopy image gave %v diskettes and %v disks, wanted one diskette",
 			len(c.Diskettes), len(c.DiskFiles))
+	}
+}
+
+/*
+-starttime takes a date and a time in the host's local time, and a start time
+is no use to a clock that reads the host
+*/
+func TestTheStartTimeIsTaken(t *testing.T) {
+	c := NewConfiguration()
+	err := c.ParseFlags("izmac", []string{"-rom", "rom.bin", "-starttime", "1987-03-02 10:00:00"}, io.Discard)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if wanted := time.Date(1987, 3, 2, 10, 0, 0, 0, time.Local); !c.StartTime.Equal(wanted) {
+		t.Errorf("the start time is %v, wanted %v", c.StartTime, wanted)
+	}
+
+	c = NewConfiguration()
+	if err := c.ParseFlags("izmac", []string{"-starttime", "March 1987"}, io.Discard); err == nil {
+		t.Error("a start time not written as asked was taken")
+	}
+
+	c = NewConfiguration()
+	err = c.ParseFlags("izmac", []string{"-rom", "rom.bin", "-wallclock", "-starttime", "1987-03-02 10:00:00"}, io.Discard)
+	if err == nil {
+		err = c.Validate()
+	}
+	if err == nil {
+		t.Error("a clock reading the host was given a start time")
 	}
 }

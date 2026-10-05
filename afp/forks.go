@@ -288,7 +288,7 @@ func (v *volume) write(r *reader, session int, data []uint8) ([]uint8, int32) {
 	} else if _, err := f.file.WriteAt(data, offset); err != nil {
 		return nil, hostError(err)
 	}
-	v.touch()
+	v.touch(f.rel)
 	return binary.BigEndian.AppendUint32(nil, uint32(offset+int64(len(data)))), errNoErr
 }
 
@@ -300,6 +300,7 @@ func (v *volume) flush(shared *resourceFork) int32 {
 	if err := v.meta.setResource(v.host(shared.rel), shared.data); err != nil {
 		return hostError(err)
 	}
+	v.touch(shared.rel)
 	shared.dirty = false
 	return errNoErr
 }
@@ -394,7 +395,7 @@ func (v *volume) setForkParms(r *reader, session int) ([]uint8, int32) {
 	} else if err := f.file.Truncate(length); err != nil {
 		return nil, hostError(err)
 	}
-	v.touch()
+	v.touch(f.rel)
 	return nil, errNoErr
 }
 

@@ -64,7 +64,7 @@ func readRtc(r *AppleRTC, command uint8) uint8 {
 }
 
 func TestTheParameterRamHoldsWhatIsWritten(t *testing.T) {
-	r := NewAppleRTC("", false)
+	r := NewAppleRTC("", false, time.Time{})
 
 	// The sixteen bytes reached with the bit 6 set, $00 to $0f
 	for address := 0; address < 16; address++ {
@@ -94,7 +94,7 @@ func TestTheParameterRamHoldsWhatIsWritten(t *testing.T) {
 }
 
 func TestTheSecondsAreReadLowByteFirst(t *testing.T) {
-	r := NewAppleRTC("", false)
+	r := NewAppleRTC("", false, time.Time{})
 	r.seconds = 0x12345678
 
 	for index, wanted := range []uint8{0x78, 0x56, 0x34, 0x12} {
@@ -107,7 +107,7 @@ func TestTheSecondsAreReadLowByteFirst(t *testing.T) {
 }
 
 func TestTheSecondsCanBeSet(t *testing.T) {
-	r := NewAppleRTC("", false)
+	r := NewAppleRTC("", false, time.Time{})
 
 	for index, value := range []uint8{0x11, 0x22, 0x33, 0x44} {
 		writeRtc(r, secondsCommand(index, false), value)
@@ -119,7 +119,7 @@ func TestTheSecondsCanBeSet(t *testing.T) {
 }
 
 func TestTheCounterAdvances(t *testing.T) {
-	r := NewAppleRTC("", false)
+	r := NewAppleRTC("", false, time.Time{})
 	before := r.seconds
 
 	r.TickSecond()
@@ -143,7 +143,7 @@ has counted, so the emulated seconds passing move it not at all and the host
 seconds passing move it exactly.
 */
 func TestTheWallClockFollowsTheHost(t *testing.T) {
-	r := NewAppleRTC("", true)
+	r := NewAppleRTC("", true, time.Time{})
 
 	if got, wanted := readSeconds(r), macSeconds(time.Now()); got != wanted {
 		t.Errorf("the clock reads %v, wanted the time of the host, %v", got, wanted)
@@ -166,7 +166,7 @@ dropped rather than half applied: taking one byte and refusing the rest would
 leave the clock somewhere in 1904.
 */
 func TestTheWallClockCanNotBeSet(t *testing.T) {
-	r := NewAppleRTC("", true)
+	r := NewAppleRTC("", true, time.Time{})
 
 	for index, value := range []uint8{0x11, 0x22, 0x33, 0x44} {
 		writeRtc(r, secondsCommand(index, false), value)
@@ -180,7 +180,7 @@ func TestTheWallClockCanNotBeSet(t *testing.T) {
 // And the parameter RAM is untouched by any of it, which matters because the
 // ROM reads it to find out what to boot from
 func TestTheWallClockStillKeepsTheParameterRam(t *testing.T) {
-	r := NewAppleRTC("", true)
+	r := NewAppleRTC("", true, time.Time{})
 
 	writeRtc(r, pramCommand(2, false), 0xa5)
 	if got := readRtc(r, pramCommand(2, true)); got != 0xa5 {
@@ -211,7 +211,7 @@ func TestTheEpoch(t *testing.T) {
 }
 
 func TestTheWriteProtectBlocksWrites(t *testing.T) {
-	r := NewAppleRTC("", false)
+	r := NewAppleRTC("", false, time.Time{})
 	command := pramCommand(0, false)
 
 	writeRtc(r, command, 0x5a)
@@ -233,7 +233,7 @@ func TestTheWriteProtectBlocksWrites(t *testing.T) {
 // Raising the enable line abandons whatever was in progress, so a command
 // interrupted half way must not be mistaken for the next one
 func TestRaisingTheEnableAbortsTheTransaction(t *testing.T) {
-	r := NewAppleRTC("", false)
+	r := NewAppleRTC("", false, time.Time{})
 	command := pramCommand(0, false)
 
 	writeRtc(r, command, 0x33)
@@ -254,7 +254,7 @@ func TestRaisingTheEnableAbortsTheTransaction(t *testing.T) {
 }
 
 func TestTheChipOnlyDrivesTheDataLineWhileAnswering(t *testing.T) {
-	r := NewAppleRTC("", false)
+	r := NewAppleRTC("", false, time.Time{})
 
 	// An undriven line reads high
 	if !r.DataOut() {
@@ -285,7 +285,7 @@ func TestTheChipOnlyDrivesTheDataLineWhileAnswering(t *testing.T) {
 }
 
 func TestAnUnknownCommandReadsAsZero(t *testing.T) {
-	r := NewAppleRTC("", false)
+	r := NewAppleRTC("", false, time.Time{})
 
 	// The low two bits of a command are always 01, so this is not one
 	if got := readRtc(r, 0x82); got != 0 {
@@ -296,13 +296,13 @@ func TestAnUnknownCommandReadsAsZero(t *testing.T) {
 func TestTheParameterRamSurvivesARestart(t *testing.T) {
 	filename := filepath.Join(t.TempDir(), "pram.bin")
 
-	r := NewAppleRTC(filename, false)
+	r := NewAppleRTC(filename, false, time.Time{})
 	for address := 0; address < 16; address++ {
 		writeRtc(r, pramCommand(address, false), uint8(address*3))
 	}
 
 	// A new machine reads back what the first one wrote
-	again := NewAppleRTC(filename, false)
+	again := NewAppleRTC(filename, false, time.Time{})
 	for address := 0; address < 16; address++ {
 		command := pramCommand(address, true)
 		if got := readRtc(again, command); got != uint8(address*3) {
@@ -318,7 +318,7 @@ func TestAnUnusableParameterRamFileLeavesTheDefaults(t *testing.T) {
 	dir := t.TempDir()
 
 	missing := filepath.Join(dir, "missing.bin")
-	if r := NewAppleRTC(missing, false); r.pram != defaultPram() {
+	if r := NewAppleRTC(missing, false, time.Time{}); r.pram != defaultPram() {
 		t.Error("a missing file did not leave the parameter RAM on its defaults")
 	}
 
@@ -326,7 +326,7 @@ func TestAnUnusableParameterRamFileLeavesTheDefaults(t *testing.T) {
 	if err := os.WriteFile(short, []uint8{1, 2, 3}, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if r := NewAppleRTC(short, false); r.pram != defaultPram() {
+	if r := NewAppleRTC(short, false, time.Time{}); r.pram != defaultPram() {
 		t.Error("a file of the wrong size was loaded anyway")
 	}
 }
@@ -378,7 +378,7 @@ half. The ROM retries once, gives up with a clock read error, and the machine
 sits at the epoch with no sign of why.
 */
 func TestTheRomReadsTheClockTwiceAndComparesTheHalves(t *testing.T) {
-	r := NewAppleRTC("", false)
+	r := NewAppleRTC("", false, time.Time{})
 	r.seconds = 0x12345678
 
 	var read [8]uint8
@@ -410,7 +410,7 @@ func TestTheRomReadsTheClockTwiceAndComparesTheHalves(t *testing.T) {
 // The low two bits of a command are 01 on every one there is, so a byte
 // without them reaches nothing
 func TestACommandWithoutItsTailReachesNothing(t *testing.T) {
-	r := NewAppleRTC("", false)
+	r := NewAppleRTC("", false, time.Time{})
 	r.seconds = 0x11223344
 
 	for _, command := range []uint8{0x80, 0x82, 0x83, 0x9c} {
@@ -452,7 +452,7 @@ func readXpram(r *AppleRTC, address int) uint8 {
 }
 
 func TestTheExtendedParameterRamHoldsWhatIsWritten(t *testing.T) {
-	r := NewAppleRTC("", false)
+	r := NewAppleRTC("", false, time.Time{})
 
 	for _, address := range []int{0x00, 0x0c, 0x7c, 0xe0, 0xff} {
 		writeXpram(r, address, uint8(address)^0x5a)
@@ -471,7 +471,7 @@ other: the ROM reads the AppleTalk configuration one way and System 7 can
 write it the other
 */
 func TestTheClassicBytesAreInTheExtendedParameterRam(t *testing.T) {
-	r := NewAppleRTC("", false)
+	r := NewAppleRTC("", false, time.Time{})
 
 	// SPConfig, the classic byte 3, is the extended $13
 	writeXpram(r, 0x13, 0x21)
@@ -489,7 +489,7 @@ func TestTheClassicBytesAreInTheExtendedParameterRam(t *testing.T) {
 func TestTheExtendedParameterRamSurvivesARestart(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "pram.bin")
 
-	r := NewAppleRTC(file, false)
+	r := NewAppleRTC(file, false, time.Time{})
 	writeXpram(r, 0xe0, 0x42)
 	writeRtc(r, pramCommand(3, false), 0x21)
 
@@ -498,7 +498,7 @@ func TestTheExtendedParameterRamSurvivesARestart(t *testing.T) {
 		t.Fatalf("the parameter RAM file is %v bytes (%v), wanted %v", len(data), err, xpramSize)
 	}
 
-	again := NewAppleRTC(file, false)
+	again := NewAppleRTC(file, false, time.Time{})
 	if readXpram(again, 0xe0) != 0x42 || again.pram[3] != 0x21 {
 		t.Errorf("the parameter RAM did not come back from the file")
 	}
@@ -514,14 +514,14 @@ func TestAnOldParameterRamFileIsStillRead(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	r := NewAppleRTC(file, false)
+	r := NewAppleRTC(file, false, time.Time{})
 	if r.pram[pramSPConfig] != 0x12 {
 		t.Errorf("a twenty byte file was not read")
 	}
 }
 
 func TestAppleTalkDecidesThePorts(t *testing.T) {
-	r := NewAppleRTC("", false)
+	r := NewAppleRTC("", false, time.Time{})
 
 	r.SetAppleTalk(true)
 	if r.pram[pramSPConfig] != spConfigAppleTalk {
@@ -531,5 +531,25 @@ func TestAppleTalkDecidesThePorts(t *testing.T) {
 	r.SetAppleTalk(false)
 	if r.pram[pramSPConfig] != spConfigBothSerial {
 		t.Errorf("with AppleTalk off SPConfig is $%02x, wanted both ports serial", r.pram[pramSPConfig])
+	}
+}
+
+/*
+A clock given a start time starts there, whatever the time of the host, and
+counts the emulated seconds from it: a time in UTC reads the same on every
+host
+*/
+func TestTheClockStartsAtTheTimeGiven(t *testing.T) {
+	start := time.Date(1987, 3, 2, 10, 0, 0, 0, time.UTC)
+	r := NewAppleRTC("", false, start)
+
+	wanted := uint32(time.Date(1987, 3, 2, 10, 0, 0, 0, time.UTC).Sub(
+		time.Date(1904, 1, 1, 0, 0, 0, 0, time.UTC)) / time.Second)
+	if got := readSeconds(r); got != wanted {
+		t.Errorf("the clock reads %v, wanted %v", got, wanted)
+	}
+	r.TickSecond()
+	if got := readSeconds(r); got != wanted+1 {
+		t.Errorf("a second on, the clock reads %v, wanted %v", got, wanted+1)
 	}
 }

@@ -7,7 +7,7 @@ import (
 )
 
 func newTestServer(t *testing.T) *Server {
-	s := NewServer("Ivan’s Mac", "Shared: stuff", t.TempDir())
+	s := NewServer("Ivan’s Mac", "Shared: stuff", t.TempDir(), nil)
 	s.OpenSession(1)
 	return s
 }

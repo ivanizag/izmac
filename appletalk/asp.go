@@ -102,10 +102,12 @@ type Listener struct {
 
 /*
 Listen puts a server on a network: a node of its own, with the name given,
-of type AFPServer, answering to the Chooser. The name is in Mac OS Roman.
+of type AFPServer, answering to the Chooser. The name is in Mac OS Roman. The
+node goes by the clock given, the host's when it is nil.
 */
-func Listen(network *localtalk.Network, name []uint8, server Server) *Listener {
+func Listen(network *localtalk.Network, name []uint8, server Server, clock *Clock) *Listener {
 	n := NewNode(network)
+	n.clock = clock
 	l := &Listener{
 		node:     n,
 		server:   server,
@@ -135,8 +137,8 @@ func (l *Listener) Sessions() int {
 }
 
 // Settle handles every frame waiting for the listener's node, see Node.Settle
-func (l *Listener) Settle() {
-	l.node.Settle()
+func (l *Listener) Settle(now time.Time) {
+	l.node.Settle(now)
 }
 
 // Stop takes the server off the network
@@ -153,7 +155,7 @@ func (l *Listener) listening(r atpRequestIn, respond func([]atpPacket)) {
 		respond([]atpPacket{{user: l.openSession(r)}})
 	case aspTickle:
 		if s, ok := l.sessions[r.user[1]]; ok && s.node == r.node {
-			s.lastHeard = time.Now()
+			s.lastHeard = l.node.clock.Now()
 		}
 		// A tickle is not answered: its retries are the tickles
 	}
@@ -174,7 +176,7 @@ func (l *Listener) openSession(r atpRequestIn) UserBytes {
 			break
 		}
 	}
-	now := time.Now()
+	now := l.node.clock.Now()
 	s := &session{id: l.nextID, node: r.node, socket: r.user[1], lastHeard: now, lastTickle: now}
 	l.sessions[s.id] = s
 	l.server.OpenSession(int(s.id))
@@ -195,7 +197,7 @@ func (l *Listener) sessionRequest(r atpRequestIn, respond func([]atpPacket)) {
 	if !ok || s.node != r.node {
 		return
 	}
-	s.lastHeard = time.Now()
+	s.lastHeard = l.node.clock.Now()
 
 	switch r.user[0] {
 	case aspCommand:

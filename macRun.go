@@ -67,6 +67,7 @@ func (m *Mac) Run() {
 			time.Sleep(200 * time.Millisecond)
 		}
 
+		m.settleFileServer()
 		if m.executeCommands() {
 			return
 		}
@@ -123,11 +124,11 @@ the run loop of a frontend takes them: a paste with PasteText, a diskette with
 SendDisketteCommand, and the rest.
 
 The file server of -share, when there is one, is settled at the end of every
-frame: what the machine asked of it during the frame is answered before the
-next one starts. The server runs in the time of the host and the machine,
-here, as fast as the host can go; without this an answer a person would get
-at once could take seconds of the machine's time, more on a busy host, and a
-Finder waiting for it would see the mouse do things it never saw start.
+frame, see settleFileServer: what the machine asked of it during the frame is
+answered before the next one starts, at the machine's time. A server in the
+time of the host would answer a machine running as fast as the host can go
+seconds of its time late, more on a busy host, and a Finder waiting for it
+would see the mouse do things it never saw start.
 */
 func (m *Mac) RunFrames(frames uint64) {
 	if !m.started {
@@ -146,10 +147,34 @@ func (m *Mac) RunFrames(frames uint64) {
 				return
 			}
 		}
-		if m.fileServer != nil {
-			m.fileServer.Settle()
-		}
+		m.settleFileServer()
 	}
+}
+
+/*
+machineTime is the time on the machine: the time it started at and the
+cycles it has run since, at the clock of the Plus, whatever the speed they
+ran at
+*/
+func (m *Mac) machineTime() time.Time {
+	cycles := m.cyclesBefore + m.cycles
+	// A cycle is 1000/7.8336 nanoseconds, 78125/612
+	return m.startTime.Add(time.Duration(cycles/612*78125 + cycles%612*78125/612))
+}
+
+/*
+settleFileServer settles the file server once a frame, at the time on the
+machine: what was sent to it in the frame is answered, and its timers run,
+before the next frame starts. The server is a part of the machine, so that
+what it answers, and when, depends on what the machine did and not on the
+host.
+*/
+func (m *Mac) settleFileServer() {
+	if m.fileServer == nil || m.settledFrame == m.frames {
+		return
+	}
+	m.settledFrame = m.frames
+	m.fileServer.Settle(m.machineTime())
 }
 
 // step runs one instruction and everything hanging from it
@@ -335,7 +360,9 @@ func (m *Mac) reset() {
 	m.cpu.Reset()
 
 	// The cycles the reset exception itself takes are not counted, the
-	// scan line tick starts with the first instruction
+	// scan line tick starts with the first instruction. The machine's time
+	// goes on.
+	m.cyclesBefore += m.cycles
 	m.cycles = 0
 	m.lineCycles = 0
 	m.secondCycles = 0

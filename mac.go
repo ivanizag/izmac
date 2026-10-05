@@ -55,6 +55,13 @@ type Mac struct {
 
 	cycles uint64
 
+	// startTime is the time the machine started at, and cyclesBefore the
+	// cycles run before the last reset: the machine's own time, which the
+	// file server goes by, is the one from the other plus the cycles run
+	startTime    time.Time
+	cyclesBefore uint64
+	settledFrame uint64
+
 	// lineCycles counts towards the next scan line, the tick the whole
 	// machine runs on
 	lineCycles   uint64
@@ -180,9 +187,13 @@ func NewMac(config *Configuration) (*Mac, error) {
 func newMac(config *Configuration, r *storage.Rom, disks []storage.BlockDisk,
 	diskettes []*storage.FloppyDisk) (*Mac, error) {
 	mm := newMemoryManager(config.RamSizeKb, r.Data(), config.hasTracer("floppy"))
+	start := config.StartTime
+	if start.IsZero() {
+		start = time.Now()
+	}
 
 	v := newVideo(mm)
-	c := component.NewAppleRTC(config.PramFile, config.WallClock)
+	c := component.NewAppleRTC(config.PramFile, config.WallClock, start)
 	c.SetAppleTalk(config.AppleTalk != "")
 	k := newKeyboard()
 	mo := newMouse()
@@ -199,6 +210,7 @@ func newMac(config *Configuration, r *storage.Rom, disks []storage.BlockDisk,
 		mm:             mm,
 		video:          v,
 		rtc:            c,
+		startTime:      start,
 		keyboard:       k,
 		mouse:          mo,
 		mousePointer:   newMousePointer(config.absoluteMouse),
@@ -243,7 +255,7 @@ func newMac(config *Configuration, r *storage.Rom, disks []storage.BlockDisk,
 		}
 
 		if config.Share != "" {
-			m.fileServer = shareFolder(network, config.Share, config.ShareName)
+			m.fileServer = shareFolder(network, config.Share, config.ShareName, start)
 		}
 	}
 

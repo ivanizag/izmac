@@ -136,9 +136,24 @@ func (v *volume) modified() time.Time {
 	return latest
 }
 
-// touch says the volume changed
-func (v *volume) touch() {
-	v.changed = time.Now()
+/*
+touch says the volume changed, at the time of the server, and dates what
+changed with it: each entry named, and the folder it is in, which an entry
+made, deleted or renamed in it, or the AppleDouble file of one changed,
+changes. The host dates them too, with its own time, which on a server given
+a time of its own is not the server's. An entry that is no longer there,
+deleted or renamed away, dates only its folder.
+*/
+func (v *volume) touch(rels ...string) {
+	now := v.now()
+	v.changed = now
+	for _, rel := range rels {
+		os.Chtimes(v.host(rel), now, now)
+		if rel != "" {
+			parent, _ := parentOf(rel)
+			os.Chtimes(v.host(parent), now, now)
+		}
+	}
 }
 
 /*
