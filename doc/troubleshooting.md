@@ -84,9 +84,6 @@ manager claims elsewhere. The same combination with **Alt** or **Option**
 gets through, since both keys are the Macintosh command key. See
 [Keyboard, mouse and the menu](controls.md).
 
-**The arrow keys do nothing.** They are not mapped, and neither is the numeric
-keypad.
-
 ## Copy and paste
 
 **A copy inside the machine did not reach my clipboard.** Some applications

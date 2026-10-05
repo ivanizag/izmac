@@ -120,10 +120,7 @@ func TestEveryCodeIsDistinctAndWellFormed(t *testing.T) {
 		if code&1 == 0 {
 			t.Errorf("%v is $%02x, which does not have its bit 0 set", name, code)
 		}
-		if code&keyboardKeyUp != 0 {
-			t.Errorf("%v is $%02x, which collides with the release bit", name, code)
-		}
-		if code == keyboardNull {
+		if code == keyboardNull || code == keyboardKeypadPrefix {
 			t.Errorf("%v is $%02x, the Null", name, code)
 		}
 		if other, clash := seen[code]; clash && other != name {
@@ -269,5 +266,79 @@ func TestAKeyWaitingWhenACommandComesIsNotLost(t *testing.T) {
 
 	if got := v.peek(viaAddress(viaRegShift)); got != a {
 		t.Errorf("the second inquiry got $%02x, wanted the key $%02x", got, a)
+	}
+}
+
+/*
+A key of the keypad, or an arrow, comes after the prefix $79, on the way
+down and on the way up, and the byte after it is what the driver reads as a
+key code $40 higher: the left arrow is $79 $0d, and $46
+*/
+func TestAnArrowComesAfterThePrefix(t *testing.T) {
+	k := newKeyboard()
+	left := keyCodes()["Left"]
+
+	k.putKey(left, true)
+	k.putKey(left, false)
+
+	for _, want := range []uint8{keyboardKeypadPrefix, 0x0d, keyboardKeypadPrefix, 0x0d | keyboardKeyUp} {
+		if got := ask(k, keyboardCmdInstant); got != want {
+			t.Errorf("the keyboard answered $%02x, wanted $%02x", got, want)
+		}
+	}
+	if got := ask(k, keyboardCmdInquiry); got != keyboardNull {
+		t.Errorf("after the arrow the keyboard answered $%02x, wanted the Null", got)
+	}
+}
+
+// The key codes the driver makes of the arrows and the keypad, from Inside
+// Macintosh volume V for the keyboard of the Plus
+func TestTheKeypadCodesMatchWhatTheDriverMakesOfThem(t *testing.T) {
+	codes := keyCodes()
+
+	for _, c := range []struct {
+		name string
+		key  uint8
+	}{
+		{"Left", 0x46}, {"Right", 0x42}, {"Up", 0x4d}, {"Down", 0x48},
+		{"Keypad0", 0x52}, {"Keypad5", 0x57}, {"Keypad9", 0x5c},
+		{"Enter", 0x4c}, {"Clear", 0x47},
+	} {
+		raw := codes[c.name]
+		if raw&keyboardKeypad == 0 {
+			t.Errorf("%v is not sent after the prefix", c.name)
+		}
+		if got := (raw&^keyboardKeypad)>>1 + 0x40; got != c.key {
+			t.Errorf("%v is raw $%02x, which the driver reads as $%02x, wanted $%02x",
+				c.name, raw, got, c.key)
+		}
+	}
+}
+
+// The keyboard says it is the one of the Plus, which has the keypad
+func TestTheKeyboardIsThePluses(t *testing.T) {
+	if got := ask(newKeyboard(), keyboardCmdModel); got != 0x0b {
+		t.Errorf("the model number is $%02x, wanted the $0b of the M0110A", got)
+	}
+}
+
+/*
+An arrow the Macintosh never got goes back with its prefix, or the byte on
+its own would be read as a key of the main block: $0d alone is the Z
+*/
+func TestAnArrowGivenBackKeepsItsPrefix(t *testing.T) {
+	k := newKeyboard()
+	k.putKey(keyCodes()["Left"], true)
+
+	if got := ask(k, keyboardCmdInquiry); got != keyboardKeypadPrefix {
+		t.Fatalf("the keyboard answered $%02x, wanted the prefix", got)
+	}
+	taken := ask(k, keyboardCmdInstant)
+	k.giveBack(taken)
+
+	for _, want := range []uint8{keyboardKeypadPrefix, 0x0d} {
+		if got := ask(k, keyboardCmdInquiry); got != want {
+			t.Errorf("given back, the keyboard answered $%02x, wanted $%02x", got, want)
+		}
 	}
 }

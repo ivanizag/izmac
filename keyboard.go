@@ -23,14 +23,28 @@ A key transition is one byte: bit 7 clear for a press and set for a release,
 the code on bits 6 to 1, and bit 0 always set. The driver reads it as
 (response & $7f) >> 1.
 
+The keyboard of the Plus, the M0110A, added a numeric keypad and four arrow
+keys to the one before it, and says so in its model number. Their
+transitions come in two bytes: the prefix $79 first, as the answer to an
+Inquiry, and the transition after it, which the driver asks for with an
+Instant and reads as a key code $40 higher than the same byte from the main
+block. So the left arrow is $79 $0d, and the driver makes it the key code
+$46, where $0d alone is the Z.
+
 The eight bits of a byte take about three milliseconds on the wire. That is
 not emulated, but the answer is not instant either: it is held back a while,
 because a keyboard that replies inside the same instruction that asked is a
 situation the ROM never sees on real hardware.
 */
 type keyboard struct {
-	// queue holds the transitions waiting to be reported
+	// queue holds the transitions waiting to be reported, a prefix
+	// before those of the keypad
 	queue []uint8
+
+	// taken is the last byte reported, and prefixed whether the prefix
+	// came before it: what a byte given back needs to be sent again
+	taken    uint8
+	prefixed bool
 
 	// response is what the keyboard will answer, and delay how many cycles
 	// are left before whatever comes next
@@ -68,10 +82,22 @@ const (
 	/*
 		keyboardModel answers the Model Number command: bit 0 set, the
 		model number on bits 1 to 3 and the next device on bits 4 to 6,
-		with bit 7 set when something else is chained on. A plain
-		keyboard with no keypad is model 1 and nothing beyond it.
+		with bit 7 set when something else is chained on. The keyboard
+		of the Plus, with its keypad and arrows, is model 5 and nothing
+		beyond it.
 	*/
-	keyboardModel uint8 = 0x03
+	keyboardModel uint8 = 0x0b
+
+	// keyboardKeypadPrefix comes before the transition of a key of the
+	// keypad or an arrow
+	keyboardKeypadPrefix uint8 = 0x79
+
+	/*
+		keyboardKeypad marks, in the table of key codes, a key sent after
+		the prefix. A code never has bit 7 set, which is the release bit
+		of a transition, so the table has room for it.
+	*/
+	keyboardKeypad uint8 = 1 << 7
 
 	// keyboardKeyUp marks a release
 	keyboardKeyUp uint8 = 1 << 7
@@ -95,24 +121,32 @@ func newKeyboard() *keyboard {
 }
 
 // PutKey queues a transition. The code is the raw one the keyboard sends,
-// from the table in Inside Macintosh, and down says whether the key went
-// down or came up.
+// from the table in Inside Macintosh, marked with keyboardKeypad for a key
+// that goes after the prefix, and down says whether the key went down or
+// came up.
 func (k *keyboard) putKey(code uint8, down bool) {
-	if len(k.queue) >= keyboardQueueLimit {
+	if len(k.queue) >= keyboardQueueLimit-1 {
 		return
 	}
 
-	transition := code
+	transition := code &^ keyboardKeypad
 	if !down {
 		transition |= keyboardKeyUp
+	}
+	if code&keyboardKeypad != 0 {
+		k.queue = append(k.queue, keyboardKeypadPrefix)
 	}
 	k.queue = append(k.queue, transition)
 }
 
 // giveBack puts a transition the Macintosh never got back at the head of the
-// queue, to be reported again
+// queue, to be reported again, with the prefix it came after
 func (k *keyboard) giveBack(transition uint8) {
 	if transition == keyboardNull || transition == keyboardModel || transition == keyboardAck {
+		return
+	}
+	if transition == k.taken && k.prefixed {
+		k.queue = append([]uint8{keyboardKeypadPrefix, transition}, k.queue...)
 		return
 	}
 	k.queue = append([]uint8{transition}, k.queue...)
@@ -145,6 +179,8 @@ func (k *keyboard) nextTransition() uint8 {
 
 	transition := k.queue[0]
 	k.queue = k.queue[1:]
+	k.prefixed = k.taken == keyboardKeypadPrefix
+	k.taken = transition
 	return transition
 }
 
@@ -190,6 +226,12 @@ keyCodes returns the raw transition codes of the United States keyboard, from
 Figure 9 on page III-32 of Inside Macintosh volume III. They are not the codes
 the software sees: the driver strips the release bit and shifts the rest one
 place right, so the $01 of the A key becomes the key code 0.
+
+The arrows and the keypad of the Plus are marked keyboardKeypad: sent after
+the prefix, the driver adds $40 to what it makes of them, so the key code of
+the left arrow, $46, is sent as $0d. The keys +, *, / and = of the keypad are
+not here: the keyboard sends each of them as the shift key and an arrow
+together, in three bytes.
 */
 func keyCodes() map[string]uint8 {
 	return map[string]uint8{
@@ -216,6 +258,21 @@ func keyCodes() map[string]uint8 {
 
 		// The bottom row. Both option keys share a code as the shifts do,
 		// and the enter key beside the space is not the return key.
-		"Option": 0x75, "Command": 0x6f, "Space": 0x63, "Enter": 0x69,
+		"Option": 0x75, "Command": 0x6f, "Space": 0x63,
+
+		// The arrows of the Plus, and its keypad, Enter among them: the
+		// Plus has no other Enter
+		"Left": kp(0x46), "Right": kp(0x42), "Up": kp(0x4d), "Down": kp(0x48),
+		"Keypad0": kp(0x52), "Keypad1": kp(0x53), "Keypad2": kp(0x54),
+		"Keypad3": kp(0x55), "Keypad4": kp(0x56), "Keypad5": kp(0x57),
+		"Keypad6": kp(0x58), "Keypad7": kp(0x59), "Keypad8": kp(0x5b),
+		"Keypad9": kp(0x5c), "KeypadPeriod": kp(0x41), "KeypadMinus": kp(0x4e),
+		"Clear": kp(0x47), "Enter": kp(0x4c),
 	}
+}
+
+// kp is the raw code of a key of the keypad, or an arrow, from the key code
+// the software sees
+func kp(keyCode uint8) uint8 {
+	return keyboardKeypad | (keyCode-0x40)<<1 | 1
 }
