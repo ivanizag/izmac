@@ -31,6 +31,11 @@ Instant and reads as a key code $40 higher than the same byte from the main
 block. So the left arrow is $79 $0d, and the driver makes it the key code
 $46, where $0d alone is the Z.
 
+The keys +, *, / and = of the keypad have no codes of their own: each is an
+arrow with the shift key around it, the shift's $71 before it on the way down
+and its $f1 before it on the way up. The plus is $71 $79 $0d, a shifted left
+arrow, which the System's keyboard layout makes a +.
+
 The eight bits of a byte take about three milliseconds on the wire. That is
 not emulated, but the answer is not instant either: it is held back a while,
 because a keyboard that replies inside the same instruction that asked is a
@@ -99,6 +104,16 @@ const (
 	*/
 	keyboardKeypad uint8 = 1 << 7
 
+	/*
+		keyboardShifted marks, in the table of key codes, one of the keys
+		of the keypad sent with the shift key around it: the bit 0 every
+		code has set, clear
+	*/
+	keyboardShifted uint8 = 1
+
+	// keyboardShift is the shift key, which goes around + * / and =
+	keyboardShift uint8 = 0x71
+
 	// keyboardKeyUp marks a release
 	keyboardKeyUp uint8 = 1 << 7
 
@@ -122,21 +137,28 @@ func newKeyboard() *keyboard {
 
 // PutKey queues a transition. The code is the raw one the keyboard sends,
 // from the table in Inside Macintosh, marked with keyboardKeypad for a key
-// that goes after the prefix, and down says whether the key went down or
-// came up.
+// that goes after the prefix and with keyboardShifted clear for one that
+// goes with the shift key around it, and down says whether the key went down
+// or came up.
 func (k *keyboard) putKey(code uint8, down bool) {
-	if len(k.queue) >= keyboardQueueLimit-1 {
+	if len(k.queue) >= keyboardQueueLimit-2 {
 		return
 	}
 
-	transition := code &^ keyboardKeypad
+	keypad := code&keyboardKeypad != 0
+	shifted := keypad && code&keyboardShifted == 0
+	transition := code&^keyboardKeypad | keyboardShifted
+	up := uint8(0)
 	if !down {
-		transition |= keyboardKeyUp
+		up = keyboardKeyUp
 	}
-	if code&keyboardKeypad != 0 {
+	if shifted {
+		k.queue = append(k.queue, keyboardShift|up)
+	}
+	if keypad {
 		k.queue = append(k.queue, keyboardKeypadPrefix)
 	}
-	k.queue = append(k.queue, transition)
+	k.queue = append(k.queue, transition|up)
 }
 
 // giveBack puts a transition the Macintosh never got back at the head of the
@@ -230,8 +252,7 @@ place right, so the $01 of the A key becomes the key code 0.
 The arrows and the keypad of the Plus are marked keyboardKeypad: sent after
 the prefix, the driver adds $40 to what it makes of them, so the key code of
 the left arrow, $46, is sent as $0d. The keys +, *, / and = of the keypad are
-not here: the keyboard sends each of them as the shift key and an arrow
-together, in three bytes.
+the four arrows marked keyboardShifted, sent with the shift key around them.
 */
 func keyCodes() map[string]uint8 {
 	return map[string]uint8{
@@ -268,7 +289,15 @@ func keyCodes() map[string]uint8 {
 		"Keypad6": kp(0x58), "Keypad7": kp(0x59), "Keypad8": kp(0x5b),
 		"Keypad9": kp(0x5c), "KeypadPeriod": kp(0x41), "KeypadMinus": kp(0x4e),
 		"Clear": kp(0x47), "Enter": kp(0x4c),
+		"KeypadPlus": shifted(kp(0x46)), "KeypadTimes": shifted(kp(0x42)),
+		"KeypadSlash": shifted(kp(0x4d)), "KeypadEquals": shifted(kp(0x48)),
 	}
+}
+
+// shifted is the code of a key of the keypad sent with the shift key around
+// it, from the arrow it shares its code with
+func shifted(code uint8) uint8 {
+	return code &^ keyboardShifted
 }
 
 // kp is the raw code of a key of the keypad, or an arrow, from the key code

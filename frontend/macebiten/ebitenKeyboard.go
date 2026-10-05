@@ -173,6 +173,10 @@ func buildKeyMap() map[ebiten.Key]uint8 {
 		ebiten.KeyNumpadDecimal:  "KeypadPeriod",
 		ebiten.KeyNumpadSubtract: "KeypadMinus",
 		ebiten.KeyNumLock:        "Clear",
+		ebiten.KeyNumpadAdd:      "KeypadPlus",
+		ebiten.KeyNumpadMultiply: "KeypadTimes",
+		ebiten.KeyNumpadDivide:   "KeypadSlash",
+		ebiten.KeyNumpadEqual:    "KeypadEquals",
 		ebiten.KeyBackspace:      "Backspace",
 		ebiten.KeyCapsLock:       "CapsLock",
 

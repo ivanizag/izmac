@@ -56,7 +56,7 @@ The modifiers are not where their names suggest:
 | Shift, either side | Shift |
 | Backspace | Backspace |
 | The arrow keys | The arrow keys |
-| The numeric keypad, its digits, period, minus and Enter | The same keys of the keypad |
+| The numeric keypad | The same keys of the keypad |
 | Num Lock, where there is one | Clear, the top left key of the keypad |
 
 Two keys of yours give the Macintosh command key because your own system
@@ -68,9 +68,11 @@ gets through. So Command-C is Command-C, and Alt-C when it is not.
 The interrupt and reset that the programmer's switch gave you are not on the
 keyboard at all — reset is on the menu.
 
-**What is missing.** Escape is not mapped, since it releases the mouse, and
-neither are +, *, / and = of the keypad: the Plus keyboard sends each of them
-as the shift key and an arrow together, which izmac does not do.
+**What is missing.** Escape is not mapped, since it releases the mouse.
+
+The keys +, *, / and = of the keypad reach the machine as the Plus keyboard
+sent them, as an arrow with the shift key around it. A shift you hold down
+yourself is let go with them.
 
 ## The emulator keys
 

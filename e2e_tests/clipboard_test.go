@@ -206,8 +206,8 @@ func TestTheClipboardCrossesApplicationsBothWays(t *testing.T) {
 /*
 The arrows and the keypad reach an application as the characters they are.
 In TeachText two letters are typed, the left arrow takes the caret back
-between them, and an X and a 5 of the keypad go in there: the text copied is
-aX5b.
+between them, and an X and the 5, the plus, the times, the slash and the
+equals of the keypad go in there, all six between the a and the b.
 */
 func TestTheArrowsMoveTheCaret(t *testing.T) {
 	t.Parallel()
@@ -222,13 +222,13 @@ func TestTheArrowsMoveTheCaret(t *testing.T) {
 	typeText(m, "ab")
 	typeKeys(m, "Left")
 	typeText(m, "X")
-	typeKeys(m, "Keypad5")
+	typeKeys(m, "Keypad5", "KeypadPlus", "KeypadTimes", "KeypadSlash", "KeypadEquals")
 	pressCommand(m, "A")
 	pressCommand(m, "C")
 	m.RunFrames(60)
 	switchToApplication(t, m, "Finder", finder)
 
-	if text, copied := m.TakeCopiedText(); !copied || text != "aX5b" {
-		t.Errorf("the host was offered %q, %v, wanted aX5b", text, copied)
+	if text, copied := m.TakeCopiedText(); !copied || text != "aX5+*/=b" {
+		t.Errorf("the host was offered %q, %v, wanted aX5+*/=b", text, copied)
 	}
 }

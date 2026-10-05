@@ -117,7 +117,7 @@ func TestEveryCodeIsDistinctAndWellFormed(t *testing.T) {
 	seen := make(map[uint8]string)
 
 	for name, code := range keyCodes() {
-		if code&1 == 0 {
+		if code&1 == 0 && code&keyboardKeypad == 0 {
 			t.Errorf("%v is $%02x, which does not have its bit 0 set", name, code)
 		}
 		if code == keyboardNull || code == keyboardKeypadPrefix {
@@ -339,6 +339,24 @@ func TestAnArrowGivenBackKeepsItsPrefix(t *testing.T) {
 	for _, want := range []uint8{keyboardKeypadPrefix, 0x0d} {
 		if got := ask(k, keyboardCmdInquiry); got != want {
 			t.Errorf("given back, the keyboard answered $%02x, wanted $%02x", got, want)
+		}
+	}
+}
+
+/*
+The + of the keypad is a shifted left arrow: the shift key down, the arrow
+after the prefix, and on the way up the shift key up before the arrow
+*/
+func TestThePlusOfTheKeypadIsAShiftedArrow(t *testing.T) {
+	k := newKeyboard()
+	plus := keyCodes()["KeypadPlus"]
+
+	k.putKey(plus, true)
+	k.putKey(plus, false)
+
+	for _, want := range []uint8{0x71, keyboardKeypadPrefix, 0x0d, 0xf1, keyboardKeypadPrefix, 0x8d} {
+		if got := ask(k, keyboardCmdInstant); got != want {
+			t.Errorf("the keyboard answered $%02x, wanted $%02x", got, want)
 		}
 	}
 }
