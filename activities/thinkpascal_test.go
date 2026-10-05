@@ -20,6 +20,23 @@ diskettes, the program of the page put in the shared folder and copied to the
 hard disk, a project made with it, the game run inside THINK Pascal and
 played, and built into an application that plays on its own
 */
+// gameListing is the program of the page, as the reader downloads it
+const gameListing = "../doc/activities/listings/2048.p"
+
+/*
+The page shows the program in blocks, with what each does, and links to it
+whole: the blocks, one after the other, are the program
+*/
+func TestThePageOfTHINKPascalHasTheWholeProgram(t *testing.T) {
+	listing, err := os.ReadFile(gameListing)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if blocks := pageListing(t, "think-pascal", "pascal"); blocks != string(listing) {
+		t.Errorf("the blocks of Pascal of the page are not %v", gameListing)
+	}
+}
+
 func thinkPascalScreenshots(t *testing.T) {
 	const page = "think-pascal"
 	album := NewAlbum(filepath.Join(activityImages, page))
@@ -27,7 +44,11 @@ func thinkPascalScreenshots(t *testing.T) {
 	if err := os.Mkdir(share, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(share, "2048.p"), []uint8(pageListing(t, page)), 0o644); err != nil {
+	listing, err := os.ReadFile(gameListing)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(share, "2048.p"), listing, 0o644); err != nil {
 		t.Fatal(err)
 	}
 	predate(t, filepath.Join(share, "2048.p"), share)
@@ -221,18 +242,18 @@ func copyDialogShows(m *izmac.Mac) bool {
 }
 
 /*
-pageListing is the program of a page: its blocks of Pascal, one after the
-other, as the reader puts them together
+pageListing is the program of a page: its blocks of code in a language, one
+after the other, as the reader puts them together
 */
-func pageListing(t *testing.T, page string) string {
+func pageListing(t *testing.T, page string, language string) string {
 	t.Helper()
 	text, err := os.ReadFile(filepath.Join(activityImages, "..", page+".md"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	blocks := regexp.MustCompile("(?s)```pascal\n(.*?)```").FindAllStringSubmatch(string(text), -1)
+	blocks := regexp.MustCompile("(?s)```"+language+"\n(.*?)```").FindAllStringSubmatch(string(text), -1)
 	if len(blocks) == 0 {
-		t.Fatalf("the page %v has no Pascal", page)
+		t.Fatalf("the page %v has no %v", page, language)
 	}
 	var listing strings.Builder
 	for i, block := range blocks {

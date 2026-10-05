@@ -69,6 +69,9 @@ const (
 	// The first two diskettes of THINK Pascal 4.0, as they were
 	testThinkPascalOneDiskette = testImages + "/thinkpascal-1.dsk"
 	testThinkPascalTwoDiskette = testImages + "/thinkpascal-2.dsk"
+
+	// The CD of MPW 3.0 and 3.1, a zip of its image, as it was downloaded
+	testMPWArchive = testImages + "/mpw3-cdrom.zip"
 )
 
 /*

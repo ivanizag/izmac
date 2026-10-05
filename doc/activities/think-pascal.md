@@ -85,9 +85,10 @@ few hundred lines of Pascal, and it plays well in black and white.
 
 ## The program
 
-6. **Write the program in a file, `2048.p`, in the folder *For the Mac*.**
-   The blocks of Pascal of this section, one after the other, are the whole
-   of it. Copy them into the file with any text editor of your computer.
+6. **Put the program in a file, `2048.p`, in the folder *For the Mac*.** It
+   is in izmac's repository, [doc/activities/listings/2048.p](listings/2048.p):
+   open it and click *Download raw file*. The blocks of Pascal of this section
+   are the same program, one after the other, with what each part does.
 
 The program begins by naming what it uses. The constants are the sizes of the
 board in pixels, the numbers of the menus and their items, and the codes of

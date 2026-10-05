@@ -5,10 +5,10 @@
 # to make them again or change them; see README.md for what is on each.
 #
 # The disks they are taken from are downloaded once, from the Internet Archive
-# and, for THINK Pascal, from WinWorld: they are kept in
-# IZMAC_TEST_IMAGES_CACHE, ~/.cache/izmac-test-images unless it says
-# otherwise, and checked against the SHA-256 they had when the images were
-# first built from them. About 385 MB in all, most of it the supplement
+# and, for THINK Pascal and MPW, from WinWorld and the Macintosh Repository:
+# they are kept in IZMAC_TEST_IMAGES_CACHE, ~/.cache/izmac-test-images unless
+# it says otherwise, and checked against the SHA-256 they had when the images
+# were first built from them. About 390 MB in all, most of it the supplement
 # disk of the MacPack, which is the one place the File Sharing of System 7.1.2
 # was found ready to copy.
 #
@@ -40,6 +40,8 @@
 #                   a StuffIt archive, out of a zip with the scans
 #   bolo.sit        Bolo 0.99.7, as the Tucows archive kept it
 #   loderunner.dsk  Lode Runner, and darkcastle.dsk Dark Castle 1.2
+#   mpw3-cdrom.zip  the CD of MPW 3.0 and 3.1, as the Macintosh Repository
+#                   keeps it, a zip of its image, which izmac opens as it is
 #   thinkpascal-1.dsk, thinkpascal-2.dsk
 #                   the first two of the four diskettes of THINK Pascal 4.0,
 #                   the application and its interfaces and libraries, out of
@@ -85,6 +87,23 @@ fetch() {
 	cp "$CACHE/$1" "$WORK/$1"
 }
 
+# fetch_repository <name> <id> <sha256>: a file of the Macintosh Repository,
+# which gives it only to the form of its download page, with the token the
+# page carries; then as fetch
+fetch_repository() {
+	if [ ! -f "$CACHE/$1" ]; then
+		echo "Downloading $1 from the Macintosh Repository"
+		page="https://www.macintoshrepository.org/download.php?id=$2"
+		token=$(curl -fsL -c "$WORK/cookies" "$page" |
+			sed -n 's/.*name="d" value="\([^"]*\)".*/\1/p' | head -n 1)
+		curl -fL --retry 5 --retry-delay 5 -b "$WORK/cookies" -e "$page" \
+			--data-urlencode "d=$token" -d via_http=1 -o "$CACHE/$1.part" \
+			"https://www.macintoshrepository.org/download.php?u=0&id=$2&go=1"
+		mv "$CACHE/$1.part" "$CACHE/$1"
+	fi
+	fetch "$1" "" "$3"
+}
+
 fetch macplus.rom "$ARCHIVE/mac_rom_archive_-_as_of_8-19-2011/mac_rom_archive_-_as_of_8-19-2011.zip/4D1F8172%20-%20MacPlus%20v3.ROM" \
 	dd908e2b65772a6b1f0c859c24e9a0d3dcde17b1c6a24f4abd8955846d7895e7
 fetch macpaint.dsk "$ARCHIVE/mac_Paint_2/Paint_2.dsk" \
@@ -113,6 +132,8 @@ fetch darkcastle.dsk "$ARCHIVE/mac_DarkCastle_1_2/DarkCastle_1_2.dsk" \
 	102e644bb7aa85b28efe362d9fe94f58fa721988ed9939762b3f51ec83f0a0b1
 fetch ThinkPascal40.7z "https://winworldpc.com/download/3295d3eb-1e78-11ec-ad33-0200008a0da4/from/c39ac2af-c381-c2bf-1b25-11c3a4e284a2" \
 	51faeb5c80e1b949d373039686e48a2e8d3eb716a5d4385f5a67ae96c1ba9584
+fetch_repository mpw3-cdrom.zip 2185 \
+	1c12702f45e345679a2133cc0e22917c46107be9a27137ded6e26fce94d6feba
 
 MACPACK="$WORK/HD20SC.vhd"
 SUPPLEMENT="$WORK/Supplement.vhd"
@@ -314,7 +335,7 @@ head -c 65536 "$CACHE/HD20SC.vhd" >"$WORK/hddriver.img"
 for f in system6.dsk system6.img system7.img macplus.rom hddriver.img macpaint.dsk teachtext.bin \
 	system41.dsk system-tools.dsk utilities-1.dsk utilities-2.dsk printing-tools.dsk \
 	macwrite.dsk multiplan.dsk basic.dsk hypercard.dsk resedit.sit bolo.sit \
-	loderunner.dsk darkcastle.dsk thinkpascal-1.dsk thinkpascal-2.dsk; do
+	loderunner.dsk darkcastle.dsk thinkpascal-1.dsk thinkpascal-2.dsk mpw3-cdrom.zip; do
 	cp "$WORK/$f" "$OUT/$f"
 	chmod 644 "$OUT/$f"
 done
