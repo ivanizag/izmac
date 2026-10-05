@@ -35,10 +35,12 @@ func ReadHost(name string) ([]File, error) {
 		}
 
 		files := assemble(loose)
+		binhex := newBinhexDecoder()
 		for i := range files {
 			where := filepath.Join(append(append([]string{name}, files[i].Folders...),
 				files[i].Name)...)
 			readHostMetadata(where, &files[i])
+			files[i] = decoded(files[i], binhex)
 		}
 		return files, nil
 	}
@@ -62,6 +64,36 @@ func ReadHost(name string) ([]File, error) {
 	readHostMetadata(name, &file)
 
 	return []File{file}, nil
+}
+
+/*
+decoded is a file of a folder that is a Macintosh file in MacBinary or BinHex,
+the way the archives on the Internet keep them, taken out as the file it is,
+in the folder it was in. Any other file comes back as it is, and so does one
+the host keeps a resource fork or Finder information for, which is a
+Macintosh file already. Archives of several files stay archives: in a folder
+they are files to be copied, not unpacked.
+*/
+func decoded(f File, binhex *binhexDecoder) File {
+	if f.IsMacFile() {
+		return f
+	}
+	head := f.Data[:min(len(f.Data), HeadSize)]
+	var inside File
+	var err error
+	switch {
+	case binhex.identify(head):
+		inside, err = binhex.decode(f.Data)
+	case isMacBinary(head, int64(len(f.Data))):
+		inside, err = openMacBinary(f.Data)
+	default:
+		return f
+	}
+	if err != nil {
+		return f
+	}
+	inside.Folders = f.Folders
+	return inside
 }
 
 /*

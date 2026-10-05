@@ -75,3 +75,52 @@ func TestAFileOfTheHostTakesTheAppleDoubleBesideIt(t *testing.T) {
 		t.Errorf("Game did not come with its resource fork and creator")
 	}
 }
+
+/*
+A file of a folder in MacBinary or BinHex, as the archives on the Internet
+keep a Macintosh file, is read as the file it holds, in the same folder: an
+application downloaded as Game.bin is the application Game
+*/
+func TestTheMacBinaryAndBinHexFilesOfAFolderAreTakenOut(t *testing.T) {
+	dir := t.TempDir()
+	resource := someImage(600)
+	if err := os.Mkdir(filepath.Join(dir, "Games"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "Games", "Game.bin"),
+		encodeMacBinaryForks("Game", nil, resource, true), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "Notes.hqx"),
+		encodeBinHex("Notes", []uint8("A note.")), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	files, err := ReadHost(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	byName := make(map[string]File)
+	for _, f := range files {
+		byName[strings.Join(append(f.Folders, f.Name), "/")] = f
+	}
+
+	game, ok := byName["Games/Game"]
+	if !ok || !bytes.Equal(game.Resource, resource) || string(game.Type[:]) != "APPL" {
+		t.Errorf("Game.bin did not give the application Game in Games, the folder has %v", names(files))
+	}
+	if notes, ok := byName["Notes"]; !ok || string(notes.Data) != "A note." {
+		t.Errorf("Notes.hqx did not give the file Notes, the folder has %v", names(files))
+	}
+	if len(files) != 2 {
+		t.Errorf("the folder gave %v files, wanted 2", len(files))
+	}
+}
+
+func names(files []File) []string {
+	var out []string
+	for _, f := range files {
+		out = append(out, strings.Join(append(f.Folders, f.Name), "/"))
+	}
+	return out
+}
