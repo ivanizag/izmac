@@ -121,7 +121,7 @@ type
 var
   tiles: Board;
   score: LongInt;
-  won, over, quitting: Boolean;
+  won, over, quitting, editEnabled: Boolean;
   window: WindowPtr;
   appleMenu, fileMenu, editMenu: MenuHandle;
 ```
@@ -293,11 +293,12 @@ end;
 ```
 
 The drawing is QuickDraw's, in black and white, as everything on the Plus. A
-tile is a rounded rectangle, darker the bigger its number: white for 2 and 4,
-then the light gray, gray and dark gray patterns, with the number on a small
-white plate so that it can be read, and black with the number in white from
-512 up. An empty square is only its outline, in gray. Above the board are the
-score and, at the end, a message.
+tile is a rounded rectangle, darker the bigger its number: white for 2, a
+pattern of a dot in eight for 4, made from its eight bytes in hexadecimal with
+`StuffHex`, then QuickDraw's own light gray, gray and dark gray patterns, all
+with the number on a small white plate so that it can be read, and black with
+the number in white from 512 up. An empty square is only its outline, in gray.
+Above the board are the score and, at the end, a message.
 
 ```pascal
 procedure DrawTile (row, col: Integer);
@@ -305,6 +306,7 @@ procedure DrawTile (row, col: Integer);
     box, plate: Rect;
     number: Str255;
     value: LongInt;
+    light: Pattern;
 begin
   SetRect(box, 0, 0, TileSize, TileSize);
   OffsetRect(box, BoardLeft + Gap + (col - 1) * (TileSize + Gap), BoardTop + Gap + (row - 1) * (TileSize + Gap));
@@ -325,10 +327,15 @@ begin
       else if value >= 32 then
         FillRoundRect(box, 12, 12, gray)
       else if value >= 8 then
-        FillRoundRect(box, 12, 12, ltGray);
+        FillRoundRect(box, 12, 12, ltGray)
+      else if value = 4 then
+        begin
+          StuffHex(@light, '8800220088002200');
+          FillRoundRect(box, 12, 12, light);
+        end;
       FrameRoundRect(box, 12, 12);
       NumToString(value, number);
-      if (value >= 8) and (value < 512) then
+      if (value >= 4) and (value < 512) then
         begin
           SetRect(plate, 0, 0, StringWidth(number) + 10, 18);
           OffsetRect(plate, box.left + (TileSize - plate.right) div 2, box.top + (TileSize - 18) div 2);
@@ -377,10 +384,14 @@ end;
 
 The rest is what every Macintosh program had to do for itself. The menus are
 handled here: the Apple menu with *About 2048* and the desk accessories, the
-File menu, and the Edit menu, which is only there for the desk accessories. A
-key slides the tiles: the arrows, and also W, A, S and D. A click is taken
-where it fell: on the menu bar, on the title bar to drag the window, on its
-close box to quit, or on a desk accessory.
+File menu, and the Edit menu. The game has nothing to edit, but without
+MultiFinder a desk accessory such as the Note Pad cuts, copies and pastes
+through the Edit menu of the application it opens over, so every application
+had one. It is dimmed while the game's window is in front, and comes on when a
+desk accessory's is: their windows are the ones with a negative
+`windowKind`. A key slides the tiles: the arrows, and also W, A, S and D. A
+click is taken where it fell: on the menu bar, on the title bar to drag the
+window, on its close box to quit, or on a desk accessory.
 
 ```pascal
 procedure ShowAbout;
@@ -484,6 +495,24 @@ begin
         SelectWindow(which);
   end;
 end;
+
+procedure UpdateEditMenu;
+  var
+    front: WindowPeek;
+    forAccessory: Boolean;
+begin
+  front := WindowPeek(FrontWindow);
+  forAccessory := (front <> nil) and (front^.windowKind < 0);
+  if forAccessory <> editEnabled then
+    begin
+      editEnabled := forAccessory;
+      if editEnabled then
+        EnableItem(editMenu, 0)
+      else
+        DisableItem(editMenu, 0);
+      DrawMenuBar;
+    end;
+end;
 ```
 
 And the start: the managers of the Toolbox started one by one, the menus made
@@ -518,6 +547,8 @@ begin
   editMenu := NewMenu(EditID, 'Edit');
   AppendMenu(editMenu, 'Undo/Z;(-;Cut/X;Copy/C;Paste/V;Clear');
   InsertMenu(editMenu, 0);
+  DisableItem(editMenu, 0);
+  editEnabled := false;
   DrawMenuBar;
   SetRect(box, 0, 0, WindowWidth, WindowHeight);
   OffsetRect(box, (512 - WindowWidth) div 2, 50);
@@ -535,6 +566,7 @@ begin
   quitting := false;
   repeat
     SystemTask;
+    UpdateEditMenu;
     if GetNextEvent(everyEvent, event) then
       case event.what of
         mouseDown:
