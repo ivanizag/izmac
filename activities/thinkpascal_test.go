@@ -20,6 +20,23 @@ diskettes, the program of the page put in the shared folder and copied to the
 hard disk, a project made with it, the game run inside THINK Pascal and
 played, and built into an application that plays on its own
 */
+// gameListing is the program of the page, as the reader downloads it
+const gameListing = "../doc/activities/listings/2048.p"
+
+/*
+The page shows the program in blocks, with what each does, and links to it
+whole: the blocks, one after the other, are the program
+*/
+func TestThePageOfTHINKPascalHasTheWholeProgram(t *testing.T) {
+	listing, err := os.ReadFile(gameListing)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if blocks := pageListing(t, "think-pascal", "pascal"); blocks != string(listing) {
+		t.Errorf("the blocks of Pascal of the page are not %v", gameListing)
+	}
+}
+
 func thinkPascalScreenshots(t *testing.T) {
 	const page = "think-pascal"
 	album := NewAlbum(filepath.Join(activityImages, page))
@@ -27,7 +44,11 @@ func thinkPascalScreenshots(t *testing.T) {
 	if err := os.Mkdir(share, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(share, "2048.p"), []uint8(pageListing(t, page, "pascal")), 0o644); err != nil {
+	listing, err := os.ReadFile(gameListing)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(share, "2048.p"), listing, 0o644); err != nil {
 		t.Fatal(err)
 	}
 	predate(t, filepath.Join(share, "2048.p"), share)
