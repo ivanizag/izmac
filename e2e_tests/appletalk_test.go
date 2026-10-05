@@ -226,7 +226,7 @@ func TestSystemSevenOpensAppleTalkAsItStarts(t *testing.T) {
 // address the driver tries first, is the one given
 func pramWithNodeHint(t *testing.T, hint uint8) string {
 	t.Helper()
-	r := component.NewAppleRTC("", false)
+	r := component.NewAppleRTC("", false, time.Time{})
 	image := r.Image()
 	const spATalkB = 0x12 // the classic byte 2, in the extended parameter RAM
 	image[spATalkB] = hint

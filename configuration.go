@@ -8,6 +8,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/ivanizag/izmac/localtalk"
 	"github.com/ivanizag/izmac/scsi"
@@ -56,6 +57,15 @@ type Configuration struct {
 	// on every read, instead of starting from it and counting the emulated
 	// seconds of its own
 	WallClock bool
+
+	/*
+		StartTime is the time the machine starts at, instead of the host's:
+		the time its clock starts from, and the one the file server of
+		Share goes by, both counting the machine's own seconds from it.
+		With the same images and the same input, two runs of RunFrames
+		from the same start time do the same, to the cycle.
+	*/
+	StartTime time.Time
 
 	// RamSizeKb is the size of the RAM, 1024 or 4096
 	RamSizeKb int
@@ -154,6 +164,9 @@ const (
 	// everything izmac writes for itself carries. See defaultRomFile.
 	defaultPramFile  = "izmac_pram.bin"
 	defaultRamSizeKb = 1024
+
+	// startTimeLayout is how -starttime is written
+	startTimeLayout = "2006-01-02 15:04:05"
 
 	// SpeedPlus runs at the clock of the real machine, SpeedFull as fast
 	// as the host can go
@@ -455,6 +468,18 @@ func (c *Configuration) AddFlags(fs *flag.FlagSet) {
 		"read the clock from the host every time instead of counting "+
 			"emulated seconds from it. Never drifts, but the date can "+
 			"no longer be set from the machine")
+	fs.Func("starttime", "start the machine at this date and time, as "+
+		"2006-01-02 15:04:05, rather than at the time of the host, and "+
+		"keep the time of the file server by the machine's own seconds "+
+		"too, so that two runs with the same input do the same",
+		func(value string) error {
+			start, err := time.ParseInLocation(startTimeLayout, value, time.Local)
+			if err != nil {
+				return fmt.Errorf("the start time %q is not like %v", value, startTimeLayout)
+			}
+			c.StartTime = start
+			return nil
+		})
 	fs.IntVar(&c.RamSizeKb, "ram", c.RamSizeKb,
 		"RAM size in Kb, 1024 or 4096")
 	fs.BoolVar(&c.Clipboard, "clipboard", c.Clipboard,
@@ -509,6 +534,10 @@ func (c *Configuration) Validate() error {
 	}
 	if c.RamSizeKb != 1024 && c.RamSizeKb != 4096 {
 		return fmt.Errorf("unsupported RAM size %vKb, use 1024 or 4096", c.RamSizeKb)
+	}
+	if c.WallClock && !c.StartTime.IsZero() {
+		return errors.New("a clock reading the host can not start at another time: " +
+			"use -wallclock or -starttime, not both")
 	}
 
 	// The images named with -hd and -floppy can be archives too

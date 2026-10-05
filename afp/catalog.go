@@ -43,6 +43,9 @@ type volume struct {
 	created time.Time
 	changed time.Time
 
+	// now is the time of the server, the host's unless it was given one
+	now func() time.Time
+
 	byID   map[uint32]string
 	byPath map[string]uint32
 	nextID uint32
@@ -57,11 +60,11 @@ type volume struct {
 	nextFork  uint16
 }
 
-func newVolume(name []uint8, folder string) *volume {
+func newVolume(name []uint8, folder string, now func() time.Time) *volume {
 	if absolute, err := filepath.Abs(folder); err == nil {
 		folder = absolute
 	}
-	created := time.Now()
+	created := now()
 	if info, err := os.Stat(folder); err == nil {
 		created = info.ModTime()
 	}
@@ -69,6 +72,7 @@ func newVolume(name []uint8, folder string) *volume {
 		name:      name,
 		root:      folder,
 		created:   created,
+		now:       now,
 		byID:      map[uint32]string{rootID: ""},
 		byPath:    map[string]uint32{"": rootID},
 		nextID:    firstFreeID,

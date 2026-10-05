@@ -53,20 +53,20 @@ func (v *volume) createFile(r *reader) ([]uint8, int32) {
 			return nil, hostError(err)
 		}
 		v.meta.write(host, metadata{})
-		v.touch()
+		v.touch(rel)
 		return nil, errNoErr
 	}
 
 	if !validName(at.name) {
 		return nil, errParamErr
 	}
-	host := v.host(folderJoin(at.folder, hostFileName(at.name)))
-	file, err := os.OpenFile(host, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+	rel := folderJoin(at.folder, hostFileName(at.name))
+	file, err := os.OpenFile(v.host(rel), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
 	if err != nil {
 		return nil, hostError(err)
 	}
 	file.Close()
-	v.touch()
+	v.touch(rel)
 	return nil, errNoErr
 }
 
@@ -96,7 +96,7 @@ func (v *volume) createDir(r *reader) ([]uint8, int32) {
 	if err := os.Mkdir(v.host(rel), 0o755); err != nil {
 		return nil, hostError(err)
 	}
-	v.touch()
+	v.touch(rel)
 	return binary.BigEndian.AppendUint32(nil, v.id(rel)), errNoErr
 }
 
@@ -155,7 +155,7 @@ func (v *volume) delete(r *reader) ([]uint8, int32) {
 	v.meta.removed(host)
 	v.removed(rel)
 	v.desktop.forget(rel)
-	v.touch()
+	v.touch(rel)
 	return nil, errNoErr
 }
 
@@ -283,6 +283,6 @@ func (v *volume) move(rel string, e entry, folder string, name []uint8) int32 {
 	v.meta.renamed(v.host(rel), v.host(to))
 	v.moved(rel, to)
 	v.desktop.moved(rel, to)
-	v.touch()
+	v.touch(rel, to)
 	return errNoErr
 }

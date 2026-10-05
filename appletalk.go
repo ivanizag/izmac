@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/ivanizag/izmac/afp"
 	"github.com/ivanizag/izmac/appletalk"
@@ -246,15 +247,17 @@ func (m *Mac) LocalTalkUDP() *localtalk.UDP {
 /*
 shareFolder puts a file server on the network serving a folder of the host,
 named after the host unless given a name, as the Chooser lists it, with the
-folder's name for the volume's
+folder's name for the volume's. It goes by the machine's time, from the time
+the machine starts at, see settleFileServer.
 */
-func shareFolder(network *localtalk.Network, folder string, name string) *appletalk.Listener {
+func shareFolder(network *localtalk.Network, folder string, name string, start time.Time) *appletalk.Listener {
 	if name == "" {
 		name = serverName()
 	}
 	volume := filepath.Base(filepath.Clean(folder))
-	server := afp.NewServer(name, volume, folder)
-	return appletalk.Listen(network, server.Name(), server)
+	clock := appletalk.KeptClock(start)
+	server := afp.NewServer(name, volume, folder, clock.Now)
+	return appletalk.Listen(network, server.Name(), server, clock)
 }
 
 // serverName is the host's name without its domain, or izmac when it has none

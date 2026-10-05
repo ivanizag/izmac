@@ -22,7 +22,7 @@ type testClient struct {
 
 func newTestClient(t *testing.T) *testClient {
 	folder := t.TempDir()
-	s := NewServer("izmac", "Shared", folder)
+	s := NewServer("izmac", "Shared", folder, nil)
 	s.OpenSession(1)
 	if _, result := s.Command(1, loginRequest(version20, uamGuest)); result != errNoErr {
 		t.Fatalf("login gave %v", result)
@@ -208,7 +208,7 @@ func TestTheResourceForkAndFinderInfoAreKept(t *testing.T) {
 		longPath("App"), uint8(0), finder)
 
 	// A new server on the same folder finds them where the host keeps them
-	s := NewServer("izmac", "Shared", c.folder)
+	s := NewServer("izmac", "Shared", c.folder, nil)
 	s.OpenSession(1)
 	s.Command(1, loginRequest(version20, uamGuest))
 	reply, result := s.Command(1, request(fpGetFileDirParms, 0, uint16(volumeID), uint32(rootID),
@@ -423,5 +423,49 @@ func TestAChangeOnTheHostMovesTheVolumeDate(t *testing.T) {
 	os.Chtimes(filepath.Join(inner, "file"), evenLater, evenLater)
 	if got := c.volumeModified(); !got.Equal(evenLater) {
 		t.Errorf("after a file was written to the volume date is %v, wanted %v", got, evenLater)
+	}
+}
+
+/*
+A server given a time of its own answers with it, and dates with it what the
+machine changes: a file made and written to, and the folder it was made in,
+although the host dated them with its own time first
+*/
+func TestAServerGoesByTheTimeItIsGiven(t *testing.T) {
+	now := time.Date(1987, 3, 2, 10, 0, 0, 0, time.UTC)
+	folder := t.TempDir()
+	os.Mkdir(filepath.Join(folder, "Folder"), 0o755)
+	before := now.Add(-time.Hour)
+	os.Chtimes(filepath.Join(folder, "Folder"), before, before)
+	os.Chtimes(folder, before, before)
+
+	s := NewServer("izmac", "Shared", folder, func() time.Time { return now })
+	s.OpenSession(1)
+	if _, result := s.Command(1, loginRequest(version20, uamGuest)); result != errNoErr {
+		t.Fatalf("login gave %v", result)
+	}
+	c := &testClient{t: t, server: s, folder: folder}
+
+	reply := c.call(errNoErr, fpGetSrvrParms, 0)
+	if got := fromAFPTime(binary.BigEndian.Uint32(reply)); !got.Equal(now) {
+		t.Errorf("the server's time is %v, wanted %v", got, now)
+	}
+
+	c.call(errNoErr, fpCreateFile, 0, uint16(volumeID), uint32(rootID), longPath("Folder", "File"))
+	ref := c.openFork(false, accessRead|accessWrite, "Folder", "File")
+	c.writeFork(ref, 0, "written")
+	c.call(errNoErr, fpCloseFork, 0, ref)
+
+	for _, name := range []string{"Folder/File", "Folder"} {
+		info, err := os.Stat(filepath.Join(folder, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !info.ModTime().Equal(now) {
+			t.Errorf("%v is dated %v, wanted the server's time, %v", name, info.ModTime(), now)
+		}
+	}
+	if got := c.volumeModified(); !got.Equal(now) {
+		t.Errorf("the volume is dated %v, wanted %v", got, now)
 	}
 }

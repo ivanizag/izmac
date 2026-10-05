@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/ivanizag/izmac"
 )
@@ -107,7 +108,33 @@ func testConfig(t testing.TB) *izmac.Configuration {
 	config.ScsiDriverFile = testScsiDriver
 	config.PramFile = filepath.Join(t.TempDir(), "pram.bin")
 	config.Messages = io.Discard
+	config.StartTime = activityStart()
 	return config
+}
+
+/*
+activityStart is the time the machines of the activities start at, the same on
+every run so that a run of a page makes the same pictures: the clocks show the
+same time, what is saved has the same date, and what depends on the time, as
+anything random does, comes out the same
+*/
+func activityStart() time.Time {
+	return time.Date(1991, 10, 1, 10, 0, 0, 0, time.UTC)
+}
+
+/*
+predate dates files and folders of the host an hour before the machines
+start, so that a folder shared with them is the same on every run too: the
+host dates what it makes with its own time
+*/
+func predate(t testing.TB, paths ...string) {
+	t.Helper()
+	before := activityStart().Add(-time.Hour)
+	for _, path := range paths {
+		if err := os.Chtimes(path, before, before); err != nil {
+			t.Fatal(err)
+		}
+	}
 }
 
 // buildTestMac validates a configuration and builds its machine, which is

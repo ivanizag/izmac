@@ -221,12 +221,16 @@ for testing and for these pages, and their sources are public archives.
 - **Keep `m.Screenshot()`, not `m.GetImage()`.** `GetImage` returns the same
   buffer on every call, which the machine keeps drawing into; `Screenshot`
   is a copy.
-- **Some things change on every run, and that is fine** when the picture
-  does not depend on them: the clock of the Alarm Clock and the Control
-  Panel, the time on HyperCard's Home card, where Bolo starts the tank.
-- **Don't take pictures of random things.** The Puzzle shuffles itself
-  differently every run, so a picture of a moved tile was dropped. The
-  shuffled puzzle stays, but it changes in every regeneration.
+- **Every run makes the same pictures.** `testConfig` starts every machine
+  at the same time, `activityStart`, the first of October of 1991 at ten, so
+  the clocks show the same time on every run, and what goes by the time
+  comes out the same too, as anything random a program does. Pictures change
+  only when the emulator, the images or the steps do.
+  - Date the files and folders the generator makes on the host for a shared
+    folder with `predate`, or the host's own time gets into the machine
+    through them.
+  - LocalTalk over UDP goes through the host's network, and the two
+    machines of an activity that uses it can come out different.
 - **The layout must be the same on every run.**
   - The System 7 Finder rearranges the icons of a disk window if it is left a
     while, so open the window as soon as the Finder starts.

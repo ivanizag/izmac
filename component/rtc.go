@@ -189,16 +189,19 @@ func withDirection(command uint8, read bool) uint8 {
 }
 
 /*
-NewAppleRTC returns a clock started at the time of the host. With wallClock it
-goes back to the host on every read instead of keeping its own count, which
-never drifts but can not be set.
+NewAppleRTC returns a clock started at the time given, or at the time of the
+host when it is zero. With wallClock it goes back to the host on every read
+instead of keeping its own count, which never drifts but can not be set.
 */
-func NewAppleRTC(pramFile string, wallClock bool) *AppleRTC {
+func NewAppleRTC(pramFile string, wallClock bool, start time.Time) *AppleRTC {
+	if start.IsZero() {
+		start = time.Now()
+	}
 	r := &AppleRTC{
 		pram:      defaultPram(),
 		pramFile:  pramFile,
 		wallClock: wallClock,
-		seconds:   macSeconds(time.Now()),
+		seconds:   macSeconds(start),
 	}
 	r.loadPram()
 	return r
@@ -206,10 +209,12 @@ func NewAppleRTC(pramFile string, wallClock bool) *AppleRTC {
 
 /*
 macSeconds returns a time as the Macintosh counts it, the seconds since
-midnight of the first of January 1904, local time.
+midnight of the first of January 1904, in the time's own location: the clock
+of the host's in its local time, and a time given in UTC the same on every
+host.
 */
 func macSeconds(t time.Time) uint32 {
-	epoch := time.Date(1904, 1, 1, 0, 0, 0, 0, time.Local)
+	epoch := time.Date(1904, 1, 1, 0, 0, 0, 0, t.Location())
 	return uint32(t.Sub(epoch) / time.Second)
 }
 

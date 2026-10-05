@@ -47,6 +47,7 @@ Both frontends take all of these.
 | `-printerport <port>` | `printer`, or `modem` with AppleTalk on | the port the printer is on, `printer` or `modem` |
 | `-printerfile <name>` | | where the printer writes: the file the raw mode appends to, or the prefix the page images are named after. Each mode has its own default |
 | `-wallclock` | off | read the clock from the host every time, instead of starting from it and counting the machine's own seconds |
+| `-starttime <time>` | | start the machine at a date and time, written `"1987-03-02 10:00:00"`, instead of at yours. The clock and the file server of `-share` both count the machine's own seconds from it, so that two runs given the same disks and the same input do the same. Not with `-wallclock` |
 | `-trace <list>` | | tracers to turn on, comma separated: `cpu`, `toolbox`, `sadmac`, `scsi`, `floppy` |
 | `-profile` | off | write a CPU profile of the emulator itself |
 | `-h` | | print the options and exit |

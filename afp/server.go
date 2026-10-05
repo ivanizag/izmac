@@ -86,12 +86,17 @@ type sessionState struct {
 
 /*
 NewServer serves a folder of the host as a volume, under the names given,
-which the machine gets in Mac OS Roman.
+which the machine gets in Mac OS Roman. Its time, the one it answers with
+and the one it dates what the machine changes with, is what now says, or the
+host's when it is nil; now is called only while the server handles a call.
 */
-func NewServer(name string, volumeName string, folder string) *Server {
+func NewServer(name string, volumeName string, folder string, now func() time.Time) *Server {
+	if now == nil {
+		now = time.Now
+	}
 	return &Server{
 		name:     macName(name, longestServerName),
-		volume:   newVolume(macName(volumeName, longestVolumeName), folder),
+		volume:   newVolume(macName(volumeName, longestVolumeName), folder, now),
 		sessions: make(map[int]*sessionState),
 	}
 }
@@ -207,7 +212,7 @@ volumes, each with its flags, no password and no Apple II configuration, and
 its name
 */
 func (s *Server) serverParms() []uint8 {
-	reply := binary.BigEndian.AppendUint32(nil, afpTime(time.Now()))
+	reply := binary.BigEndian.AppendUint32(nil, afpTime(s.volume.now()))
 	reply = append(reply, 1, 0)
 	return appendPascal(reply, s.volume.name)
 }

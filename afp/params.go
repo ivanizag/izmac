@@ -422,11 +422,18 @@ func (v *volume) setParms(r *reader, files bool, folders bool) ([]uint8, int32) 
 			return nil, hostError(err)
 		}
 	}
+	// The folder dated as changed first, so that a folder given its own
+	// date keeps it
+	if rel != "" {
+		parent, _ := parentOf(rel)
+		v.touch(parent)
+	} else {
+		v.touch()
+	}
 	if !modified.IsZero() {
-		if err := os.Chtimes(host, time.Now(), modified); err != nil {
+		if err := os.Chtimes(host, v.now(), modified); err != nil {
 			return nil, hostError(err)
 		}
 	}
-	v.touch()
 	return nil, errNoErr
 }

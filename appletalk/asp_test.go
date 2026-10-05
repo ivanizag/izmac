@@ -155,7 +155,7 @@ func (c *client) lookup() (uint8, uint8, []uint8) {
 func serverAndClient(t *testing.T) (*fakeServer, *Listener, *client) {
 	network := localtalk.NewNetwork()
 	server := &fakeServer{status: bytes.Repeat([]uint8("status "), 100)}
-	l := Listen(network, []uint8("izmac"), server)
+	l := Listen(network, []uint8("izmac"), server, nil)
 	t.Cleanup(l.Stop)
 	return server, l, newClient(t, network)
 }
@@ -333,7 +333,7 @@ a probe for its address is answered by the time Settle is done.
 */
 func TestSettlingAnswersWhatWasSent(t *testing.T) {
 	network := localtalk.NewNetwork()
-	l := Listen(network, []uint8("Server"), &fakeServer{})
+	l := Listen(network, []uint8("Server"), &fakeServer{}, nil)
 	defer l.Stop()
 	log := &frameLog{}
 	network.Attach(log)
@@ -341,7 +341,7 @@ func TestSettlingAnswersWhatWasSent(t *testing.T) {
 	address := l.Node().Address()
 	for i := 0; i < 100; i++ {
 		network.Send(log, []uint8{address, 0x09, lapEnq})
-		l.Settle()
+		l.Settle(time.Now())
 		log.mutex.Lock()
 		answered := len(log.frames) == i+1 && log.frames[i][2] == lapAck
 		log.mutex.Unlock()
@@ -359,7 +359,7 @@ the answer comes, and loses that, to wait seconds for a retry.
 func TestAWriteIsAnsweredBeforeItsDataIsReleased(t *testing.T) {
 	network := localtalk.NewNetwork()
 	server := &fakeServer{status: []uint8("status")}
-	l := Listen(network, []uint8("izmac"), server)
+	l := Listen(network, []uint8("izmac"), server, nil)
 	t.Cleanup(l.Stop)
 	c := newClient(t, network)
 	log := &frameLog{}
@@ -390,4 +390,78 @@ func TestAWriteIsAnsweredBeforeItsDataIsReleased(t *testing.T) {
 	if answer < 0 || release < 0 || answer > release {
 		t.Errorf("the answer to the write is frame %v and the release frame %v, wanted the answer first", answer, release)
 	}
+}
+
+/*
+A node on a kept clock is a part of whatever keeps it: a probe sent to it
+waits, however long the host takes, until it is settled, and is answered
+then
+*/
+func TestAKeptNodeAnswersWhenSettled(t *testing.T) {
+	network := localtalk.NewNetwork()
+	start := time.Date(1987, 3, 2, 10, 0, 0, 0, time.UTC)
+	l := Listen(network, []uint8("Server"), &fakeServer{}, KeptClock(start))
+	defer l.Stop()
+	log := &frameLog{}
+	network.Attach(log)
+
+	network.Send(log, []uint8{l.Node().Address(), 0x09, lapEnq})
+	time.Sleep(50 * time.Millisecond)
+	log.mutex.Lock()
+	early := len(log.frames)
+	log.mutex.Unlock()
+	if early != 0 {
+		t.Fatalf("the node answered before it was settled")
+	}
+
+	l.Settle(start)
+	log.mutex.Lock()
+	defer log.mutex.Unlock()
+	if len(log.frames) != 1 || log.frames[0][2] != lapAck {
+		t.Errorf("settled, the node answered %x, wanted its lapACK", log.frames)
+	}
+}
+
+/*
+The timers of a node on a kept clock go by the time it is given, and not by
+the host's: they run when the time given reaches the next tick, once however
+far it jumps, and not at all while the host's time passes alone
+*/
+func TestAKeptNodeTicksOnTheTimeGiven(t *testing.T) {
+	network := localtalk.NewNetwork()
+	start := time.Date(1987, 3, 2, 10, 0, 0, 0, time.UTC)
+	n := NewNode(network)
+	n.clock = KeptClock(start)
+	var ticks []time.Time
+	n.onTick(func(now time.Time) { ticks = append(ticks, now) })
+	n.Start()
+	defer n.Stop()
+
+	count := func() int {
+		var c int
+		n.do(func() { c = len(ticks) })
+		return c
+	}
+	for _, step := range []struct {
+		after time.Duration
+		ticks int
+	}{
+		{0, 0}, {tickInterval / 2, 0}, {tickInterval, 1}, {tickInterval * 3 / 2, 1},
+		{tickInterval * 10, 2},
+	} {
+		n.Settle(start.Add(step.after))
+		if got := count(); got != step.ticks {
+			t.Errorf("at %v the timers ran %v times, wanted %v", step.after, got, step.ticks)
+		}
+	}
+
+	time.Sleep(3 * tickInterval)
+	if got := count(); got != 2 {
+		t.Errorf("the host's time alone ran the timers, %v times in all", got)
+	}
+	n.do(func() {
+		if last := ticks[len(ticks)-1]; !last.Equal(start.Add(tickInterval * 10)) {
+			t.Errorf("the timers were told it was %v, wanted the time given", last)
+		}
+	})
 }

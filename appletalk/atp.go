@@ -162,7 +162,7 @@ func (s *atpSocket) request(d Datagram, control uint8, bitmap uint8, tid uint16,
 			return
 		}
 		timeout := releaseTimeout << (control & atpTimeoutMask)
-		s.kept[key] = &keptResponse{expires: time.Now().Add(timeout)}
+		s.kept[key] = &keptResponse{expires: s.node.clock.Now().Add(timeout)}
 	}
 
 	r := atpRequestIn{node: d.SourceNode, socket: d.SourceSocket, tid: tid, xo: xo, user: user, data: data}
@@ -214,7 +214,7 @@ func (s *atpSocket) call(node uint8, socket uint8, user UserBytes, data []uint8,
 		node: node, socket: socket, from: s.socket,
 		data: data, wanted: bitmap,
 		retries: retries, interval: interval,
-		next: time.Now().Add(interval), done: done,
+		next: s.node.clock.Now().Add(interval), done: done,
 	}
 	p.header = [atpHeaderLength]uint8{control, bitmap, uint8(tid >> 8), uint8(tid)}
 	copy(p.header[4:], user[:])

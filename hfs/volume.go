@@ -155,7 +155,8 @@ func (e *NoRoomError) Error() string {
 
 /*
 Build makes a volume of the given size, a multiple of BlockSize, holding the
-folder. The name of the folder is not used: the volume has a name of its own.
+folder. The name of the folder is not used: the volume has a name of its own,
+and the folder's date for its own. A file or folder with no date is dated now.
 */
 func Build(volumeName string, root *Folder, size int64) ([]uint8, error) {
 	if size%BlockSize != 0 || size < 64*BlockSize {
@@ -461,7 +462,8 @@ blocks and again at the end:
 */
 func (v *volume) masterDirectoryBlock() []uint8 {
 	mdb := make([]uint8, BlockSize)
-	now := macTime(time.Now())
+	// The volume is dated as its root folder is, now when that has no date
+	now := macTime(v.root.modified)
 
 	binary.BigEndian.PutUint16(mdb[0:], 0x4244)
 	binary.BigEndian.PutUint32(mdb[2:], now)

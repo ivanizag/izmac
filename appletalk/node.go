@@ -91,6 +91,42 @@ type Node struct {
 
 	sockets map[uint8]socketHandler
 	tickers []func(now time.Time)
+
+	// clock is the time the node goes by, and nextTick when the timers are
+	// next due on a clock that is kept
+	clock    *Clock
+	nextTick time.Time
+}
+
+/*
+Clock is the time a node goes by: the host's, or one that is kept, which is
+the time it was given last and moves only when it is given another, with
+Settle. A node on a kept clock is a part of whatever keeps it: it takes the
+frames sent to it and runs its timers only when settled, so that what it
+answers, and when, follows the time it is given and nothing else. It is read
+only on the node's goroutine. A nil Clock is the host's.
+*/
+type Clock struct {
+	kept bool
+	now  time.Time
+}
+
+// KeptClock is a clock that starts at the time given and moves when a node
+// is settled
+func KeptClock(start time.Time) *Clock {
+	return &Clock{kept: true, now: start}
+}
+
+// Now is the time on the clock
+func (c *Clock) Now() time.Time {
+	if !c.isKept() {
+		return time.Now()
+	}
+	return c.now
+}
+
+func (c *Clock) isKept() bool {
+	return c != nil && c.kept
 }
 
 /*
@@ -197,35 +233,57 @@ by then. A node runs in the time of the host, and a machine run as fast as the
 host can go runs far ahead of it; a program running both settles the node
 between frames of the machine, so that an answer comes back in the time of
 the machine, as from a server on the same wire.
+
+On a kept clock the time given is the node's from then on, never going back,
+and the timers that are due run after the frames. On the host's it is not
+used.
 */
-func (n *Node) Settle() {
+func (n *Node) Settle(now time.Time) {
 	n.do(func() {
-		for {
-			select {
-			case frame := <-n.frames:
-				n.frame(frame)
-			default:
-				return
-			}
+		kept := n.clock.isKept()
+		if kept && now.After(n.clock.now) {
+			n.clock.now = now
+		}
+		for len(n.frames) > 0 {
+			n.frame(<-n.frames)
+		}
+		if kept && !n.clock.now.Before(n.nextTick) {
+			n.tick(n.clock.now)
+			n.nextTick = n.clock.now.Add(tickInterval)
 		}
 	})
 }
 
+// tick runs the timers
+func (n *Node) tick(now time.Time) {
+	for _, t := range n.tickers {
+		t(now)
+	}
+}
+
 func (n *Node) run() {
 	defer close(n.stopped)
-	ticker := time.NewTicker(tickInterval)
-	defer ticker.Stop()
+
+	// On a kept clock the frames and the timers wait for Settle
+	frames := n.frames
+	var ticks <-chan time.Time
+	if n.clock.isKept() {
+		frames = nil
+		n.nextTick = n.clock.now.Add(tickInterval)
+	} else {
+		ticker := time.NewTicker(tickInterval)
+		defer ticker.Stop()
+		ticks = ticker.C
+	}
 
 	for {
 		select {
-		case frame := <-n.frames:
+		case frame := <-frames:
 			n.frame(frame)
 		case f := <-n.calls:
 			f()
-		case now := <-ticker.C:
-			for _, t := range n.tickers {
-				t(now)
-			}
+		case now := <-ticks:
+			n.tick(now)
 		case <-n.stop:
 			return
 		}
