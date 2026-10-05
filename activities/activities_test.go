@@ -43,6 +43,7 @@ func TestActivityScreenshots(t *testing.T) {
 	t.Run("systems", systemsScreenshots)
 	t.Run("lode-runner", lodeRunnerScreenshots)
 	t.Run("dark-castle", darkCastleScreenshots)
+	t.Run("think-pascal", thinkPascalScreenshots)
 }
 
 /*

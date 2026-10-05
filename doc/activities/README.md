@@ -101,6 +101,14 @@ then a stack of your own with a button and a HyperTalk script.
 The menus, icons and words of a program are its resources, apart from its
 code: TeachText opened in ResEdit and one of its menus changed.
 
+### [Writing a game in THINK Pascal](think-pascal.md)
+
+<a href="think-pascal.md"><img src="images/think-pascal/game.png" width="320" alt="2048, written in THINK Pascal"></a>
+
+Pascal was the language of the Macintosh: THINK Pascal 4.0 installed on a
+hard disk, and the game 2048 written in it from nothing, run, and built into
+an application of its own.
+
 ## The machine
 
 ### [MultiFinder](multifinder.md)
