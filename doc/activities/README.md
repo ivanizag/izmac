@@ -109,6 +109,14 @@ Pascal was the language of the Macintosh: THINK Pascal 4.0 installed on a
 hard disk, and the game 2048 written in it from nothing, run, and built into
 an application of its own.
 
+### [Exploring the Mandelbrot set with MPW](mpw.md)
+
+<a href="mpw.md"><img src="images/mpw/copy.png" width="320" alt="A copy of the Mandelbrot set inside it"></a>
+
+Apple's own Macintosh Programmer's Workshop, where a line of text sent with
+Enter is a command: a Mandelbrot set explorer written in C, compiled and
+linked from the Worksheet, and zoomed into until the set turns up again.
+
 ## The machine
 
 ### [MultiFinder](multifinder.md)

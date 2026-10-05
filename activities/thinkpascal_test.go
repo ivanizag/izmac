@@ -27,7 +27,7 @@ func thinkPascalScreenshots(t *testing.T) {
 	if err := os.Mkdir(share, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(share, "2048.p"), []uint8(pageListing(t, page)), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(share, "2048.p"), []uint8(pageListing(t, page, "pascal")), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	predate(t, filepath.Join(share, "2048.p"), share)
@@ -221,18 +221,18 @@ func copyDialogShows(m *izmac.Mac) bool {
 }
 
 /*
-pageListing is the program of a page: its blocks of Pascal, one after the
-other, as the reader puts them together
+pageListing is the program of a page: its blocks of code in a language, one
+after the other, as the reader puts them together
 */
-func pageListing(t *testing.T, page string) string {
+func pageListing(t *testing.T, page string, language string) string {
 	t.Helper()
 	text, err := os.ReadFile(filepath.Join(activityImages, "..", page+".md"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	blocks := regexp.MustCompile("(?s)```pascal\n(.*?)```").FindAllStringSubmatch(string(text), -1)
+	blocks := regexp.MustCompile("(?s)```"+language+"\n(.*?)```").FindAllStringSubmatch(string(text), -1)
 	if len(blocks) == 0 {
-		t.Fatalf("the page %v has no Pascal", page)
+		t.Fatalf("the page %v has no %v", page, language)
 	}
 	var listing strings.Builder
 	for i, block := range blocks {
