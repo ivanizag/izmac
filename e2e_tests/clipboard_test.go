@@ -202,3 +202,33 @@ func TestTheClipboardCrossesApplicationsBothWays(t *testing.T) {
 		t.Errorf("the host was offered %q, %v, wanted what was pasted and typed", text, copied)
 	}
 }
+
+/*
+The arrows and the keypad reach an application as the characters they are.
+In TeachText two letters are typed, the left arrow takes the caret back
+between them, and an X and the 5, the plus, the times, the slash and the
+equals of the keypad go in there, all six between the a and the b.
+*/
+func TestTheArrowsMoveTheCaret(t *testing.T) {
+	t.Parallel()
+	const finder = 92
+	m := systemSevenFinder(t)
+	doubleClickAt(t, m, 38, 92)
+	waitForApplication(t, m, "TeachText", 30)
+	m.RunFrames(600)
+	m.TakeCopiedText()
+
+	pressCommand(m, "A")
+	typeText(m, "ab")
+	typeKeys(m, "Left")
+	typeText(m, "X")
+	typeKeys(m, "Keypad5", "KeypadPlus", "KeypadTimes", "KeypadSlash", "KeypadEquals")
+	pressCommand(m, "A")
+	pressCommand(m, "C")
+	m.RunFrames(60)
+	switchToApplication(t, m, "Finder", finder)
+
+	if text, copied := m.TakeCopiedText(); !copied || text != "aX5+*/=b" {
+		t.Errorf("the host was offered %q, %v, wanted aX5+*/=b", text, copied)
+	}
+}

@@ -212,6 +212,38 @@ func TestAKeyPressReachesTheKeyMap(t *testing.T) {
 }
 
 /*
+An arrow of the Plus keyboard, which comes after the keypad prefix, reaches
+the key map as the key code $46 the left arrow is. A driver that missed the
+prefix would read the byte after it as a key of the main block, the Z.
+*/
+func TestAnArrowReachesTheKeyMap(t *testing.T) {
+	t.Parallel()
+	const keyMap = 0x0174
+	const leftArrow, z = 0x46, 0x06
+
+	m := bootedMac(t)
+	held := func(key int) bool {
+		return m.Peek(uint32(keyMap+key/8))&(1<<(key%8)) != 0
+	}
+
+	code := izmac.KeyCodes()["Left"]
+	m.PutKey(code, true)
+	m.RunFrames(20)
+	if !held(leftArrow) {
+		t.Errorf("pressing the left arrow set nothing for it in the key map")
+	}
+	if held(z) {
+		t.Errorf("pressing the left arrow held the Z down")
+	}
+
+	m.PutKey(code, false)
+	m.RunFrames(20)
+	if held(leftArrow) {
+		t.Errorf("releasing the left arrow left it held down")
+	}
+}
+
+/*
 A menu accelerator, which is the keyboard reaching the Event Manager and not
 only the key map. Command and A together are Select All, and the Finder
 answers by highlighting every icon on the desktop; A on its own moves the

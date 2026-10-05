@@ -55,7 +55,9 @@ The modifiers are not where their names suggest:
 | **Control**, either side | **Option** |
 | Shift, either side | Shift |
 | Backspace | Backspace |
-| Enter on the numeric keypad | Enter, the key beside the space bar |
+| The arrow keys | The arrow keys |
+| The numeric keypad | The same keys of the keypad |
+| Num Lock, where there is one | Clear, the top left key of the keypad |
 
 Two keys of yours give the Macintosh command key because your own system
 keeps some combinations for itself: Command-Q and Command-Tab on macOS never
@@ -66,11 +68,11 @@ gets through. So Command-C is Command-C, and Alt-C when it is not.
 The interrupt and reset that the programmer's switch gave you are not on the
 keyboard at all — reset is on the menu.
 
-**What is missing.** The arrow keys and the numeric keypad are not mapped, and
-neither is Escape, which is used to release the mouse. The Macintosh Plus
-keyboard had no arrow keys in the main block either, and software of the
-period is built to be driven by the mouse, but a program that wants the arrows
-or the keypad cannot be given them.
+**What is missing.** Escape is not mapped, since it releases the mouse.
+
+The keys +, *, / and = of the keypad reach the machine as the Plus keyboard
+sent them, as an arrow with the shift key around it. A shift you hold down
+yourself is let go with them.
 
 ## The emulator keys
 
